@@ -300,7 +300,7 @@ impl WhiteboardHandle {
 
 async fn build_board_state(
     store: &zw_db::session_store::SessionStore,
-    dir: &PathBuf,
+    dir: &Path,
     cache: &Arc<zw_cache::CacheManager>,
     sid: &str,
 ) -> anyhow::Result<BoardState> {
@@ -330,7 +330,7 @@ async fn build_board_state(
 
 async fn poll_with_db(
     store: &zw_db::session_store::SessionStore,
-    dir: &PathBuf,
+    dir: &Path,
     cache: &Arc<zw_cache::CacheManager>,
     state: &Arc<Mutex<MonitorCore>>,
     tx: &broadcast::Sender<WhiteboardEvent>,
@@ -398,7 +398,7 @@ async fn poll_with_db(
 }
 
 async fn poll_without_db(
-    dir: &PathBuf,
+    dir: &Path,
     cache: &Arc<zw_cache::CacheManager>,
     state: &Arc<Mutex<MonitorCore>>,
     tx: &broadcast::Sender<WhiteboardEvent>,
@@ -421,7 +421,7 @@ async fn poll_without_db(
     }
 }
 
-fn read_board_from(dir: &PathBuf, cache: &Arc<zw_cache::CacheManager>, session_id: &str) -> Option<ParsedBoard> {
+fn read_board_from(dir: &Path, cache: &Arc<zw_cache::CacheManager>, session_id: &str) -> Option<ParsedBoard> {
     let path = session_path(dir, session_id);
     if !path.exists() {
         return None;

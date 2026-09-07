@@ -39,13 +39,15 @@ impl ChannelContext {
     }
 }
 
+pub type ChannelEnvelope = (ChannelMessage, oneshot::Sender<anyhow::Result<String>>, Option<mpsc::Sender<StreamEvent>>);
+
 #[derive(Clone)]
 pub struct ChannelRegistryHandle {
-    tx: mpsc::Sender<(ChannelMessage, oneshot::Sender<anyhow::Result<String>>, Option<mpsc::Sender<StreamEvent>>)>,
+    tx: mpsc::Sender<ChannelEnvelope>,
 }
 
 impl ChannelRegistryHandle {
-    pub fn new(tx: mpsc::Sender<(ChannelMessage, oneshot::Sender<anyhow::Result<String>>, Option<mpsc::Sender<StreamEvent>>)>) -> Self {
+    pub fn new(tx: mpsc::Sender<ChannelEnvelope>) -> Self {
         Self { tx }
     }
 

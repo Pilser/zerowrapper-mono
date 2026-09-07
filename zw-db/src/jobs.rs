@@ -186,6 +186,7 @@ impl DbPool {
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn srv_job_run_insert(
         &self,
         board_id: &str,

@@ -62,6 +62,7 @@ impl DbPool {
         Ok(out)
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn srv_recipe_add(&self, board_id: &str, name: &str, when_json: &str, match_json: Option<&str>, enabled: bool, dedup_on: Option<&str>, actions_json: &str) -> anyhow::Result<i64> {
         let conn = self.conn().await;
         let b = sq(board_id);

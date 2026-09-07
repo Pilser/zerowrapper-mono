@@ -157,7 +157,7 @@ pub fn invoke(name: &str, args: &[Value]) -> Result<Value, ExprError> {
                 return Err(arg_err(name, "2 or 3", args.len()));
             }
             let dt = parse_ts(&args[0]);
-            let days = to_int(&args[1]).map(|d| d as i64);
+            let days = to_int(&args[1]);
             match (dt, days) {
                 (Some(dt), Some(days)) => {
                     let _ = ChronoDuration::days(days);

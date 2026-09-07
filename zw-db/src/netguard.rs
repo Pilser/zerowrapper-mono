@@ -24,7 +24,7 @@ pub fn valid_url(url: &str) -> bool {
     let Some(rest) = url.split_once("://").map(|(_, r)| r) else {
         return false;
     };
-    let host = rest.split('/').next().unwrap_or("").split('@').last().unwrap_or("");
+    let host = rest.split('/').next().unwrap_or("").rsplit('@').next().unwrap_or("");
     let host = host.trim_end_matches(']');
     let host = host.split(':').next().unwrap_or("").trim_matches(|c| c == '[' || c == ']');
     if host.is_empty() {

@@ -262,8 +262,8 @@ fn env_lines_to_toml(content: &str) -> String {
             let keystr = key.trim();
             let valstr = value.trim().trim_matches('"').trim_matches('\'');
             if let Some(rest) = keystr.strip_prefix("ZEROWRAPPER_") {
-                if rest.starts_with('_') {
-                    let field = rest[1..].to_lowercase();
+                if let Some(stripped) = rest.strip_prefix('_') {
+                    let field = stripped.to_lowercase();
                     sections
                         .entry(String::new())
                         .or_default()

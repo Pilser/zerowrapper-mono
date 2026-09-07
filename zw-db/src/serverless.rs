@@ -901,7 +901,7 @@ fn apply_patch_ops(target: &mut serde_json::Value, ops: &serde_json::Value) -> a
             "$unset" => {
                 let paths: Vec<String> = match value {
                     serde_json::Value::Array(a) => a.iter().filter_map(|x| x.as_str().map(|s| s.to_string())).collect(),
-                    serde_json::Value::Object(m) => m.keys().map(|k| k.clone()).collect(),
+                    serde_json::Value::Object(m) => m.keys().cloned().collect(),
                     other => anyhow::bail!("$unset requires an array of field paths, got {}", other),
                 };
                 for path in paths {

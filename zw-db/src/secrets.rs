@@ -24,7 +24,7 @@ pub type SecretMap = HashMap<String, String>;
 fn master_key() -> [u8; 32] {
     let gen = match std::env::var("WAOS_SECRET_KEY") {
         Ok(k) if !k.is_empty() => k,
-        _ => format!("waos-dev-key-{}-{}", std::process::id(), crate::audit::audit_hash_str("x")[..16].to_string()),
+        _ => format!("waos-dev-key-{}-{}", std::process::id(), &crate::audit::audit_hash_str("x")[..16]),
     };
     let mut out = [0u8; 32];
     let bytes = gen.as_bytes();

@@ -1,5 +1,5 @@
 use sha2::{Digest, Sha256};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use crate::FileMeta;
 
 /// Hash a path string to produce a stable cache key.
@@ -12,13 +12,13 @@ pub fn hash_path(path: &str) -> String {
     base64::Engine::encode(&base64::engine::general_purpose::URL_SAFE_NO_PAD, truncated)
 }
 
-fn meta_path(cache_dir: &PathBuf, hash: &str) -> PathBuf {
+fn meta_path(cache_dir: &Path, hash: &str) -> PathBuf {
     let prefix = &hash[..2.min(hash.len())];
     let dir = cache_dir.join("meta").join(prefix);
     dir.join(hash)
 }
 
-pub fn write_meta(cache_dir: &PathBuf, hash: &str, meta: &FileMeta) -> anyhow::Result<()> {
+pub fn write_meta(cache_dir: &Path, hash: &str, meta: &FileMeta) -> anyhow::Result<()> {
     let path = meta_path(cache_dir, hash);
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
@@ -28,7 +28,7 @@ pub fn write_meta(cache_dir: &PathBuf, hash: &str, meta: &FileMeta) -> anyhow::R
     Ok(())
 }
 
-pub fn read_meta(cache_dir: &PathBuf, hash: &str) -> anyhow::Result<Option<FileMeta>> {
+pub fn read_meta(cache_dir: &Path, hash: &str) -> anyhow::Result<Option<FileMeta>> {
     let path = meta_path(cache_dir, hash);
     if path.exists() {
         let json = std::fs::read_to_string(&path)?;

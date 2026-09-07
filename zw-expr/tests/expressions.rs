@@ -30,10 +30,10 @@ fn path_and_index() {
 
 #[test]
 fn comparison_and_logic() {
-    assert_eq!(truthy("$.price >= 10 && $.qty > 1", &ctx()).unwrap(), true);
-    assert_eq!(truthy("$.status == 'paid'", &ctx()).unwrap(), true);
-    assert_eq!(truthy("$.price > 100", &ctx()).unwrap(), false);
-    assert_eq!(truthy("$.price < 100 || $.qty > 100", &ctx()).unwrap(), true);
+    assert!(truthy("$.price >= 10 && $.qty > 1", &ctx()).unwrap());
+    assert!(truthy("$.status == 'paid'", &ctx()).unwrap());
+    assert!(!truthy("$.price > 100", &ctx()).unwrap());
+    assert!(truthy("$.price < 100 || $.qty > 100", &ctx()).unwrap());
 }
 
 #[test]
@@ -51,7 +51,7 @@ fn functions() {
     assert_eq!(evaluate("len($.items)", &ctx()).unwrap(), json!(2));
     assert_eq!(evaluate("if($.qty > 0, 'in', 'out')", &ctx()).unwrap(), json!("in"));
     assert_eq!(evaluate("coalesce($.missing, 'default')", &ctx()).unwrap(), json!("default"));
-    assert_eq!(evaluate("round(3.14159, 2)", &ctx()).unwrap(), json!(3.14));
+    assert_eq!(evaluate("round(2.345, 1)", &ctx()).unwrap(), json!(2.3));
     assert_eq!(evaluate("contains('hello', 'ell')", &ctx()).unwrap(), json!(true));
     assert_eq!(evaluate("startswith('hello', 'he')", &ctx()).unwrap(), json!(true));
     assert_eq!(evaluate("nowunix()", &ctx()).unwrap().as_i64().map(|v| v > 0), Some(true));

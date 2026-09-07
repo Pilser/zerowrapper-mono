@@ -18,6 +18,7 @@ pub struct CallResult {
 }
 
 impl DbPool {
+    #[allow(clippy::too_many_arguments)]
     pub async fn srv_http_call(
         &self,
         board_id: &str,

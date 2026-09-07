@@ -1,6 +1,6 @@
 pub mod disk;
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -15,10 +15,10 @@ pub struct CacheManager {
 }
 
 impl CacheManager {
-    pub fn new(cache_dir: &PathBuf) -> Self {
+    pub fn new(cache_dir: &Path) -> Self {
         std::fs::create_dir_all(cache_dir).ok();
         Self {
-            cache_dir: cache_dir.clone(),
+            cache_dir: cache_dir.to_path_buf(),
         }
     }
 

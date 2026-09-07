@@ -371,7 +371,7 @@ pub fn srv_filter_where(board_id: &str, conds: &[FilterCond]) -> (String, Vec<Va
         };
         parts.push(frag);
     }
-    (format!("{}", parts.join(" AND ")), params, search_ph)
+    (parts.join(" AND ").to_string(), params, search_ph)
 }
 
 fn agg_target(agg: Agg, field: Option<&str>, params: &mut Vec<Value>) -> anyhow::Result<String> {
