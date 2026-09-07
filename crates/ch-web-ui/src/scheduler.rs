@@ -22,14 +22,26 @@ fn extract_path<'a>(value: &'a Value, path: &str) -> Option<&'a Value> {
     }
     let mut cur = value;
     for seg in p.split('.') {
-        let key = seg.trim_matches('[').trim_matches(']');
-        if key.is_empty() {
+        if seg.is_empty() {
             continue;
         }
-        if let Some(idx) = key.parse::<usize>().ok() {
+        // Segment may embed bracket indices: "b", "b[2]", "[0]".
+        let (key_part, mut rest) = match seg.find('[') {
+            Some(i) => (&seg[..i], &seg[i..]),
+            None => (seg, ""),
+        };
+        if !key_part.is_empty() {
+            if let Ok(idx) = key_part.parse::<usize>() {
+                cur = cur.get(idx)?;
+            } else {
+                cur = cur.get(key_part)?;
+            }
+        }
+        while let Some(start) = rest.find('[') {
+            let end = rest.find(']')?;
+            let idx: usize = rest[start + 1..end].trim().parse().ok()?;
             cur = cur.get(idx)?;
-        } else {
-            cur = cur.get(key)?;
+            rest = &rest[end + 1..];
         }
     }
     Some(cur)
