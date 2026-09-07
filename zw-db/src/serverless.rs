@@ -436,6 +436,8 @@ impl DbPool {
             },
             None => 1,
         };
+        // turso 0.8: connection is busy until open Rows are dropped.
+        drop(seq_rows);
         let text = serde_json::to_string(payload)?;
         let w = match writer {
             Some(w) => format!("'{}'", sq(w)),
