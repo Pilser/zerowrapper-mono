@@ -1,0 +1,74 @@
+# whitelist memo — ignore everything, then un-ignore only tracked sources
+# 1. block all non-dot files, 2. re-allow directories for traversal, 3. whitelist extensions, 4. re-block runtime artifacts
+
+*
+!*/
+
+# --- whitelist: source and config extensions ---
+!*.rs
+!*.toml
+!*.lock
+!*.md
+!*.json
+!*.yaml
+!*.yml
+!*.css
+!*.js
+!*.ts
+!*.html
+!*.sh
+!*.txt
+!*.sql
+
+# --- whitelist: important files without extension / dotfiles ---
+!.gitignore
+!build.rs
+!components.toml
+!Dockerfile
+!LICENSE
+!Makefile
+
+# keep example env, but block real .env below
+!.env.example
+
+# --- blacklist overrides: runtime, build, secrets, binaries (must come last) ---
+# secrets / local env
+.env
+.zeroclaw/
+
+# build artifacts
+/target/
+**/target/
+debug/
+release/
+
+# runtime data (single global DB lives here — do not track)
+data/
+**/data/
+*.db
+*.db-shm
+*.db-wal
+*.db-journal
+cache/
+zw-cache/cache/
+uploads/
+dist/
+web/dist/
+node_modules/
+
+# large binaries / media (that jpg in root)
+*.jpg
+*.jpeg
+*.png
+*.gif
+*.bin
+*.pdf
+*.zip
+
+# OS / editor
+.DS_Store
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
