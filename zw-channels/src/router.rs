@@ -7,7 +7,13 @@ pub async fn route_incoming(
     msg: ChannelMessage,
     event_tx: Option<mpsc::Sender<StreamEvent>>,
 ) -> anyhow::Result<String> {
-    let session_id = build_session_id(&msg.channel, &msg.agent_alias, &msg.user_id, &msg.role);
+    // Single-user: trust frontend session_id (sess_xxx). Fallback to legacy
+    // composite only when missing/unknown so old clients keep working.
+    let session_id = if msg.session_id.is_empty() || msg.session_id == "unknown" {
+        build_session_id(&msg.channel, &msg.agent_alias, &msg.user_id, &msg.role)
+    } else {
+        sanitize_key(&msg.session_id)
+    };
     let channel = &msg.channel;
     let result = match event_tx {
         Some(tx) => zc.process_prompt_stream(&session_id, &msg.user_id, &msg.agent_alias, channel, &msg.role, &msg.attachments, &msg.content, tx).await?,

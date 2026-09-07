@@ -21,41 +21,80 @@ export function buildSessionId(email) {
   return 'web.' + agent + '.' + sanitized
 }
 
-export function loadFromStorage() {
-  state.email = localStorage.getItem(STORAGE_EMAIL) || ''
-  state.sessionId = localStorage.getItem(STORAGE_SESSION) || ''
-  state.name = localStorage.getItem(STORAGE_NAME) || ''
-  state.role = localStorage.getItem(STORAGE_ROLE) || ''
-  try {
-    state.roles = JSON.parse(localStorage.getItem(STORAGE_ROLES) || '[]')
-  } catch {
-    state.roles = []
-  }
+// Single-user simple thread id: sess_xxx (no user/role/channel composite).
+export function genSimpleSid() {
+  const n = Date.now().toString(36) + Math.floor(Math.random() * 1296).toString(36)
+  return 'sess_' + n.replace(/[^a-z0-9]/gi, '').toLowerCase()
 }
 
-// Auto-login identity supplied by the embedding host (the engine SPA) via
-// ?email=&name=&role=&roles= on the iframe URL. Only applied when no session is
-// stored yet so a returning user keeps their own session.
+export async function fetchSessions() {
+  // Try direct API first (standalone), fallback to root dispatch (?api=) for
+  // board-proxy embeds where only `/` is reachable.
+  for (const url of ['/api/sessions', '?api=sessions']) {
+    try {
+      const r = await fetch(url)
+      if (!r.ok) continue
+      const j = await r.json()
+      if (j.sessions) return j.sessions
+    } catch {}
+  }
+  return []
+}
+
+export async function createSession(title) {
+  for (const url of ['/api/sessions', '?api=sessions_create']) {
+    try {
+      const r = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: title || '' }),
+      })
+      if (!r.ok) continue
+      return await r.json()
+    } catch {}
+  }
+  // Offline fallback: local-only thread (will be persisted on first send).
+  const id = genSimpleSid()
+  return { session_id: id, title: title || id }
+}
+
+export function loadFromStorage() {
+  // Single-user: no email login. Session is a simple sess_xxx thread id.
+  state.sessionId = localStorage.getItem(STORAGE_SESSION) || ''
+  state.email = 'single'
+  state.name = 'single user'
+  state.role = ''
+  state.roles = []
+}
+
 export function loadFromQuery() {
+  // New: ?session_id=sess_xxx resumes a thread. Legacy ?email= kept for compat.
   const qs = new URLSearchParams(location.search)
+  const sid = (qs.get('session_id') || '').trim()
+  if (sid) {
+    state.sessionId = sid.replace(/[^a-zA-Z0-9_.-]/g, '_')
+    state.email = 'single'
+    saveToStorage()
+    return
+  }
   const email = (qs.get('email') || '').trim()
   if (!email) return
-  if (localStorage.getItem(STORAGE_EMAIL)) return
-  state.email = email
+  if (localStorage.getItem(STORAGE_SESSION)) return
+  state.email = 'single'
   state.sessionId = buildSessionId(email)
-  state.name = (qs.get('name') || '').trim()
-  state.role = (qs.get('role') || '').trim()
-  const roles = (qs.get('roles') || '').split(',').map((r) => r.trim()).filter(Boolean)
-  state.roles = roles.length > 0 ? roles : (state.role ? [state.role] : [])
   saveToStorage()
 }
 
+export function ensureSession() {
+  if (!state.sessionId) {
+    state.sessionId = genSimpleSid()
+    saveToStorage()
+  }
+  return state.sessionId
+}
+
 export function saveToStorage() {
-  if (state.email) localStorage.setItem(STORAGE_EMAIL, state.email)
   if (state.sessionId) localStorage.setItem(STORAGE_SESSION, state.sessionId)
-  if (state.name) localStorage.setItem(STORAGE_NAME, state.name)
-  if (state.role) localStorage.setItem(STORAGE_ROLE, state.role)
-  if (state.roles && state.roles.length > 0) localStorage.setItem(STORAGE_ROLES, JSON.stringify(state.roles))
 }
 
 export function clearFromStorage() {
@@ -67,26 +106,22 @@ export function clearFromStorage() {
 }
 
 export function showForm() {
-  els.authSection.classList.remove('hidden')
-  els.userBadge.classList.add('hidden')
+  // Single-user: no login form. Hide it, show logged-in badge.
+  if (els.authSection) els.authSection.classList.add('hidden')
+  showBadge()
 }
 
 export function showBadge() {
-  els.authSection.classList.add('hidden')
+  if (els.authSection) els.authSection.classList.add('hidden')
+  if (!els.userBadge) return
   els.userBadge.classList.remove('hidden')
-  els.badgeDisplay.textContent = state.name || state.email
-  const roles = state.roles && state.roles.length > 0 ? state.roles : (state.role ? [state.role] : [])
-  const roleText = roles.length > 1 ? `${roles[0]} +${roles.length - 1}` : (roles[0] || '')
-  if (els.badgeSub) els.badgeSub.textContent = [roleText, state.email].filter(Boolean).join(' · ')
+  if (els.badgeDisplay) els.badgeDisplay.textContent = 'single user'
+  if (els.badgeSub) els.badgeSub.textContent = 'logged in · ' + (state.sessionId || '')
+  const lb = document.getElementById('logout-btn')
+  if (lb) lb.style.display = 'none'
 }
 
-export function scrollToAuth() {
-  els.authSection.scrollIntoView({ behavior: 'smooth', block: 'center' })
-  els.emailInput.focus()
-  els.authSection.style.transition = 'box-shadow 0.3s'
-  els.authSection.style.boxShadow = '0 0 0 3px var(--color-bg-interactive)'
-  setTimeout(() => { els.authSection.style.boxShadow = 'none' }, 2000)
-}
+export function scrollToAuth() {}
 
 export function showAuthError(msg) {
   els.authError.textContent = msg

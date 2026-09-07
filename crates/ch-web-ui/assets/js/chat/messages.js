@@ -105,13 +105,23 @@ export function fetchHistory() {
   if (abortController) abortController.abort()
   abortController = new AbortController()
 
-  const email = localStorage.getItem('zerowrapper_email')
-  if (!email) return
+  const sid = localStorage.getItem('zerowrapper_session') || ''
+  if (!sid) return
 
-  const url = '?api=history&user_id=' + encodeURIComponent(email)
-  fetch(url, { signal: abortController.signal })
-    .then(r => r.json())
+  // Direct API first, root-dispatch fallback for proxied embeds.
+  const urls = [
+    '/api/history?session_id=' + encodeURIComponent(sid),
+    '?api=history&session_id=' + encodeURIComponent(sid),
+  ]
+  const tryFetch = (i) => {
+    if (i >= urls.length) return Promise.resolve(null)
+    return fetch(urls[i], { signal: abortController.signal })
+      .then(r => (r.ok ? r.json() : tryFetch(i + 1)))
+      .catch(() => tryFetch(i + 1))
+  };
+  tryFetch(0)
     .then(data => {
+      if (!data) return
       if (data.session_id) {
         localStorage.setItem('zerowrapper_session', data.session_id)
       }

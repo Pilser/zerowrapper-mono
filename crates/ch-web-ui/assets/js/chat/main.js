@@ -35,18 +35,15 @@ export function init() {
 
   auth.loadFromQuery()
   auth.loadFromStorage()
+  auth.ensureSession()
 
-  if (auth.state.email) {
-    auth.showBadge()
-    connection.connect()
-  } else {
-    auth.showForm()
-  }
+  // Single-user: always logged in. Show badge, connect, load old sessions.
+  auth.showBadge()
+  connection.connect()
+  refreshSessionList()
 
-  els.registerBtn.addEventListener('click', handleLogin)
-  els.emailInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') els.registerBtn.click() })
-
-  els.logoutBtn.addEventListener('click', handleLogout)
+  if (els.sessionNewBtn) els.sessionNewBtn.addEventListener('click', handleNewSession)
+  if (els.sessionSelect) els.sessionSelect.addEventListener('change', handleSwitchSession)
 
   if (els.uploadBtn && els.fileInput) {
     els.uploadBtn.addEventListener('click', () => els.fileInput.click())
@@ -86,33 +83,61 @@ function handleCancel() {
   showSendIcon()
 }
 
-function handleLogin() {
-  auth.hideAuthError()
-  const raw = els.emailInput.value.trim()
-  if (!raw) { auth.showAuthError('Please enter your email.'); return }
-
-  auth.state.email = raw
-  auth.state.sessionId = auth.buildSessionId(raw)
-  auth.saveToStorage()
+async function refreshSessionList() {
+  const list = await auth.fetchSessions()
+  if (!els.sessionSelect) return
+  els.sessionSelect.innerHTML = ''
+  const seen = new Set()
+  for (const s of list) {
+    const id = s.id || s.session_id
+    if (!id || seen.has(id)) continue
+    seen.add(id)
+    const opt = document.createElement('option')
+    opt.value = id
+    opt.textContent = (s.title && s.title !== id ? s.title + ' · ' : '') + id
+    if (id === auth.state.sessionId) opt.selected = true
+    els.sessionSelect.appendChild(opt)
+  }
+  if (!seen.has(auth.state.sessionId)) {
+    const opt = document.createElement('option')
+    opt.value = auth.state.sessionId
+    opt.textContent = auth.state.sessionId + ' (current)'
+    opt.selected = true
+    els.sessionSelect.appendChild(opt)
+  }
   auth.showBadge()
-  connection.connect()
 }
 
-function handleLogout() {
-  auth.clearFromStorage()
-  auth.state.email = ''
-  auth.state.sessionId = ''
-  connection.disconnect()
+async function handleNewSession() {
+  const res = await auth.createSession('')
+  const id = res.session_id || res.id || auth.genSimpleSid()
+  auth.state.sessionId = id
+  auth.saveToStorage()
   els.messages.innerHTML = ''
-  if (els.hint) els.hint.style.display = 'block'
-  if (els.hintText) els.hintText.textContent = els.hintText.dataset.fallback || els.hintText.textContent
-  if (els.chatRefreshBtn) els.chatRefreshBtn.classList.add('hidden')
-  auth.showForm()
+  connection.disconnect()
+  connection.connect()
+  refreshSessionList()
+}
+
+async function handleSwitchSession() {
+  const id = els.sessionSelect.value
+  if (!id || id === auth.state.sessionId) return
+  auth.state.sessionId = id
+  auth.saveToStorage()
+  els.messages.innerHTML = ''
+  const { fetchHistory } = await import('./messages.js')
+  const whiteboard = await import('./whiteboard.js')
+  connection.disconnect()
+  connection.connect()
+  fetchHistory()
+  whiteboard.setSession(id)
+  auth.showBadge()
+  refreshSessionList()
 }
 
 function handleSubmit(e) {
   e.preventDefault()
-  if (!auth.state.email) { auth.scrollToAuth(); return }
+  auth.ensureSession()
   streaming.finalizeIfActive()
   const text = els.input.value.trim()
   const attachments = [...uploadState.pending]

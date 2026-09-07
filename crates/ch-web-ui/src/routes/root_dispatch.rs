@@ -77,7 +77,7 @@ impl Layer for RootDispatchLayer {
                 return serve_file(cx, &hash).await;
             }
 
-            // API: `/?api=history&user_id=...` or `/?api=upload`
+            // API: `/?api=history&session_id=...`, `/?api=sessions`, `/?api=upload`
             if let Some(api) = query_value(cx, "api") {
                 return dispatch_api(cx, &api, body).await;
             }
@@ -105,6 +105,8 @@ async fn root_ws(cx: &Cx, body: Body) -> Result<Response> {
 async fn dispatch_api(cx: &Cx, api: &str, body: Body) -> Result<Response> {
     match api {
         "history" => api_history(cx).await,
+        "sessions" => api_sessions_list(cx).await,
+        "sessions_create" => api_sessions_create(cx, body).await,
         "upload" => api_upload(cx, body).await,
         _ => Ok(Response::builder()
             .status(StatusCode::NOT_FOUND)
@@ -115,20 +117,23 @@ async fn dispatch_api(cx: &Cx, api: &str, body: Body) -> Result<Response> {
 }
 
 /// Mirrors `api/history.rs` but keyed from the root query params.
+/// Single-user: prefers ?session_id=sess_xxx, falls back to legacy ?user_id=.
 async fn api_history(cx: &Cx) -> Result<Response> {
     let app: &AppContext = app_context(cx);
-    let user_id = query_value(cx, "user_id").map(|v| url_decode(&v)).unwrap_or_default();
-    let _role = query_value(cx, "role").map(|v| url_decode(&v)).unwrap_or_else(|| "public".to_string());
-
-    if user_id.is_empty() {
-        return Ok(Response::builder()
-            .status(StatusCode::BAD_REQUEST)
-            .header("Content-Type", "application/json")
-            .body(Body::from(serde_json::json!({"error": "Missing user_id"}).to_string()))
-            .unwrap());
-    }
-
-    let session_id = format!("web.{}.{}", app.agent, sanitize_key(&user_id));
+    let direct = query_value(cx, "session_id").map(|v| url_decode(&v)).unwrap_or_default();
+    let session_id = if !direct.is_empty() {
+        sanitize_key(&direct)
+    } else {
+        let user_id = query_value(cx, "user_id").map(|v| url_decode(&v)).unwrap_or_default();
+        if user_id.is_empty() {
+            return Ok(Response::builder()
+                .status(StatusCode::BAD_REQUEST)
+                .header("Content-Type", "application/json")
+                .body(Body::from(serde_json::json!({"error": "Missing session_id"}).to_string()))
+                .unwrap());
+        }
+        format!("web.{}.{}", app.agent, sanitize_key(&user_id))
+    };
 
     match app.zeroclaw.get_session_messages(session_id.clone(), Some(100)).await {
         Ok(result) => Ok(Response::builder()
@@ -153,6 +158,45 @@ async fn api_history(cx: &Cx) -> Result<Response> {
                 .unwrap())
         }
     }
+}
+
+async fn api_sessions_list(cx: &Cx) -> Result<Response> {
+    let app: &AppContext = app_context(cx);
+    match app.db.system().list_sessions(100).await {
+        Ok(rows) => Ok(Response::builder()
+            .status(StatusCode::OK)
+            .header("Content-Type", "application/json")
+            .body(Body::from(serde_json::json!({"ok": true, "sessions": rows}).to_string()))
+            .unwrap()),
+        Err(_) => Ok(Response::builder()
+            .status(StatusCode::INTERNAL_SERVER_ERROR)
+            .header("Content-Type", "application/json")
+            .body(Body::from(serde_json::json!({"error": "list failed"}).to_string()))
+            .unwrap()),
+    }
+}
+
+async fn api_sessions_create(cx: &Cx, body: Body) -> Result<Response> {
+    let app: &AppContext = app_context(cx);
+    let id = zw_db::sessions::new_simple_id();
+    let _ = to_bytes(body, 100_000).await;
+    let _ = cx;
+    if let Err(e) = app.db.system().create_simple_session(&id, &id, &app.agent, "web").await {
+        tracing::warn!("sessions create: {e}");
+        return Ok(Response::builder()
+            .status(StatusCode::INTERNAL_SERVER_ERROR)
+            .header("Content-Type", "application/json")
+            .body(Body::from(serde_json::json!({"error": "create failed"}).to_string()))
+            .unwrap());
+    }
+    if let Some(wb) = app.whiteboard() {
+        let _ = wb.ensure(&id).await;
+    }
+    Ok(Response::builder()
+        .status(StatusCode::OK)
+        .header("Content-Type", "application/json")
+        .body(Body::from(serde_json::json!({"ok": true, "session_id": id, "title": id}).to_string()))
+        .unwrap())
 }
 
 /// Mirrors `api/upload.rs` but keyed from the root query params.

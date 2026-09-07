@@ -8,8 +8,9 @@ CREATE TABLE IF NOT EXISTS users (
 
 CREATE TABLE IF NOT EXISTS sessions (
     id          TEXT PRIMARY KEY,
-    user_id     TEXT NOT NULL REFERENCES users(id),
-    agent_alias TEXT NOT NULL,
+    user_id     TEXT REFERENCES users(id),
+    title       TEXT NOT NULL DEFAULT '',
+    agent_alias TEXT NOT NULL DEFAULT '',
     account     TEXT,
     chat_id     TEXT,
     channel     TEXT NOT NULL DEFAULT 'web',
@@ -227,6 +228,7 @@ pub const SYSTEM_MIGRATIONS: &[&str] = &[
     "ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'public';",
     "ALTER TABLE users ADD COLUMN password_hash TEXT NOT NULL DEFAULT '';",
     "ALTER TABLE wb_keys ADD COLUMN scope TEXT;",
+    "ALTER TABLE sessions ADD COLUMN title TEXT NOT NULL DEFAULT '';",
 ];
 
 pub const SESSION_MIGRATIONS: &[&str] = &[

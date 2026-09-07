@@ -159,10 +159,13 @@ impl ZeroClawBridge {
                 tracing::warn!("whiteboard ensure failed: {}", e);
             }
         }
-        if let Err(e) = self.db.upsert_session(&actual_session_id, user_id, agent_alias, None, None, "web").await {
+        // Single-user: simple sess_xxx id, user defaults to "single".
+        let user = if user_id.is_empty() || user_id == "anonymous" { "single" } else { user_id };
+        if let Err(e) = self.db.upsert_session(&actual_session_id, user, agent_alias, None, None, "web").await {
             tracing::warn!("Failed to save session to DB: {}", e);
         }
-        let structured_prompt = self.format_prompt(user_id, channel, role, attachments, prompt).await;
+        let _ = self.db.touch_session(&actual_session_id).await;
+        let structured_prompt = self.format_prompt(user, channel, role, attachments, prompt).await;
         conn.prompt(&actual_session_id, &structured_prompt).await
     }
 
@@ -188,10 +191,12 @@ impl ZeroClawBridge {
             }
         }
 
-        if let Err(e) = self.db.upsert_session(&actual_session_id, user_id, agent_alias, None, None, "web").await {
+        let user = if user_id.is_empty() || user_id == "anonymous" { "single" } else { user_id };
+        if let Err(e) = self.db.upsert_session(&actual_session_id, user, agent_alias, None, None, "web").await {
             tracing::warn!("Failed to save session to DB: {}", e);
         }
-        let structured_prompt = self.format_prompt(user_id, channel, role, attachments, prompt).await;
+        let _ = self.db.touch_session(&actual_session_id).await;
+        let structured_prompt = self.format_prompt(user, channel, role, attachments, prompt).await;
         conn.prompt_stream(&actual_session_id, &structured_prompt, &event_tx).await
     }
 

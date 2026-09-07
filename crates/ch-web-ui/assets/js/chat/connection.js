@@ -113,13 +113,10 @@ export function send(text, role, attachments) {
     return
   }
   const payload = {
-    session_id: authState.sessionId || '',
-    user_id: authState.email,
+    session_id: authState.sessionId || localStorage.getItem('zerowrapper_session') || '',
+    user_id: 'single',
     content: text,
   }
-  if (authState.name) payload.user_name = authState.name
-  if (authState.roles && authState.roles.length > 0) payload.roles = authState.roles
-  else if (authState.role) payload.roles = [authState.role]
   if (attachments && attachments.length > 0) payload.attachments = attachments
   network.send(JSON.stringify(payload))
 }

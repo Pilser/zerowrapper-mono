@@ -28,22 +28,23 @@ pub async fn chat_section(cx: &Cx) -> Result {
                 </div>
             </div>
             <div id="chat-bottom-bar" style="position: sticky; bottom: 0; z-index: 10; background: var(--color-bg); padding-top: 12px; margin-top: 8px;">
-                <div id="auth-section">
-                    <div id="auth-form" class="flex flex-col gap-3 mt-6 p-5 rounded-xl" style="border: 1px solid var(--color-border); background: var(--color-bg);">
-                        <div class="flex items-center gap-3 mb-1">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--color-bg-interactive)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
-                            <span class="text-sm font-bold" style="color: var(--color-text-strong);">"Enter your email to start"</span>
-                        </div>
-                        <input id="email-input" type="email" placeholder="Your email" class="w-full px-4 py-2.5 text-sm rounded-lg outline-none transition" style="border: 1.5px solid var(--color-border); background: var(--color-bg-weak); color: var(--color-text-strong); font-family: var(--font-mono);"/>
-                        <button id="register-btn" class="w-full px-6 py-2.5 text-sm font-medium rounded-lg cursor-pointer transition" style="background: var(--color-bg-interactive); color: var(--color-text-inverted); border: none;">"Start Chat"</button>
+                <div id="session-bar" class="flex items-center gap-2 mt-4 px-3 py-1.5 rounded-lg" style="border: 1px solid var(--color-border-weak); background: var(--color-bg-weak);">
+                    <span class="text-xs" style="color: var(--color-text-weak);">"Session"</span>
+                    <select id="session-select" class="text-xs flex-1 px-2 py-1 rounded" style="background: var(--color-bg); color: var(--color-text-strong); border: 1px solid var(--color-border-weak);"></select>
+                    <button id="session-new-btn" class="text-xs px-2 py-0.5 rounded cursor-pointer transition" style="color: var(--color-text-inverted); border: none; background: var(--color-bg-interactive);">"+ New"</button>
+                </div>
+                <div id="auth-section" class="hidden">
+                    <div id="auth-form" class="hidden">
+                        <input id="email-input" type="hidden"/>
+                        <button id="register-btn" type="button" class="hidden">"Start"</button>
                         <p id="auth-error" class="text-xs hidden" style="color: #ff3b30; text-align: center;"></p>
                     </div>
                 </div>
-                <div id="user-badge" class="hidden flex items-center gap-2 mt-4 px-3 py-1.5 rounded-lg" style="border: 1px solid var(--color-border-weak); background: var(--color-bg-weak);">
+                <div id="user-badge" class="flex items-center gap-2 mt-4 px-3 py-1.5 rounded-lg" style="border: 1px solid var(--color-border-weak); background: var(--color-bg-weak);">
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--color-text-weak)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                    <span id="badge-display" class="text-xs flex-1" style="color: var(--color-text-strong);"></span>
+                    <span id="badge-display" class="text-xs flex-1" style="color: var(--color-text-strong);">"single user · logged in"</span>
                     <span id="badge-sub" class="text-xs" style="color: var(--color-text-weak);"></span>
-                    <button id="logout-btn" class="text-xs px-2 py-0.5 rounded cursor-pointer transition" style="color: var(--color-text-weak); border: 1px solid var(--color-border-weak); background: transparent;">"Logout"</button>
+                    <button id="logout-btn" type="button" class="hidden">"Logout"</button>
                 </div>
                 <div style="padding: 8px 16px 4px;">
                     <div id="attachments" class="flex flex-wrap gap-1 mb-1"></div>
