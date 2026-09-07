@@ -439,12 +439,19 @@ fn set_world_writable(path: &std::path::Path) {
 
 fn session_path(dir: &Path, sid: &str) -> PathBuf {
     let sess = dir.join("sessions").join(sid);
-    let path = sess.join(format!("{sid}.wb"));
-    let legacy = dir.join(format!("{sid}.wb"));
-    if legacy.is_file() && !path.exists() {
-        let _ = std::fs::create_dir_all(&sess);
-        let _ = std::fs::rename(&legacy, &path);
-    }
+    let path = sess.join("whiteboard.wb");
+    // Migrate old per-sid filenames to the fixed name.
+    // Legacy 1: dir/<sid>.wb (pre-sessions layout)
+    // Legacy 2: dir/sessions/<sid>/<sid>.wb (old per-session filename)
+    let legacy_root = dir.join(format!("{sid}.wb"));
+    let legacy_sess = sess.join(format!("{sid}.wb"));
     let _ = std::fs::create_dir_all(&sess);
+    if !path.exists() {
+        if legacy_sess.is_file() {
+            let _ = std::fs::rename(&legacy_sess, &path);
+        } else if legacy_root.is_file() {
+            let _ = std::fs::rename(&legacy_root, &path);
+        }
+    }
     path
 }
