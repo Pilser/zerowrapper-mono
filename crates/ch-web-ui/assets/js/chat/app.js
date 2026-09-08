@@ -1,19 +1,20 @@
-// network.js
-var MAX_RECONNECT_DELAY = 30000;
-var BASE_RECONNECT_DELAY = 1000;
-var State = {
-  DISCONNECTED: "disconnected",
-  CONNECTING: "connecting",
-  CONNECTED: "connected",
-  RECONNECTING: "reconnecting"
+var __defProp = Object.defineProperty;
+var __returnValue = (v) => v;
+function __exportSetter(name, newValue) {
+  this[name] = __returnValue.bind(null, newValue);
+}
+var __export = (target, all) => {
+  for (var name in all)
+    __defProp(target, name, {
+      get: all[name],
+      enumerable: true,
+      configurable: true,
+      set: __exportSetter.bind(all, name)
+    });
 };
-var ws = null;
-var state = State.DISCONNECTED;
-var url = "";
-var callbacks = { onOpen: null, onMessage: null, onClose: null };
-var reconnectTimer = null;
-var reconnectAttempts = 0;
-var listenerMap = new Map;
+var __esm = (fn, res) => () => (fn && (res = fn(fn = 0)), res);
+
+// network.js
 function getState() {
   return state;
 }
@@ -96,19 +97,30 @@ function stopReconnect() {
     reconnectTimer = null;
   }
 }
-window.addEventListener("online", () => {
-  if (state === State.RECONNECTING || state === State.DISCONNECTED) {
-    stopReconnect();
-    if (url)
-      connect();
-  }
-});
-window.addEventListener("offline", () => {
-  emit("offline");
+var MAX_RECONNECT_DELAY = 30000, BASE_RECONNECT_DELAY = 1000, State, ws = null, state, url = "", callbacks, reconnectTimer = null, reconnectAttempts = 0, listenerMap;
+var init_network = __esm(() => {
+  State = {
+    DISCONNECTED: "disconnected",
+    CONNECTING: "connecting",
+    CONNECTED: "connected",
+    RECONNECTING: "reconnecting"
+  };
+  state = State.DISCONNECTED;
+  callbacks = { onOpen: null, onMessage: null, onClose: null };
+  listenerMap = new Map;
+  window.addEventListener("online", () => {
+    if (state === State.RECONNECTING || state === State.DISCONNECTED) {
+      stopReconnect();
+      if (url)
+        connect();
+    }
+  });
+  window.addEventListener("offline", () => {
+    emit("offline");
+  });
 });
 
 // dom.js
-var els = {};
 function init() {
   els.form = document.getElementById("chat-form");
   els.input = document.getElementById("chat-input");
@@ -125,137 +137,28 @@ function init() {
   els.emailInput = document.getElementById("email-input");
   els.authError = document.getElementById("auth-error");
   els.logoutBtn = document.getElementById("logout-btn");
+  els.sessionSelect = document.getElementById("session-select");
+  els.sessionNewBtn = document.getElementById("session-new-btn");
   els.sendBtn = document.getElementById("send-btn");
   els.cancelBtn = document.getElementById("cancel-btn");
   els.uploadBtn = document.getElementById("upload-btn");
   els.fileInput = document.getElementById("file-input");
   els.attachments = document.getElementById("attachments");
 }
-
-// auth.js
-var STORAGE_EMAIL = "zerowrapper_email";
-var STORAGE_SESSION = "zerowrapper_session";
-var STORAGE_NAME = "zerowrapper_name";
-var STORAGE_ROLE = "zerowrapper_role";
-var STORAGE_ROLES = "zerowrapper_roles";
-var state2 = {
-  email: "",
-  sessionId: "",
-  name: "",
-  role: "",
-  roles: []
-};
-var agent = (window.ZW_AGENT || "").toString();
-function buildSessionId(email) {
-  const sanitized = String(email || "").replace(/[^a-zA-Z0-9_.@-]/g, "_");
-  return "web." + agent + "." + sanitized;
-}
-function loadFromStorage() {
-  state2.email = localStorage.getItem(STORAGE_EMAIL) || "";
-  state2.sessionId = localStorage.getItem(STORAGE_SESSION) || "";
-  state2.name = localStorage.getItem(STORAGE_NAME) || "";
-  state2.role = localStorage.getItem(STORAGE_ROLE) || "";
-  try {
-    state2.roles = JSON.parse(localStorage.getItem(STORAGE_ROLES) || "[]");
-  } catch {
-    state2.roles = [];
-  }
-}
-function loadFromQuery() {
-  const qs = new URLSearchParams(location.search);
-  const email = (qs.get("email") || "").trim();
-  if (!email)
-    return;
-  if (localStorage.getItem(STORAGE_EMAIL))
-    return;
-  state2.email = email;
-  state2.sessionId = buildSessionId(email);
-  state2.name = (qs.get("name") || "").trim();
-  state2.role = (qs.get("role") || "").trim();
-  const roles = (qs.get("roles") || "").split(",").map((r) => r.trim()).filter(Boolean);
-  state2.roles = roles.length > 0 ? roles : state2.role ? [state2.role] : [];
-  saveToStorage();
-}
-function saveToStorage() {
-  if (state2.email)
-    localStorage.setItem(STORAGE_EMAIL, state2.email);
-  if (state2.sessionId)
-    localStorage.setItem(STORAGE_SESSION, state2.sessionId);
-  if (state2.name)
-    localStorage.setItem(STORAGE_NAME, state2.name);
-  if (state2.role)
-    localStorage.setItem(STORAGE_ROLE, state2.role);
-  if (state2.roles && state2.roles.length > 0)
-    localStorage.setItem(STORAGE_ROLES, JSON.stringify(state2.roles));
-}
-function clearFromStorage() {
-  localStorage.removeItem(STORAGE_EMAIL);
-  localStorage.removeItem(STORAGE_SESSION);
-  localStorage.removeItem(STORAGE_NAME);
-  localStorage.removeItem(STORAGE_ROLE);
-  localStorage.removeItem(STORAGE_ROLES);
-}
-function showForm() {
-  els.authSection.classList.remove("hidden");
-  els.userBadge.classList.add("hidden");
-}
-function showBadge() {
-  els.authSection.classList.add("hidden");
-  els.userBadge.classList.remove("hidden");
-  els.badgeDisplay.textContent = state2.name || state2.email;
-  const roles = state2.roles && state2.roles.length > 0 ? state2.roles : state2.role ? [state2.role] : [];
-  const roleText = roles.length > 1 ? `${roles[0]} +${roles.length - 1}` : roles[0] || "";
-  if (els.badgeSub)
-    els.badgeSub.textContent = [roleText, state2.email].filter(Boolean).join(" · ");
-}
-function scrollToAuth() {
-  els.authSection.scrollIntoView({ behavior: "smooth", block: "center" });
-  els.emailInput.focus();
-  els.authSection.style.transition = "box-shadow 0.3s";
-  els.authSection.style.boxShadow = "0 0 0 3px var(--color-bg-interactive)";
-  setTimeout(() => {
-    els.authSection.style.boxShadow = "none";
-  }, 2000);
-}
-function showAuthError(msg) {
-  els.authError.textContent = msg;
-  els.authError.classList.remove("hidden");
-}
-function hideAuthError() {
-  els.authError.classList.add("hidden");
-}
-
-// messages.js
-import { marked as marked3 } from "marked";
+var els;
+var init_dom = __esm(() => {
+  els = {};
+});
 
 // constants.js
-var USER_AVATAR = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>';
-var BOT_AVATAR = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
 function escapeHtml(str) {
   if (!str)
     return "";
   return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
-
-// markdown.js
-import hljs from "highlight.js";
-import { marked } from "marked";
-import katex from "katex";
-import mermaid from "mermaid";
+var USER_AVATAR = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>', BOT_AVATAR = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
 
 // mermaid-modal.js
-var modal = null;
-var stage = null;
-var canvas = null;
-var scale = 1;
-var tx = 0;
-var ty = 0;
-var fit = 1;
-var diagramW = 600;
-var diagramH = 400;
-var drag = null;
-var pointers = new Map;
-var pinchDist = 0;
 function clamp(v, lo, hi) {
   return Math.max(lo, Math.min(hi, v));
 }
@@ -380,71 +283,19 @@ function close() {
 function isOpen() {
   return !!modal && modal.classList.contains("active");
 }
+var modal = null, stage = null, canvas = null, scale = 1, tx = 0, ty = 0, fit = 1, diagramW = 600, diagramH = 400, drag = null, pointers, pinchDist = 0;
+var init_mermaid_modal = __esm(() => {
+  pointers = new Map;
+});
 
 // markdown.js
+import hljs from "highlight.js";
+import { marked } from "marked";
+import katex from "katex";
+import mermaid from "mermaid";
 function escapeHtml2(s) {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
-marked.use({
-  extensions: [
-    {
-      name: "mathBlock",
-      level: "block",
-      start(src) {
-        return src.indexOf("$$");
-      },
-      tokenizer(src) {
-        const match = /^\$\$([\s\S]+?)\$\$\n?/.exec(src);
-        if (!match)
-          return;
-        return { type: "mathBlock", raw: match[0], text: match[1] };
-      },
-      renderer(token) {
-        try {
-          return `<div class="math-block">${katex.renderToString(token.text, { displayMode: true, throwOnError: false })}</div>`;
-        } catch {
-          return `<div class="math-block">${escapeHtml2(token.text)}</div>`;
-        }
-      }
-    },
-    {
-      name: "mathInline",
-      level: "inline",
-      start(src) {
-        return src.indexOf("$");
-      },
-      tokenizer(src) {
-        const match = /^\$([^\s$][^$\n]*[^\s$])\$/.exec(src);
-        if (!match)
-          return;
-        return { type: "mathInline", raw: match[0], text: match[1] };
-      },
-      renderer(token) {
-        try {
-          return katex.renderToString(token.text, { displayMode: false, throwOnError: false });
-        } catch {
-          return escapeHtml2(token.text);
-        }
-      }
-    },
-    {
-      name: "mermaid",
-      level: "block",
-      start(src) {
-        return src.indexOf("```mermaid");
-      },
-      tokenizer(src) {
-        const match = /^```mermaid\s*\n([\s\S]*?)```/.exec(src);
-        if (!match)
-          return;
-        return { type: "mermaid", raw: match[0], text: match[1] };
-      },
-      renderer(token) {
-        return `<div class="mermaid">${escapeHtml2(token.text)}</div>`;
-      }
-    }
-  ]
-});
 function cssVar(name, fallback) {
   const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
   return v || fallback;
@@ -580,7 +431,6 @@ function mermaidTheme() {
     }
   };
 }
-var mermaidSources = new Map;
 function fitSvg(svg) {
   if (!svg)
     return;
@@ -643,7 +493,6 @@ function postProcessSvg(svg) {
   fitSvg(svg);
   svg.removeAttribute("style");
 }
-mermaid.initialize(mermaidTheme());
 function renderMermaid(el) {
   const nodes = el.querySelectorAll("div.mermaid");
   if (!nodes.length)
@@ -676,16 +525,6 @@ function rerenderMermaid() {
     mermaid.run({ nodes }).then(() => nodes.forEach((node) => postProcessSvg(node.querySelector("svg")))).catch(() => {});
   } catch {}
 }
-var mermaidThemeObserver = new MutationObserver(rerenderMermaid);
-mermaidThemeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
-document.addEventListener("click", (e) => {
-  if (isOpen())
-    return;
-  const svg = e.target.closest("svg");
-  if (!svg || !svg.closest(".mermaid"))
-    return;
-  open(svg);
-});
 function highlight(el) {
   el.querySelectorAll("pre code").forEach((block) => {
     hljs.highlightElement(block);
@@ -788,15 +627,85 @@ function render(el, html, runScripts = false) {
   highlight(el);
   renderMermaid(el);
 }
+var mermaidSources, mermaidThemeObserver;
+var init_markdown = __esm(() => {
+  init_mermaid_modal();
+  marked.use({
+    extensions: [
+      {
+        name: "mathBlock",
+        level: "block",
+        start(src) {
+          return src.indexOf("$$");
+        },
+        tokenizer(src) {
+          const match = /^\$\$([\s\S]+?)\$\$\n?/.exec(src);
+          if (!match)
+            return;
+          return { type: "mathBlock", raw: match[0], text: match[1] };
+        },
+        renderer(token) {
+          try {
+            return `<div class="math-block">${katex.renderToString(token.text, { displayMode: true, throwOnError: false })}</div>`;
+          } catch {
+            return `<div class="math-block">${escapeHtml2(token.text)}</div>`;
+          }
+        }
+      },
+      {
+        name: "mathInline",
+        level: "inline",
+        start(src) {
+          return src.indexOf("$");
+        },
+        tokenizer(src) {
+          const match = /^\$([^\s$][^$\n]*[^\s$])\$/.exec(src);
+          if (!match)
+            return;
+          return { type: "mathInline", raw: match[0], text: match[1] };
+        },
+        renderer(token) {
+          try {
+            return katex.renderToString(token.text, { displayMode: false, throwOnError: false });
+          } catch {
+            return escapeHtml2(token.text);
+          }
+        }
+      },
+      {
+        name: "mermaid",
+        level: "block",
+        start(src) {
+          return src.indexOf("```mermaid");
+        },
+        tokenizer(src) {
+          const match = /^```mermaid\s*\n([\s\S]*?)```/.exec(src);
+          if (!match)
+            return;
+          return { type: "mermaid", raw: match[0], text: match[1] };
+        },
+        renderer(token) {
+          return `<div class="mermaid">${escapeHtml2(token.text)}</div>`;
+        }
+      }
+    ]
+  });
+  mermaidSources = new Map;
+  mermaid.initialize(mermaidTheme());
+  mermaidThemeObserver = new MutationObserver(rerenderMermaid);
+  mermaidThemeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+  document.addEventListener("click", (e) => {
+    if (isOpen())
+      return;
+    const svg = e.target.closest("svg");
+    if (!svg || !svg.closest(".mermaid"))
+      return;
+    open(svg);
+  });
+});
 
 // streaming.js
 import { marked as marked2 } from "marked";
-var el = null;
-var content = "";
-var activeThought = null;
-var streamId = 0;
-var renderPending = false;
-var onFinalize = null;
 function setOnFinalize(cb) {
   onFinalize = cb;
 }
@@ -938,9 +847,21 @@ function hideTyping() {
     els.typingEl.classList.remove("active");
   }
 }
+var el = null, content = "", activeThought = null, streamId = 0, renderPending = false, onFinalize = null;
+var init_streaming = __esm(() => {
+  init_dom();
+  init_markdown();
+});
 
 // messages.js
-var abortController = null;
+var exports_messages = {};
+__export(exports_messages, {
+  abortHistoryFetch: () => abortHistoryFetch,
+  addMessage: () => addMessage,
+  fetchHistory: () => fetchHistory,
+  scrollToBottom: () => scrollToBottom
+});
+import { marked as marked3 } from "marked";
 function extractMessageText(raw) {
   if (!raw)
     return "";
@@ -1036,11 +957,21 @@ function fetchHistory() {
   if (abortController)
     abortController.abort();
   abortController = new AbortController;
-  const email = localStorage.getItem("zerowrapper_email");
-  if (!email)
+  const sid = localStorage.getItem("zerowrapper_session") || "";
+  if (!sid)
     return;
-  const url2 = "?api=history&user_id=" + encodeURIComponent(email);
-  fetch(url2, { signal: abortController.signal }).then((r) => r.json()).then((data) => {
+  const urls = [
+    "/api/history?session_id=" + encodeURIComponent(sid),
+    "?api=history&session_id=" + encodeURIComponent(sid)
+  ];
+  const tryFetch = (i) => {
+    if (i >= urls.length)
+      return Promise.resolve(null);
+    return fetch(urls[i], { signal: abortController.signal }).then((r) => r.ok ? r.json() : tryFetch(i + 1)).catch(() => tryFetch(i + 1));
+  };
+  tryFetch(0).then((data) => {
+    if (!data)
+      return;
     if (data.session_id) {
       localStorage.setItem("zerowrapper_session", data.session_id);
     }
@@ -1064,62 +995,12 @@ function abortHistoryFetch() {
     abortController = null;
   }
 }
-
-// tool-calls.js
-var pending = [];
-function handleToolCall(id, name, args, container) {
-  const target = container || els.messages;
-  if (!target)
-    return;
-  const pill = document.createElement("div");
-  pill.className = "tool-call-pill";
-  pill.dataset.id = id || "";
-  const argsStr = args ? JSON.stringify(args, null, 2) : null;
-  pill.innerHTML = '<div class="tc-pill-inner">' + "+ acting" + '<span class="tc-pill-status running">◌</span>' + "</div>" + (argsStr ? '<div class="tc-pill-detail hidden"><pre>' + escapeHtml(argsStr) + "</pre></div>" : "");
-  pill.addEventListener("click", () => {
-    const detail = pill.querySelector(".tc-pill-detail");
-    if (detail)
-      detail.classList.toggle("hidden");
-  });
-  target.appendChild(pill);
-  pill.scrollIntoView({ behavior: "smooth", block: "end" });
-  pending.push({ id: id || "", el: pill, name });
-}
-function handleToolResult(id, name, output) {
-  const idx = pending.findIndex((p) => p.id === id);
-  if (idx === -1)
-    return;
-  const item = pending[idx];
-  pending.splice(idx, 1);
-  const status = item.el.querySelector(".tc-pill-status");
-  if (status) {
-    status.className = "tc-pill-status done";
-    status.innerHTML = "✓";
-  }
-  if (output) {
-    let detail = item.el.querySelector(".tc-pill-detail");
-    const existed = !!detail;
-    if (!detail) {
-      detail = document.createElement("div");
-      detail.className = "tc-pill-detail hidden";
-      item.el.appendChild(detail);
-    }
-    if (output.length <= 80) {
-      detail.textContent = output;
-    } else {
-      detail.innerHTML = "<details><summary>" + output.slice(0, 80) + "...</summary><pre>" + escapeHtml(output) + "</pre></details>";
-    }
-    if (!existed) {
-      item.el.addEventListener("click", () => {
-        detail.classList.toggle("hidden");
-      });
-    }
-  }
-  item.el.scrollIntoView({ behavior: "smooth", block: "end" });
-}
-function clearPending() {
-  pending = [];
-}
+var abortController = null;
+var init_messages = __esm(() => {
+  init_dom();
+  init_markdown();
+  init_streaming();
+});
 
 // whiteboard-render.js
 import { marked as marked4 } from "marked";
@@ -1211,21 +1092,18 @@ function renderBoard(bodyContainer, pinsContainer, board) {
   renderBody(bodyContainer, board && board.body_md);
   renderPins(pinsContainer, board && board.pins);
 }
+var init_whiteboard_render = __esm(() => {
+  init_markdown();
+});
 
 // whiteboard.js
-var SWIPE_THRESHOLD = 40;
-var sessionId = "";
-var mode = "closed";
-var panel = null;
-var body = null;
-var pins = null;
-var down = null;
-var up = null;
-var dragStartY = null;
-var dragging = false;
-var currentState = null;
-var currentPage = 0;
-var syncHideTimer = null;
+var exports_whiteboard = {};
+__export(exports_whiteboard, {
+  init: () => init2,
+  setBoard: () => setBoard,
+  setSession: () => setSession,
+  sync: () => sync
+});
 function getEl2(id) {
   return document.getElementById(id);
 }
@@ -1536,8 +1414,181 @@ function setBoard(data) {
   if (next)
     next.disabled = true;
 }
+var SWIPE_THRESHOLD = 40, sessionId = "", mode = "closed", panel = null, body = null, pins = null, down = null, up = null, dragStartY = null, dragging = false, currentState = null, currentPage = 0, syncHideTimer = null;
+var init_whiteboard = __esm(() => {
+  init_network();
+  init_whiteboard_render();
+});
+
+// main.js
+init_network();
+init_dom();
+init_dom();
+
+// auth.js
+init_dom();
+var STORAGE_SESSION = "zerowrapper_session";
+var state2 = {
+  email: "",
+  sessionId: "",
+  name: "",
+  role: "",
+  roles: []
+};
+var agent = (window.ZW_AGENT || "").toString();
+function buildSessionId(email) {
+  const sanitized = String(email || "").replace(/[^a-zA-Z0-9_.@-]/g, "_");
+  return "web." + agent + "." + sanitized;
+}
+function genSimpleSid() {
+  const n = Date.now().toString(36) + Math.floor(Math.random() * 1296).toString(36);
+  return "sess_" + n.replace(/[^a-z0-9]/gi, "").toLowerCase();
+}
+async function fetchSessions() {
+  for (const url2 of ["/api/sessions", "?api=sessions"]) {
+    try {
+      const r = await fetch(url2);
+      if (!r.ok)
+        continue;
+      const j = await r.json();
+      if (j.sessions)
+        return j.sessions;
+    } catch {}
+  }
+  return [];
+}
+async function createSession(title) {
+  for (const url2 of ["/api/sessions", "?api=sessions_create"]) {
+    try {
+      const r = await fetch(url2, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: title || "" })
+      });
+      if (!r.ok)
+        continue;
+      return await r.json();
+    } catch {}
+  }
+  const id = genSimpleSid();
+  return { session_id: id, title: title || id };
+}
+function loadFromStorage() {
+  state2.sessionId = localStorage.getItem(STORAGE_SESSION) || "";
+  state2.email = "single";
+  state2.name = "single user";
+  state2.role = "";
+  state2.roles = [];
+}
+function loadFromQuery() {
+  const qs = new URLSearchParams(location.search);
+  const sid = (qs.get("session_id") || "").trim();
+  if (sid) {
+    state2.sessionId = sid.replace(/[^a-zA-Z0-9_.-]/g, "_");
+    state2.email = "single";
+    saveToStorage();
+    return;
+  }
+  const email = (qs.get("email") || "").trim();
+  if (!email)
+    return;
+  if (localStorage.getItem(STORAGE_SESSION))
+    return;
+  state2.email = "single";
+  state2.sessionId = buildSessionId(email);
+  saveToStorage();
+}
+function ensureSession() {
+  if (!state2.sessionId) {
+    state2.sessionId = genSimpleSid();
+    saveToStorage();
+  }
+  return state2.sessionId;
+}
+function saveToStorage() {
+  if (state2.sessionId)
+    localStorage.setItem(STORAGE_SESSION, state2.sessionId);
+}
+function showBadge() {
+  if (els.authSection)
+    els.authSection.classList.add("hidden");
+  if (!els.userBadge)
+    return;
+  els.userBadge.classList.remove("hidden");
+  if (els.badgeDisplay)
+    els.badgeDisplay.textContent = "single user";
+  if (els.badgeSub)
+    els.badgeSub.textContent = "logged in · " + (state2.sessionId || "");
+  const lb = document.getElementById("logout-btn");
+  if (lb)
+    lb.style.display = "none";
+}
 
 // connection.js
+init_network();
+init_dom();
+init_messages();
+init_streaming();
+
+// tool-calls.js
+init_dom();
+var pending = [];
+function handleToolCall(id, name, args, container) {
+  const target = container || els.messages;
+  if (!target)
+    return;
+  const pill = document.createElement("div");
+  pill.className = "tool-call-pill";
+  pill.dataset.id = id || "";
+  const argsStr = args ? JSON.stringify(args, null, 2) : null;
+  pill.innerHTML = '<div class="tc-pill-inner">' + "+ acting" + '<span class="tc-pill-status running">◌</span>' + "</div>" + (argsStr ? '<div class="tc-pill-detail hidden"><pre>' + escapeHtml(argsStr) + "</pre></div>" : "");
+  pill.addEventListener("click", () => {
+    const detail = pill.querySelector(".tc-pill-detail");
+    if (detail)
+      detail.classList.toggle("hidden");
+  });
+  target.appendChild(pill);
+  pill.scrollIntoView({ behavior: "smooth", block: "end" });
+  pending.push({ id: id || "", el: pill, name });
+}
+function handleToolResult(id, name, output) {
+  const idx = pending.findIndex((p) => p.id === id);
+  if (idx === -1)
+    return;
+  const item = pending[idx];
+  pending.splice(idx, 1);
+  const status = item.el.querySelector(".tc-pill-status");
+  if (status) {
+    status.className = "tc-pill-status done";
+    status.innerHTML = "✓";
+  }
+  if (output) {
+    let detail = item.el.querySelector(".tc-pill-detail");
+    const existed = !!detail;
+    if (!detail) {
+      detail = document.createElement("div");
+      detail.className = "tc-pill-detail hidden";
+      item.el.appendChild(detail);
+    }
+    if (output.length <= 80) {
+      detail.textContent = output;
+    } else {
+      detail.innerHTML = "<details><summary>" + output.slice(0, 80) + "...</summary><pre>" + escapeHtml(output) + "</pre></details>";
+    }
+    if (!existed) {
+      item.el.addEventListener("click", () => {
+        detail.classList.toggle("hidden");
+      });
+    }
+  }
+  item.el.scrollIntoView({ behavior: "smooth", block: "end" });
+}
+function clearPending() {
+  pending = [];
+}
+
+// connection.js
+init_whiteboard();
 var onStateChange = null;
 function setHint(state3) {
   if (!els.hint)
@@ -1644,16 +1695,10 @@ function send2(text, role, attachments) {
     return;
   }
   const payload = {
-    session_id: state2.sessionId || "",
-    user_id: state2.email,
+    session_id: state2.sessionId || localStorage.getItem("zerowrapper_session") || "",
+    user_id: "single",
     content: text
   };
-  if (state2.name)
-    payload.user_name = state2.name;
-  if (state2.roles && state2.roles.length > 0)
-    payload.roles = state2.roles;
-  else if (state2.role)
-    payload.roles = [state2.role];
   if (attachments && attachments.length > 0)
     payload.attachments = attachments;
   send(JSON.stringify(payload));
@@ -1661,6 +1706,10 @@ function send2(text, role, attachments) {
 function sendCancel2() {
   sendCancel(state2.sessionId);
 }
+
+// main.js
+init_streaming();
+init_messages();
 
 // lightbox.js
 var lightbox = null;
@@ -1851,18 +1900,14 @@ function init4() {
   init3(els.messages);
   loadFromQuery();
   loadFromStorage();
-  if (state2.email) {
-    showBadge();
-    connect2();
-  } else {
-    showForm();
-  }
-  els.registerBtn.addEventListener("click", handleLogin);
-  els.emailInput.addEventListener("keydown", (e) => {
-    if (e.key === "Enter")
-      els.registerBtn.click();
-  });
-  els.logoutBtn.addEventListener("click", handleLogout);
+  ensureSession();
+  showBadge();
+  connect2();
+  refreshSessionList();
+  if (els.sessionNewBtn)
+    els.sessionNewBtn.addEventListener("click", handleNewSession);
+  if (els.sessionSelect)
+    els.sessionSelect.addEventListener("change", handleSwitchSession);
   if (els.uploadBtn && els.fileInput) {
     els.uploadBtn.addEventListener("click", () => els.fileInput.click());
     els.fileInput.addEventListener("change", async () => {
@@ -1900,39 +1945,62 @@ function handleCancel() {
   sendCancel2();
   showSendIcon();
 }
-function handleLogin() {
-  hideAuthError();
-  const raw = els.emailInput.value.trim();
-  if (!raw) {
-    showAuthError("Please enter your email.");
+async function refreshSessionList() {
+  const list = await fetchSessions();
+  if (!els.sessionSelect)
     return;
+  els.sessionSelect.innerHTML = "";
+  const seen = new Set;
+  for (const s of list) {
+    const id = s.id || s.session_id;
+    if (!id || seen.has(id))
+      continue;
+    seen.add(id);
+    const opt = document.createElement("option");
+    opt.value = id;
+    opt.textContent = (s.title && s.title !== id ? s.title + " · " : "") + id;
+    if (id === state2.sessionId)
+      opt.selected = true;
+    els.sessionSelect.appendChild(opt);
   }
-  state2.email = raw;
-  state2.sessionId = buildSessionId(raw);
-  saveToStorage();
+  if (!seen.has(state2.sessionId)) {
+    const opt = document.createElement("option");
+    opt.value = state2.sessionId;
+    opt.textContent = state2.sessionId + " (current)";
+    opt.selected = true;
+    els.sessionSelect.appendChild(opt);
+  }
   showBadge();
-  connect2();
 }
-function handleLogout() {
-  clearFromStorage();
-  state2.email = "";
-  state2.sessionId = "";
-  disconnect2();
+async function handleNewSession() {
+  const res = await createSession("");
+  const id = res.session_id || res.id || genSimpleSid();
+  state2.sessionId = id;
+  saveToStorage();
   els.messages.innerHTML = "";
-  if (els.hint)
-    els.hint.style.display = "block";
-  if (els.hintText)
-    els.hintText.textContent = els.hintText.dataset.fallback || els.hintText.textContent;
-  if (els.chatRefreshBtn)
-    els.chatRefreshBtn.classList.add("hidden");
-  showForm();
+  disconnect2();
+  connect2();
+  refreshSessionList();
+}
+async function handleSwitchSession() {
+  const id = els.sessionSelect.value;
+  if (!id || id === state2.sessionId)
+    return;
+  state2.sessionId = id;
+  saveToStorage();
+  els.messages.innerHTML = "";
+  const { fetchHistory: fetchHistory2 } = await Promise.resolve().then(() => (init_messages(), exports_messages));
+  const whiteboard = await Promise.resolve().then(() => (init_whiteboard(), exports_whiteboard));
+  disconnect2();
+  connect2();
+  fetchHistory2();
+  whiteboard.setSession(id);
+  showBadge();
+  refreshSessionList();
 }
 function handleSubmit(e) {
   e.preventDefault();
-  if (!state2.email) {
-    scrollToAuth();
-    return;
-  }
+  ensureSession();
   finalizeIfActive();
   const text = els.input.value.trim();
   const attachments = [...uploadState.pending];
@@ -1961,5 +2029,6 @@ function autoGrow() {
 }
 
 // app-entry.js
+init_whiteboard();
 init4();
 init2();

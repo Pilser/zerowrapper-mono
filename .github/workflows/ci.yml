@@ -46,6 +46,18 @@ jobs:
           # Don't thrash cache on every PR push
           save-if: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' }}
 
+      - name: Install bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Bundle frontend JS
+        # app.js is served by the binary (layout.rs asset!) — rebuild from
+        # modules BEFORE cargo build so the binary embeds fresh frontend.
+        run: |
+          cd crates/ch-web-ui/assets/js/chat
+          bun build app-entry.js --format esm --external marked --external highlight.js --external katex --external mermaid --outfile app.js
+
       - name: cargo check
         run: cargo check --workspace --all-targets
 
@@ -66,5 +78,20 @@ jobs:
         with:
           name: zw-linux-x86_64
           path: target/release/zw
+          retention-days: 14
+          if-no-files-found: error
+
+      - name: Bundle assets
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.event_name == 'workflow_dispatch'
+        run: |
+          cargo install topcoat-cli --locked --root /tmp/topcoat-cli || true
+          /tmp/topcoat-cli/bin/topcoat asset bundle --bin zw --release --out bundle-assets || topcoat asset bundle --bin zw --release --out bundle-assets
+
+      - name: Upload assets bundle
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: zw-assets
+          path: bundle-assets/
           retention-days: 14
           if-no-files-found: error
