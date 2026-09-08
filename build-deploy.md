@@ -1,59 +1,17 @@
-# Build & Deploy Guide (waos / zerowrapper)
+# Build & Deploy (zerowrapper-mono, no docker)
 
-How to build the Rust service and deploy it to the Docker-backed sites
-(`vox` on :9090, `pilserlabs` on :9091).
+Flow: edit → push → CI builds → download binary + bundle → copy → restart → verify.
+The binary and its asset bundle are built by CI (`.github/workflows/ci.yml`);
+nothing is compiled on the deploy machine.
 
-## Prerequisites
+## 1. Edit
 
-- `cargo` (Rust toolchain) — builds the `zw` release binary.
-- `topcoat` (`~/.cargo/bin/topcoat`) — extracts hashed assets from the binary into a
-  directory the containers serve.
-- `docker` + `docker compose` — run the containers.
-- `bun` — only needed when changing the frontend JS/CSS (see the two-part build below).
-
-Key paths:
-
-- Repo: `/home/vox/.AAAPROJECTS/Whatsapp4Agents`
-- Crate: `zerowrapper/crates/ch-web-ui`
-- JS entry: `zerowrapper/crates/ch-web-ui/assets/js/chat/app-entry.js`
-- Deploy dir (shared binary + assets, gitignored): `zerowrapper/deploy/{zw,assets/}`
-- Per-domain config (tracked): `zerowrapper/deploy/config/{vox,pilserlabs}/`
-- Compose + env (tracked in this repo): `zerowrapper/deploy/{compose.yml,vox.env,pilserlabs.env}`
-- Runtime data (not in repo): `/home/vox/pilserlabs/{vox,pilserlabs}/data`
-
-## Layout
-
-The two containers share one binary (`zw`) and one asset bundle (`assets/` — the hashed
-`.js`/`.css` + `manifest.toml`, identical for both sites). Each site only mounts its own
-per-domain files (`favicon.svg`, `robots.txt`, `landing.yaml`, `sitesettings.yaml`) as
-`/app/config`:
-
-| env var                  | vox                       | pilserlabs                   | mounted as        |
-|--------------------------|---------------------------|------------------------------|-------------------|
-| `ZW_BIN`                 | `deploy/zw`               | `deploy/zw`                  | `/usr/local/bin/zw` (ro) |
-| `BUNDLE_DIR`             | `deploy/assets`           | `deploy/assets`              | `/app/bundle` (ro) |
-| `CONFIG_DIR`             | `deploy/config/vox`       | `deploy/config/pilserlabs`   | `/app/config` (ro) |
-| `TOPCOAT_ASSETS_DIR`     | `/app/bundle`             | `/app/bundle`                | —                  |
-| `ZEROWRAPPER_CONFIG_DIR` | `/app/config`             | `/app/config`                | —                  |
-| `ZEROWRAPPER_LANDING_YAML`| `/app/config/landing.yaml`| `/app/config/landing.yaml`  | —                  |
-| `ZEROWRAPPER_SETTINGS_YAML`| `/app/config/sitesettings.yaml`| `/app/config/sitesettings.yaml`| —          |
-
-The compose project name comes from `INSTANCE_NAME` in each env file (top-level
-`name: ${INSTANCE_NAME}`), so the true project names are `vox` and `pilserlabs` — matching
-the env files. No `-p` flag is needed.
-
-`DIST_DIR` / `ZEROWRAPPER_CH_WEB__DIST_PATH` (the old `web/dist` static frontend) have been
-removed — the topcoat bundle under `TOPCOAT_ASSETS_DIR` is the only frontend served.
-
-## Two-part build
-
-The project is **Rust (topcoat) + JS (bundled by bun)**. The Rust binary registers the JS
-asset at compile time; the JS must be bundled by bun *before* `cargo build --release`.
-
-### 1. Bundle frontend JS (bun) — only if you changed JS/CSS
+Rust in `zw-*/`, `src/`, `crates/`. Frontend JS lives in
+`crates/ch-web-ui/assets/js/chat/` as modules — only if you touched those,
+rebundle first so the committed `app.js` stays fresh:
 
 ```bash
-cd zerowrapper/crates/ch-web-ui/assets/js/chat
+cd crates/ch-web-ui/assets/js/chat
 bun build app-entry.js \
   --format esm \
   --external marked \
@@ -63,80 +21,56 @@ bun build app-entry.js \
   --outfile app.js
 ```
 
-CDN libraries (marked, katex, mermaid, highlight.js) stay external via the importmap; the
-output `app.js` is what the server serves.
+(CI re-runs this step anyway before `cargo build`, since the binary embeds
+`app.js` at compile time via `layout.rs` `asset!(…)`.)
 
-Optional: after editing any Rust file, sanity-check with `cargo check` (fast).
-
-### 2. Build the release binary (cargo)
+## 2. Push — CI triggers
 
 ```bash
-cd zerowrapper
-cargo build --release
+git add -A && git commit -m "..." && git push origin main
 ```
 
-This embeds the current `app.js`/`styles.css` into the `zw` binary's asset registry.
+CI (`ci` workflow) runs: bun bundle → `cargo check --workspace --all-targets`
+→ `cargo clippy` → `cargo test --workspace` → `cargo build -p zw --release`
+→ `topcoat asset bundle` → uploads two artifacts: `zw-linux-x86_64` (binary)
+and `zw-assets` (bundle). ~10 min. Watch: `gh run list --repo Pilser/zerowrapper-mono`.
 
-## Deploy
+## 3. Download binary + bundle (must stay paired)
 
-### 3. Bundle assets to the shared deploy dir (topcoat)
-
-`topcoat` reads the release binary's asset registry and writes hashed files (e.g.
-`app-<hash>.js`) + `manifest.toml` into the shared bundle dir, which both containers mount
-read-only as `/app/bundle`:
+The bundle's manifest IDs belong to that exact binary — never mix a new
+binary with an old bundle (web task panics with `failed to resolve asset`).
 
 ```bash
-cd zerowrapper
-topcoat asset bundle --bin zw --release --out /home/vox/.AAAPROJECTS/Whatsapp4Agents/zerowrapper/deploy/assets
+gh run download <run-id> --repo Pilser/zerowrapper-mono --dir /tmp/zw-new
+# → /tmp/zw-new/zw-linux-x86_64/zw  +  /tmp/zw-new/zw-assets/
 ```
 
-The per-domain files (`favicon.svg`, `robots.txt`, `landing.yaml`, `sitesettings.yaml`)
-live under `zerowrapper/deploy/config/{vox,pilserlabs}/` and are edited in place (tracked
-in git); they are NOT part of the bundle.
-
-### 4. Copy the binary (atomic, safe while containers run)
-
-Copy to a `.new` file then `mv` so the running process keeps its old inode safely:
+## 4. Copy into the deploy dir (atomic for the binary)
 
 ```bash
-cd zerowrapper
-cp target/release/zw deploy/zw.new
-mv -f deploy/zw.new deploy/zw
+D=/home/vox/.AAAPROJECTS/FPE/AI-plan/deployment/zerowrapper-mono
+cp /tmp/zw-new/zw-linux-x86_64/zw $D/zw.new && mv -f $D/zw.new $D/zw && chmod +x $D/zw
+rm -rf $D/assets && cp -r /tmp/zw-new/zw-assets $D/assets
 ```
 
-Both containers mount this same file, so one copy updates both.
+## 5. Restart and verify
 
-### 5. Recreate the containers (docker compose)
-
-`--force-recreate` is required because the bind mounts changed without a compose config
-change. The project name is taken from `INSTANCE_NAME` in the env file:
+Kill the old `./zw`, then run per `deployment/zerowrapper-mono/RUN.md`
+(`source mono.env`, `./zw`). Verify:
 
 ```bash
-cd zerowrapper/deploy
-docker compose -f compose.yml --env-file vox.env up -d --force-recreate
-docker compose -f compose.yml --env-file pilserlabs.env up -d --force-recreate
+curl -s -o /dev/null -w "%{http_code}\n" http://localhost:9092/   # 200
+curl -s http://localhost:9092/ | grep -o 'app-[a-z0-9]*\.js'      # current hash
 ```
 
-### 6. Verify
+Assets serve under `/_topcoat/assets/`. To confirm new frontend is live:
 
 ```bash
-curl -s -o /dev/null -w "%{http_code}\n" http://localhost:9090/   # vox: 200
-curl -s -o /dev/null -w "%{http_code}\n" http://localhost:9091/   # pilserlabs: 200
-curl -s http://localhost:9090/ | grep -o 'app-[a-f0-9]*\.js' | head -1   # current asset hash
-```
-
-Assets are served under `/_topcoat/assets/` (not the site root). To confirm a change is
-live, download that asset and grep for the new JS:
-
-```bash
-curl -s http://localhost:9090/_topcoat/assets/<app-hash>.js | grep '<your-symbol>'
+curl -s http://localhost:9092/_topcoat/assets/<app-hash>.js | grep '<your-symbol>'
 ```
 
 ## Troubleshooting
 
-- **Frontend change shows old behavior after deploy**: hard-refresh the browser (assets are
-  hash-versioned, so a refresh usually suffices). Confirm the served asset via step 6.
-- **Scripts/HTML not executing in chat**: script execution (`runScripts=true`) is currently
-  enabled for the **whiteboard body only**, not chat messages. Enable it in `messages.js`
-  and `owner-chat.js` if agent widgets need to run in chat.
-- **`docker compose up -d` reports "Running" without recreating**: add `--force-recreate`.
+- **Web task panics `failed to resolve asset`**: binary/bundle mismatch — redo step 3–4 together.
+- **`daemon socket LOST` in wrapper log / browser banner**: daemon down — restart it per `RUN.md`; wrapper recovers alone (retries + watchdog, no restart).
+- **Prompt fails `-32603`**: upstream provider error, not socket — check provider keys/status (see test-agent `ENV-SETUP.md` §3).
