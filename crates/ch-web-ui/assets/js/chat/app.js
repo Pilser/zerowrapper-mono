@@ -1512,16 +1512,8 @@ function saveToStorage() {
 function showBadge() {
   if (els.authSection)
     els.authSection.classList.add("hidden");
-  if (!els.userBadge)
-    return;
-  els.userBadge.classList.remove("hidden");
-  if (els.badgeDisplay)
-    els.badgeDisplay.textContent = "single user";
-  if (els.badgeSub)
-    els.badgeSub.textContent = "logged in · " + (state2.sessionId || "");
-  const lb = document.getElementById("logout-btn");
-  if (lb)
-    lb.style.display = "none";
+  if (els.userBadge)
+    els.userBadge.classList.add("hidden");
 }
 
 // connection.js

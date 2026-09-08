@@ -106,19 +106,15 @@ export function clearFromStorage() {
 }
 
 export function showForm() {
-  // Single-user: no login form. Hide it, show logged-in badge.
+  // No users, no login, no badge — single process. Hide shells if present.
   if (els.authSection) els.authSection.classList.add('hidden')
-  showBadge()
+  if (els.userBadge) els.userBadge.classList.add('hidden')
 }
 
 export function showBadge() {
+  // No-op kept for callers: no user identity is displayed anywhere.
   if (els.authSection) els.authSection.classList.add('hidden')
-  if (!els.userBadge) return
-  els.userBadge.classList.remove('hidden')
-  if (els.badgeDisplay) els.badgeDisplay.textContent = 'single user'
-  if (els.badgeSub) els.badgeSub.textContent = 'logged in · ' + (state.sessionId || '')
-  const lb = document.getElementById('logout-btn')
-  if (lb) lb.style.display = 'none'
+  if (els.userBadge) els.userBadge.classList.add('hidden')
 }
 
 export function scrollToAuth() {}
