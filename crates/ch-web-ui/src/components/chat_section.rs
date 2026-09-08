@@ -3,7 +3,9 @@ use topcoat::view::{view, component, Unescaped};
 use topcoat::context::Cx;
 
 #[component]
-pub async fn chat_section(_cx: &Cx) -> Result {
+pub async fn chat_section(cx: &Cx) -> Result {
+    // Bare page: request context intentionally unused (no settings/landing).
+    let _ = cx;
     view! {
         <section class="px-6 py-8 md:px-10 mb-2 md:mb-4" style="border-top: 1px solid var(--color-border-weak);">
             <div id="chat-messages">
