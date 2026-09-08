@@ -32,6 +32,49 @@ struct ZeroClawConnection {
     next_id: u64,
 }
 
+// ── Production reconnect policy ──────────────────────────────────────
+// The daemon socket can vanish at any time (daemon restart/deploy). Every
+// daemon round-trip below retries TRANSPORT failures (refused/closed/reset)
+// with backoff and gives up with a clear error. Application-level daemon
+// errors (bad params, provider failures) are never retried.
+const RECONNECT_ATTEMPTS: u32 = 8;
+
+fn reconnect_delay(attempt: u32) -> std::time::Duration {
+    // 250ms, 500ms, 1s, 2s, 4s, 8s, 8s, 8s (~28s total budget)
+    let ms = 250u64.saturating_mul(1 << attempt.min(5)).min(8000);
+    std::time::Duration::from_millis(ms)
+}
+
+/// True when the error means "the socket died" (retry) as opposed to "the
+/// daemon answered with an error" (do not retry).
+fn is_transport_error(e: &anyhow::Error) -> bool {
+    if let Some(io) = e.downcast_ref::<std::io::Error>() {
+        use std::io::ErrorKind::*;
+        if matches!(
+            io.kind(),
+            ConnectionRefused
+                | ConnectionReset
+                | ConnectionAborted
+                | NotConnected
+                | BrokenPipe
+                | TimedOut
+                | Interrupted
+                | UnexpectedEof
+        ) {
+            return true;
+        }
+    }
+    let s = format!("{e:#}").to_lowercase();
+    s.contains("connection closed")
+        || s.contains("connection reset")
+        || s.contains("connection refused")
+        || s.contains("broken pipe")
+        || s.contains("no such file")
+        || s.contains("not connected")
+        || s.contains("timed out")
+        || s.contains("unexpected eof")
+}
+
 impl ZeroClawBridge {
     pub fn new(socket_path: &str, db: DbPool) -> Self {
         let (cmd_tx, cmd_rx) = tokio::sync::mpsc::channel(64);
@@ -68,31 +111,99 @@ impl ZeroClawBridge {
         Ok(())
     }
 
+    /// Every command branch answers its reply channel — even on connect
+    /// failure — so callers never hang on a dropped sender.
     async fn exec_command(socket_path: String, cmd: ZeroClawCommand) -> anyhow::Result<()> {
-        let mut conn = Self::connect_to(&socket_path).await?;
         match cmd {
             ZeroClawCommand::Prompt { session_id, prompt, reply_tx } => {
-                let result = conn.prompt(&session_id, &prompt).await;
+                let result = Self::with_reconnect(&socket_path, |mut conn| {
+                    let session_id = session_id.clone();
+                    let prompt = prompt.clone();
+                    async move { conn.prompt(&session_id, &prompt).await }
+                })
+                .await;
                 let _ = reply_tx.send(result);
             }
             ZeroClawCommand::PromptStream { session_id, prompt, event_tx, reply_tx } => {
-                let result = conn.prompt_stream(&session_id, &prompt, &event_tx).await;
+                let result = Self::with_reconnect(&socket_path, |mut conn| {
+                    let session_id = session_id.clone();
+                    let prompt = prompt.clone();
+                    let event_tx = event_tx.clone();
+                    async move { conn.prompt_stream(&session_id, &prompt, &event_tx).await.map(|(text, _)| text) }
+                })
+                .await;
                 let _ = reply_tx.send(result);
             }
             ZeroClawCommand::NewSession { session_id, agent_alias, reply_tx } => {
-                let result = conn.new_session(&session_id, &agent_alias).await.map(|s| s);
+                let result = Self::with_reconnect(&socket_path, |mut conn| {
+                    let session_id = session_id.clone();
+                    let agent_alias = agent_alias.clone();
+                    async move { conn.new_session(&session_id, &agent_alias).await }
+                })
+                .await;
                 let _ = reply_tx.send(result);
             }
             ZeroClawCommand::GetSessionMessages { session_id, limit, reply_tx } => {
-                let result = conn.get_session_messages(&session_id, limit).await;
+                let result = Self::with_reconnect(&socket_path, |mut conn| {
+                    let session_id = session_id.clone();
+                    async move { conn.get_session_messages(&session_id, limit).await }
+                })
+                .await;
                 let _ = reply_tx.send(result);
             }
             ZeroClawCommand::Cancel { session_id, reply_tx } => {
-                let result = conn.cancel_session(&session_id).await;
+                let result = Self::with_reconnect(&socket_path, |mut conn| {
+                    let session_id = session_id.clone();
+                    async move { conn.cancel_session(&session_id).await }
+                })
+                .await;
                 let _ = reply_tx.send(result);
             }
         }
         Ok(())
+    }
+
+    /// Run `op` on a fresh connection, reconnecting with backoff on transport
+    /// failures. The op closure must be idempotent across attempts (all our
+    /// ops are: new_session is upsert-like, reads are pure).
+    async fn with_reconnect<T, F, Fut>(socket_path: &str, op: F) -> anyhow::Result<T>
+    where
+        F: Fn(ZeroClawConnection) -> Fut,
+        Fut: std::future::Future<Output = anyhow::Result<T>>,
+    {
+        let mut last_err = anyhow::anyhow!("unreachable");
+        for attempt in 0..RECONNECT_ATTEMPTS {
+            if attempt > 0 {
+                let d = reconnect_delay(attempt - 1);
+                tracing::warn!("ZeroClaw socket lost, reconnect attempt {attempt}/{RECONNECT_ATTEMPTS} in {d:?}");
+                tokio::time::sleep(d).await;
+            }
+            let conn = match Self::connect_to(socket_path).await {
+                Ok(c) => c,
+                Err(e) => {
+                    last_err = e;
+                    if attempt > 0 || is_transport_error(&last_err) {
+                        continue;
+                    }
+                    return Err(last_err);
+                }
+            };
+            match op(conn).await {
+                Ok(v) => {
+                    if attempt > 0 {
+                        tracing::info!("ZeroClaw socket reconnected after {attempt} retries");
+                    }
+                    return Ok(v);
+                }
+                Err(e) => {
+                    last_err = e;
+                    if !is_transport_error(&last_err) {
+                        return Err(last_err);
+                    }
+                }
+            }
+        }
+        Err(anyhow::anyhow!("ZeroClaw daemon unreachable after {RECONNECT_ATTEMPTS} attempts: {last_err:#}"))
     }
 
     async fn connect_to(socket_path: &str) -> anyhow::Result<ZeroClawConnection> {
@@ -110,17 +221,7 @@ impl ZeroClawBridge {
     }
 
     async fn connect(&self) -> anyhow::Result<ZeroClawConnection> {
-        let stream = UnixStream::connect(&self.socket_path)
-            .await
-            .map_err(|e| anyhow::anyhow!("connect to ZeroClaw socket {}: {}", self.socket_path, e))?;
-        let (reader, writer) = stream.into_split();
-        let mut conn = ZeroClawConnection {
-            writer,
-            reader: BufReader::new(reader),
-            next_id: 0,
-        };
-        conn.send_request("initialize", serde_json::json!({"protocol_version": 1})).await?;
-        Ok(conn)
+        Self::connect_to(&self.socket_path).await
     }
 
     async fn format_prompt(&self, _user_id: &str, channel: &str, role: &str, attachments: &[zw_core::Attachment], prompt: &str) -> String {
@@ -152,21 +253,39 @@ impl ZeroClawBridge {
     }
 
     pub async fn process_prompt(&self, session_id: &str, user_id: &str, agent_alias: &str, channel: &str, role: &str, attachments: &[zw_core::Attachment], prompt: &str) -> anyhow::Result<String> {
-        let mut conn = self.connect().await?;
-        let actual_session_id = conn.new_session(session_id, agent_alias).await?;
-        if let Some(wb) = &self.whiteboard {
-            if let Err(e) = wb.ensure(&actual_session_id).await {
-                tracing::warn!("whiteboard ensure failed: {}", e);
-            }
-        }
         // Single-user: simple sess_xxx id, user defaults to "single".
         let user = if user_id.is_empty() || user_id == "anonymous" { "single" } else { user_id };
-        if let Err(e) = self.db.upsert_session(&actual_session_id, user, agent_alias, None, None, "web").await {
-            tracing::warn!("Failed to save session to DB: {}", e);
-        }
-        let _ = self.db.touch_session(&actual_session_id).await;
         let structured_prompt = self.format_prompt(user, channel, role, attachments, prompt).await;
-        conn.prompt(&actual_session_id, &structured_prompt).await
+        let socket_path = self.socket_path.clone();
+        let session_id = session_id.to_string();
+        let agent_alias = agent_alias.to_string();
+        let user = user.to_string();
+        let db = self.db.clone();
+        let whiteboard = self.whiteboard.clone();
+        // Whole op is retried: new_session is upsert-like, db writes idempotent.
+        // NOTE: non-`move` closure on purpose — with_reconnect needs Fn.
+        Self::with_reconnect(&socket_path, |mut conn| {
+            let session_id = session_id.clone();
+            let agent_alias = agent_alias.clone();
+            let user = user.clone();
+            let structured_prompt = structured_prompt.clone();
+            let db = db.clone();
+            let whiteboard = whiteboard.clone();
+            async move {
+                let actual_session_id = conn.new_session(&session_id, &agent_alias).await?;
+                if let Some(wb) = &whiteboard {
+                    if let Err(e) = wb.ensure(&actual_session_id).await {
+                        tracing::warn!("whiteboard ensure failed: {}", e);
+                    }
+                }
+                if let Err(e) = db.upsert_session(&actual_session_id, &user, &agent_alias, None, None, "web").await {
+                    tracing::warn!("Failed to save session to DB: {}", e);
+                }
+                let _ = db.touch_session(&actual_session_id).await;
+                conn.prompt(&actual_session_id, &structured_prompt).await
+            }
+        })
+        .await
     }
 
     pub async fn process_prompt_stream(
@@ -180,29 +299,116 @@ impl ZeroClawBridge {
         prompt: &str,
         event_tx: mpsc::Sender<StreamEvent>,
     ) -> anyhow::Result<String> {
-        let mut conn = self.connect().await?;
-        let actual_session_id = conn.new_session(session_id, agent_alias).await?;
+        let user = if user_id.is_empty() || user_id == "anonymous" { "single" } else { user_id };
+        let structured_prompt = self.format_prompt(user, channel, role, attachments, prompt).await;
+        let socket_path = self.socket_path.clone();
+        let session_id = session_id.to_string();
+        let agent_alias = agent_alias.to_string();
+        let user = user.to_string();
+        let db = self.db.clone();
+        let whiteboard = self.whiteboard.clone();
+        let mut last_err = anyhow::anyhow!("unreachable");
+        // Retry only while NOTHING was streamed yet — re-issuing after partial
+        // chunks (or tool calls) could duplicate agent side effects.
+        for attempt in 0..RECONNECT_ATTEMPTS {
+            if attempt > 0 {
+                let d = reconnect_delay(attempt - 1);
+                tracing::warn!("ZeroClaw stream lost before first event, retry {attempt}/{RECONNECT_ATTEMPTS} in {d:?}");
+                tokio::time::sleep(d).await;
+            }
+            let conn = match Self::connect_to(&socket_path).await {
+                Ok(c) => c,
+                Err(e) => {
+                    last_err = e;
+                    if attempt > 0 || is_transport_error(&last_err) {
+                        continue;
+                    }
+                    return Self::fail_stream(&event_tx, last_err).await;
+                }
+            };
+            match Self::stream_once(conn, &session_id, &agent_alias, &user, &structured_prompt, &db, whiteboard.as_ref(), &event_tx).await {
+                Ok((text, streamed)) => {
+                    if attempt > 0 {
+                        tracing::info!("ZeroClaw stream recovered after {attempt} retries");
+                    }
+                    let _ = streamed;
+                    return Ok(text);
+                }
+                Err((e, streamed)) => {
+                    if streamed || !is_transport_error(&e) {
+                        return Self::fail_stream(&event_tx, e).await;
+                    }
+                    last_err = e;
+                }
+            }
+        }
+        Self::fail_stream(&event_tx, anyhow::anyhow!("ZeroClaw daemon unreachable after {RECONNECT_ATTEMPTS} attempts: {last_err:#}")).await
+    }
 
+    /// Terminal failure: always tell the client (no silent hangs), then Err.
+    async fn fail_stream(event_tx: &mpsc::Sender<StreamEvent>, e: anyhow::Error) -> anyhow::Result<String> {
+        let msg = format!("{e:#}");
+        let _ = event_tx
+            .send(StreamEvent::Error { message: format!("Daemon unreachable: {msg}") })
+            .await;
+        Err(e)
+    }
+
+    /// One attempt of open-session + prompt-stream. Returns (text, streamed_any).
+    async fn stream_once(
+        mut conn: ZeroClawConnection,
+        session_id: &str,
+        agent_alias: &str,
+        user: &str,
+        structured_prompt: &str,
+        db: &DbPool,
+        whiteboard: Option<&zw_whiteboard::WhiteboardHandle>,
+        event_tx: &mpsc::Sender<StreamEvent>,
+    ) -> Result<(String, bool), (anyhow::Error, bool)> {
+        // Intercept events to know whether anything reached the client yet.
+        let (inner_tx, mut inner_rx) = mpsc::channel::<StreamEvent>(256);
+        let actual_session_id = conn.new_session(session_id, agent_alias).await.map_err(|e| (e, false))?;
         let _ = event_tx.send(StreamEvent::SessionCreated { session_id: actual_session_id.clone() }).await;
-
-        if let Some(wb) = &self.whiteboard {
+        if let Some(wb) = whiteboard {
             if let Err(e) = wb.ensure(&actual_session_id).await {
                 tracing::warn!("whiteboard ensure failed: {}", e);
             }
         }
-
-        let user = if user_id.is_empty() || user_id == "anonymous" { "single" } else { user_id };
-        if let Err(e) = self.db.upsert_session(&actual_session_id, user, agent_alias, None, None, "web").await {
+        if let Err(e) = db.upsert_session(&actual_session_id, user, agent_alias, None, None, "web").await {
             tracing::warn!("Failed to save session to DB: {}", e);
         }
-        let _ = self.db.touch_session(&actual_session_id).await;
-        let structured_prompt = self.format_prompt(user, channel, role, attachments, prompt).await;
-        conn.prompt_stream(&actual_session_id, &structured_prompt, &event_tx).await
+        let _ = db.touch_session(&actual_session_id).await;
+        // Forwarder: client-visible events + streamed flag.
+        let fwd_tx = event_tx.clone();
+        let fwd = tokio::spawn(async move {
+            let mut any = false;
+            while let Some(ev) = inner_rx.recv().await {
+                any = true;
+                if fwd_tx.send(ev).await.is_err() {
+                    break;
+                }
+            }
+            any
+        });
+        let res = conn.prompt_stream(&actual_session_id, structured_prompt, &inner_tx).await;
+        drop(inner_tx);
+        let streamed = fwd.await.unwrap_or(false);
+        // SessionCreated went direct (not via forwarder); the prompt itself
+        // streamed iff the forwarder saw events.
+        match res {
+            Ok(text) => Ok((text, streamed)),
+            Err(e) => Err((e, streamed)),
+        }
     }
 
     pub async fn cancel_session(&self, session_id: &str) -> anyhow::Result<bool> {
-        let mut conn = self.connect().await?;
-        conn.cancel_session(session_id).await
+        let socket_path = self.socket_path.clone();
+        let session_id = session_id.to_string();
+        Self::with_reconnect(&socket_path, |mut conn| {
+            let session_id = session_id.clone();
+            async move { conn.cancel_session(&session_id).await }
+        })
+        .await
     }
 
     pub async fn get_session_messages(
@@ -210,8 +416,13 @@ impl ZeroClawBridge {
         session_id: &str,
         limit: Option<usize>,
     ) -> anyhow::Result<SessionMessagesResult> {
-        let mut conn = self.connect().await?;
-        conn.get_session_messages(session_id, limit).await
+        let socket_path = self.socket_path.clone();
+        let session_id = session_id.to_string();
+        Self::with_reconnect(&socket_path, |mut conn| {
+            let session_id = session_id.clone();
+            async move { conn.get_session_messages(&session_id, limit).await }
+        })
+        .await
     }
 }
 
@@ -294,12 +505,14 @@ impl ZeroClawConnection {
         }
     }
 
+    /// Returns (full_text, streamed_any): whether anything reached the
+    /// client determines if a transport failure may be retried safely.
     async fn prompt_stream(
         &mut self,
         session_id: &str,
         prompt: &str,
         event_tx: &mpsc::Sender<StreamEvent>,
-    ) -> anyhow::Result<String> {
+    ) -> anyhow::Result<(String, bool)> {
         let params = serde_json::json!({
             "session_id": session_id,
             "prompt": prompt,
@@ -318,6 +531,7 @@ impl ZeroClawConnection {
         self.writer.write_all(line.as_bytes()).await?;
 
         let mut full_text = String::new();
+        let mut streamed = false;
         loop {
             let mut buf = String::new();
             let n = self.reader.read_line(&mut buf).await?;
@@ -328,6 +542,7 @@ impl ZeroClawConnection {
 
             if let Ok(resp) = serde_json::from_str::<Value>(trimmed) {
                 if resp.get("id").and_then(|id| id.as_u64()) == Some(req_id) {
+                    streamed = true;
                     if let Some(err) = resp.get("error") {
                         let code = err.get("code").and_then(|c| c.as_i64()).unwrap_or(0);
                         let message = err.get("message").and_then(|m| m.as_str()).unwrap_or("unknown");
@@ -343,10 +558,11 @@ impl ZeroClawConnection {
                         }
                     }
                     let _ = event_tx.send(StreamEvent::ChunkReset).await;
-                    return Ok(full_text);
+                    return Ok((full_text, streamed));
                 }
 
                 if resp.get("method").and_then(|m| m.as_str()) == Some("session/update") {
+                    streamed = true;
                     if let Some(params) = resp.get("params") {
                         let event_type = params.get("type").and_then(|t| t.as_str()).unwrap_or("");
 
@@ -381,7 +597,7 @@ impl ZeroClawConnection {
                                 }
                                 let _ = event_tx.send(StreamEvent::ChunkReset).await;
                                 let _ = event_tx.send(StreamEvent::Done { content: full_text.clone() }).await;
-                                return Ok(full_text);
+                                return Ok((full_text, streamed));
                             }
                             _ => {}
                         }
