@@ -16,6 +16,7 @@ export function init() {
   els.emailInput = document.getElementById('email-input')
   els.authError = document.getElementById('auth-error')
   els.logoutBtn = document.getElementById('logout-btn')
+  els.daemonBanner = document.getElementById('daemon-banner')
   els.sessionSelect = document.getElementById('session-select')
   els.sessionNewBtn = document.getElementById('session-new-btn')
   els.sendBtn = document.getElementById('send-btn')

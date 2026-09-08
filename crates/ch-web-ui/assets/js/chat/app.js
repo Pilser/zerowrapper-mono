@@ -137,6 +137,7 @@ function init() {
   els.emailInput = document.getElementById("email-input");
   els.authError = document.getElementById("auth-error");
   els.logoutBtn = document.getElementById("logout-btn");
+  els.daemonBanner = document.getElementById("daemon-banner");
   els.sessionSelect = document.getElementById("session-select");
   els.sessionNewBtn = document.getElementById("session-new-btn");
   els.sendBtn = document.getElementById("send-btn");
@@ -1646,6 +1647,14 @@ function handleMessage(e) {
         addMessage("error", data.message || data.error || "Unknown error");
         if (onStateChange)
           onStateChange("error");
+        break;
+      case "daemon_status":
+        if (els.daemonBanner) {
+          if (data.online)
+            els.daemonBanner.classList.add("hidden");
+          else
+            els.daemonBanner.classList.remove("hidden");
+        }
         break;
     }
   } catch (e2) {

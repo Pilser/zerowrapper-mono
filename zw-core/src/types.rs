@@ -41,6 +41,9 @@ pub enum StreamEvent {
     /// Sent when a new session is created with the zeroclaw daemon.
     /// Frontend should store this session_id in localStorage.
     SessionCreated { session_id: String },
+    /// Emitted by the daemon watchdog when socket reachability changes.
+    /// Frontend should show/hide a "daemon reconnecting" banner.
+    DaemonStatus { online: bool },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

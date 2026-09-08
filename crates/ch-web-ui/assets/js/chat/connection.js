@@ -68,6 +68,12 @@ function handleMessage(e) {
         addMessage('error', data.message || data.error || 'Unknown error')
         if (onStateChange) onStateChange('error')
         break
+      case 'daemon_status':
+        if (els.daemonBanner) {
+          if (data.online) els.daemonBanner.classList.add('hidden')
+          else els.daemonBanner.classList.remove('hidden')
+        }
+        break
     }
   } catch (e2) {
     addMessage('assistant', e.data)

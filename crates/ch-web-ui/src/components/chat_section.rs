@@ -26,6 +26,7 @@ pub async fn chat_section(cx: &Cx) -> Result {
                 </div>
             </div>
             <div id="chat-bottom-bar" style="position: sticky; bottom: 0; z-index: 10; background: var(--color-bg); padding-top: 12px; margin-top: 8px;">
+                <div id="daemon-banner" class="hidden text-xs px-3 py-1.5 rounded-lg" style="border: 1px solid var(--color-status-error); background: color-mix(in srgb, var(--color-status-error) 12%, transparent); color: var(--color-text-strong); text-align: center;">"Daemon reconnecting… chats will send once it is back."</div>
                 <div id="session-bar" class="flex items-center gap-2 mt-4 px-3 py-1.5 rounded-lg" style="border: 1px solid var(--color-border-weak); background: var(--color-bg-weak);">
                     <span class="text-xs" style="color: var(--color-text-weak);">"Session"</span>
                     <select id="session-select" class="text-xs flex-1 px-2 py-1 rounded" style="background: var(--color-bg); color: var(--color-text-strong); border: 1px solid var(--color-border-weak);"></select>

@@ -10,6 +10,7 @@ pub struct ZeroClawBridge {
     socket_path: String,
     cmd_tx: tokio::sync::mpsc::Sender<ZeroClawCommand>,
     cmd_rx: Option<tokio::sync::mpsc::Receiver<ZeroClawCommand>>,
+    status_tx: tokio::sync::broadcast::Sender<bool>,
     db: DbPool,
     whiteboard: Option<zw_whiteboard::WhiteboardHandle>,
 }
@@ -20,6 +21,7 @@ impl Clone for ZeroClawBridge {
             socket_path: self.socket_path.clone(),
             cmd_tx: self.cmd_tx.clone(),
             cmd_rx: None,
+            status_tx: self.status_tx.clone(),
             db: self.db.clone(),
             whiteboard: self.whiteboard.clone(),
         }
@@ -78,10 +80,12 @@ fn is_transport_error(e: &anyhow::Error) -> bool {
 impl ZeroClawBridge {
     pub fn new(socket_path: &str, db: DbPool) -> Self {
         let (cmd_tx, cmd_rx) = tokio::sync::mpsc::channel(64);
+        let (status_tx, _) = tokio::sync::broadcast::channel(16);
         Self {
             socket_path: socket_path.to_string(),
             cmd_tx,
             cmd_rx: Some(cmd_rx),
+            status_tx,
             db,
             whiteboard: None,
         }
@@ -92,7 +96,62 @@ impl ZeroClawBridge {
     }
 
     pub fn handle(&self) -> ZeroClawHandle {
-        ZeroClawHandle::new(self.cmd_tx.clone())
+        ZeroClawHandle::new(self.cmd_tx.clone(), self.status_tx.clone())
+    }
+
+    /// Background watchdog: dials the daemon socket every `interval`,
+    /// broadcasting reachability changes and logging transitions. Runs until
+    /// the returned handle is dropped/aborted. First probe sets baseline
+    /// silently (no false "recovered" event at boot).
+    pub fn spawn_watchdog(&self, interval: std::time::Duration) -> tokio::task::JoinHandle<()> {
+        let socket_path = self.socket_path.clone();
+        let status_tx = self.status_tx.clone();
+        tokio::spawn(async move {
+            let mut ticker = tokio::time::interval(interval);
+            // Skip the immediate first tick so boot doesn't probe mid-startup.
+            ticker.tick().await;
+            let mut last: Option<bool> = None;
+            let mut down_since: Option<std::time::Instant> = None;
+            loop {
+                ticker.tick().await;
+                let online = Self::probe(&socket_path).await;
+                match (last, online) {
+                    (None, _) => {
+                        last = Some(online);
+                        if !online {
+                            down_since = Some(std::time::Instant::now());
+                            tracing::warn!("ZeroClaw watchdog: daemon socket unreachable at boot: {}", socket_path);
+                        } else {
+                            tracing::info!("ZeroClaw watchdog: daemon socket OK: {}", socket_path);
+                        }
+                    }
+                    (Some(prev), cur) if prev != cur => {
+                        last = Some(cur);
+                        if cur {
+                            let dark = down_since.map(|t| t.elapsed()).map(|d| format!(" after {d:?}")).unwrap_or_default();
+                            tracing::info!("ZeroClaw watchdog: daemon socket recovered{dark}");
+                            down_since = None;
+                        } else {
+                            down_since = Some(std::time::Instant::now());
+                            tracing::warn!("ZeroClaw watchdog: daemon socket LOST: {}", socket_path);
+                        }
+                        let _ = status_tx.send(cur);
+                    }
+                    _ => {}
+                }
+            }
+        })
+    }
+
+    /// Cheap liveness check: connect + initialize handshake, then drop.
+    async fn probe(socket_path: &str) -> bool {
+        match Self::connect_to(socket_path).await {
+            Ok(_) => true,
+            Err(e) => {
+                tracing::debug!("ZeroClaw watchdog probe failed: {e:#}");
+                false
+            }
+        }
     }
 
     pub async fn run(mut self) -> anyhow::Result<()> {

@@ -168,6 +168,10 @@ async fn main() -> anyhow::Result<()> {
         }
     });
 
+    // Daemon watchdog: probes the socket every 5s, logs transitions and
+    // pushes daemon_status to browsers. Independent of the run() loop.
+    let _watchdog = zeroclaw.spawn_watchdog(std::time::Duration::from_secs(5));
+
     let zc_handle = tokio::spawn(async move {
         if let Err(e) = zeroclaw.run().await {
             tracing::error!("ZeroClaw bridge exited: {}", e);

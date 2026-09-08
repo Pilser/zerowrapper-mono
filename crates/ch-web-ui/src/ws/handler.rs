@@ -71,6 +71,28 @@ pub async fn handle_ws_connection(
     let (ws_sender, mut ws_receiver) = socket.split();
     let ws_sender = Arc::new(tokio::sync::Mutex::new(ws_sender));
 
+    // Proactive daemon-status push: watchdog transitions become visible in
+    // the browser without waiting for a chat send to fail.
+    {
+        let ws = ws_sender.clone();
+        let mut status_rx = zeroclaw.subscribe_status();
+        tokio::spawn(async move {
+            loop {
+                match status_rx.recv().await {
+                    Ok(online) => {
+                        let frame = serde_json::json!({"type": "daemon_status", "online": online}).to_string();
+                        let mut sender = ws.lock().await;
+                        if sender.send(Message::Text(frame.into())).await.is_err() {
+                            break;
+                        }
+                    }
+                    Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
+                    Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+                }
+            }
+        });
+    }
+
     let mut current_session_id = String::new();
     let mut whiteboard_forwarding_for: Option<String> = None;
 

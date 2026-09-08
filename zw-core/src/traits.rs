@@ -81,11 +81,17 @@ impl ChannelRegistryHandle {
 #[derive(Clone)]
 pub struct ZeroClawHandle {
     tx: mpsc::Sender<ZeroClawCommand>,
+    status_tx: tokio::sync::broadcast::Sender<bool>,
 }
 
 impl ZeroClawHandle {
-    pub fn new(tx: mpsc::Sender<ZeroClawCommand>) -> Self {
-        Self { tx }
+    pub fn new(tx: mpsc::Sender<ZeroClawCommand>, status_tx: tokio::sync::broadcast::Sender<bool>) -> Self {
+        Self { tx, status_tx }
+    }
+
+    /// Subscribe to daemon reachability changes (true = socket answers).
+    pub fn subscribe_status(&self) -> tokio::sync::broadcast::Receiver<bool> {
+        self.status_tx.subscribe()
     }
 
     pub async fn prompt(&self, session_id: String, prompt: String) -> anyhow::Result<String> {
