@@ -116,6 +116,48 @@ pub struct AboutSection {
     pub text: String,
 }
 
+impl SiteSettings {
+    /// Built-in defaults for bare single-user deploys (no sitesettings.yaml).
+    pub fn bare_default() -> Self {
+        Self {
+            site: SiteInfo {
+                title: "Jerboa".into(),
+                brand: None,
+                url: "http://localhost:9092".into(),
+                local_url: None,
+                tagline: "AI agents".into(),
+                description: "Jerboa AI agents.".into(),
+                favicon: None,
+            },
+            footer: FooterConfig {
+                text: "© Jerboa".into(),
+                links: vec![],
+            },
+            business: None,
+        }
+    }
+}
+
+impl LandingData {
+    /// Built-in defaults for bare single-user deploys (no landing.yaml).
+    pub fn bare_default() -> Self {
+        Self {
+            hero: HeroSection {
+                title: "Jerboa".into(),
+                subtitle: Some("AI agents".into()),
+                description: "Jerboa AI agents.".into(),
+                fallback: "Backend not connected.".into(),
+            },
+            examples: vec![],
+            faq: vec![],
+            about: AboutSection {
+                heading: "Jerboa".into(),
+                text: String::new(),
+            },
+        }
+    }
+}
+
 pub fn load_site_settings(path: impl AsRef<Path>) -> Result<SiteSettings, String> {
     let content = std::fs::read_to_string(path.as_ref())
         .map_err(|e| format!("Failed to read {}: {e}", path.as_ref().display()))?;

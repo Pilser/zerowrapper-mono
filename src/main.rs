@@ -124,44 +124,26 @@ async fn main() -> anyhow::Result<()> {
     let config_dir = std::env::var("ZEROWRAPPER_CONFIG_DIR")
         .map(PathBuf::from)
         .unwrap_or_else(|_| std::path::PathBuf::from("config"));
-    let settings = ch_web_ui::config::load_site_settings(&settings_path)
-        .unwrap_or_else(|e| {
-            tracing::warn!("Failed to load {}: {e}", settings_path);
-            ch_web_ui::config::SiteSettings {
-                site: ch_web_ui::config::SiteInfo {
-                    title: "Jerboa".into(),
-                    brand: None,
-                    url: "http://localhost:9092".into(),
-                    local_url: None,
-                    tagline: "AI agents".into(),
-                    description: "Jerboa AI agents.".into(),
-                    favicon: None,
-                },
-                footer: ch_web_ui::config::FooterConfig {
-                    text: "© Jerboa".into(),
-                    links: vec![],
-                },
-                business: None,
-            }
-        });
-    let landing = ch_web_ui::config::load_landing(&landing_path)
-        .unwrap_or_else(|e| {
-            tracing::warn!("Failed to load {}: {e}", landing_path);
-            ch_web_ui::config::LandingData {
-                hero: ch_web_ui::config::HeroSection {
-                    title: "Jerboa".into(),
-                    subtitle: Some("AI agents".into()),
-                    description: "Jerboa AI agents.".into(),
-                    fallback: "Backend not connected.".into(),
-                },
-                examples: vec![],
-                faq: vec![],
-                about: ch_web_ui::config::AboutSection {
-                    heading: "Jerboa".into(),
-                    text: String::new(),
-                },
-            }
-        });
+    // Bare single-user deploys ship no landing/sitesettings YAML — missing file
+    // is the normal case, so fall back silently (warn only on parse errors).
+    let settings = if std::path::Path::new(&settings_path).exists() {
+        ch_web_ui::config::load_site_settings(&settings_path).unwrap_or_else(|e| {
+            tracing::warn!("Failed to parse {}: {e}", settings_path);
+            ch_web_ui::config::SiteSettings::bare_default()
+        })
+    } else {
+        tracing::info!("no {settings_path}, using built-in site defaults");
+        ch_web_ui::config::SiteSettings::bare_default()
+    };
+    let landing = if std::path::Path::new(&landing_path).exists() {
+        ch_web_ui::config::load_landing(&landing_path).unwrap_or_else(|e| {
+            tracing::warn!("Failed to parse {}: {e}", landing_path);
+            ch_web_ui::config::LandingData::bare_default()
+        })
+    } else {
+        tracing::info!("no {landing_path}, using built-in landing defaults");
+        ch_web_ui::config::LandingData::bare_default()
+    };
 
     let ui_ctx = ch_web_ui::context::AppContext::new(
         registry_handle,
