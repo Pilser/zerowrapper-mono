@@ -1,19 +1,15 @@
 use topcoat::Result;
 use topcoat::view::{view, component, Unescaped};
-use topcoat::context::{Cx, app_context};
-
-use crate::context::AppContext;
+use topcoat::context::Cx;
 
 #[component]
-pub async fn chat_section(cx: &Cx) -> Result {
-    let ctx: &AppContext = app_context(cx);
-
+pub async fn chat_section(_cx: &Cx) -> Result {
     view! {
         <section class="px-6 py-8 md:px-10 mb-2 md:mb-4" style="border-top: 1px solid var(--color-border-weak);">
             <div id="chat-messages">
                 <div id="fallback-hint" class="flex flex-col items-center justify-center py-12 gap-3">
                     <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--color-text-weak)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="opacity: 0.5;"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-                    <p id="chat-hint-text" class="text-center leading-relaxed" style="color: var(--color-text-weak); font-size: 0.8125rem;" data-fallback=(&ctx.landing.hero.fallback)>"Connecting to backend…"</p>
+                    <p id="chat-hint-text" class="text-center leading-relaxed" style="color: var(--color-text-weak); font-size: 0.8125rem;" data-fallback="Connecting to backend…">"Connecting to backend…"</p>
                     <button id="chat-refresh-btn" class="hidden flex items-center gap-1.5 px-3 py-1.5 rounded text-xs cursor-pointer transition" style="color: var(--color-text-weak); border: 1px solid var(--color-border-weak); background: var(--color-bg-weak);" type="button">
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
                         "Refresh"

@@ -31,8 +31,8 @@ pub async fn public_wb(cx: &Cx) -> Result<Response> {
         .lines()
         .find_map(|l| l.strip_prefix("# ").map(|s| s.trim().to_string()))
         .unwrap_or_else(|| "Shared Whiteboard Page".to_string());
-    let favicon = ctx.settings.site.favicon.as_deref().unwrap_or("/favicon.svg");
-    let brand = ctx.settings.site.brand_or_title();
+    let favicon = "/favicon.svg";
+    let brand = "chat";
 
     let css_url = format!("/?asset={}", bundled_asset(cx, STYLESHEET).name());
     let wb_js_url = format!("/?asset={}", bundled_asset(cx, PUBLIC_WB_JS).name());

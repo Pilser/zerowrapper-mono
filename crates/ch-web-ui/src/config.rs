@@ -117,20 +117,21 @@ pub struct AboutSection {
 }
 
 impl SiteSettings {
-    /// Built-in defaults for bare single-user deploys (no sitesettings.yaml).
+    /// Neutral defaults for the bare chat page. No brand, no footer, no
+    /// hardcoded URL (multi-proxy safe — nothing builds absolute URLs).
     pub fn bare_default() -> Self {
         Self {
             site: SiteInfo {
-                title: "Jerboa".into(),
+                title: String::new(),
                 brand: None,
-                url: "http://localhost:9092".into(),
+                url: String::new(),
                 local_url: None,
-                tagline: "AI agents".into(),
-                description: "Jerboa AI agents.".into(),
+                tagline: String::new(),
+                description: String::new(),
                 favicon: None,
             },
             footer: FooterConfig {
-                text: "© Jerboa".into(),
+                text: String::new(),
                 links: vec![],
             },
             business: None,
@@ -139,19 +140,19 @@ impl SiteSettings {
 }
 
 impl LandingData {
-    /// Built-in defaults for bare single-user deploys (no landing.yaml).
+    /// Neutral defaults — the bare page renders no landing content.
     pub fn bare_default() -> Self {
         Self {
             hero: HeroSection {
-                title: "Jerboa".into(),
-                subtitle: Some("AI agents".into()),
-                description: "Jerboa AI agents.".into(),
-                fallback: "Backend not connected.".into(),
+                title: String::new(),
+                subtitle: None,
+                description: String::new(),
+                fallback: "Connecting to backend…".into(),
             },
             examples: vec![],
             faq: vec![],
             about: AboutSection {
-                heading: "Jerboa".into(),
+                heading: String::new(),
                 text: String::new(),
             },
         }
