@@ -3,8 +3,6 @@ use zw_core::{ChannelRegistryHandle, ZeroClawHandle};
 use zw_db::SessionStore;
 use zw_db::rate::RateLimiter;
 use zw_cache::CacheManager;
-use crate::config::{SiteSettings, LandingData};
-
 #[derive(Clone)]
 pub struct AppContext {
     pub registry: ChannelRegistryHandle,
@@ -15,8 +13,6 @@ pub struct AppContext {
     pub agent: String,
     pub upload_dir: std::path::PathBuf,
     pub config_dir: std::path::PathBuf,
-    pub settings: SiteSettings,
-    pub landing: LandingData,
     pub whiteboard: Option<zw_whiteboard::WhiteboardHandle>,
     pub materials: Option<zw_materials::TemplateStore>,
     pub mcp: Option<zw_mcp::dispatch::McpProviders>,
@@ -32,8 +28,6 @@ impl AppContext {
         agent: &str,
         upload_dir: std::path::PathBuf,
         config_dir: std::path::PathBuf,
-        settings: SiteSettings,
-        landing: LandingData,
     ) -> Self {
         Self {
             registry,
@@ -44,8 +38,6 @@ impl AppContext {
             agent: agent.to_string(),
             upload_dir,
             config_dir,
-            settings,
-            landing,
             whiteboard: None,
             materials: None,
             mcp: None,

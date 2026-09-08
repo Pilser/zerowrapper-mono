@@ -94,10 +94,6 @@ async fn main() -> anyhow::Result<()> {
         zw_mcp::manage_materials::ManageMaterialsProvider::new(Clone::clone(&materials))
     )).await;
 
-    if config.mcp.is_none() {
-        tracing::info!("No [zerowrapper.mcp] configured (only needed if zeroclaw daemon needs to discover this server)");
-    }
-
     tracing::info!("Config loaded: zeroclaw_socket={}, db={}, web_channel={{{}}}",
         config.zeroclaw_socket, config.db_path, config.ch_web.bind);
 
@@ -117,33 +113,11 @@ async fn main() -> anyhow::Result<()> {
     let registry_handle = channels.registry_handle();
     let zeroclaw_handle = Arc::new(channels.zeroclaw_handle());
 
-    let landing_path = std::env::var("ZEROWRAPPER_LANDING_YAML")
-        .unwrap_or_else(|_| "./landing.yaml".to_string());
-    let settings_path = std::env::var("ZEROWRAPPER_SETTINGS_YAML")
-        .unwrap_or_else(|_| "./sitesettings.yaml".to_string());
+    // Bare page: no landing/sitesettings YAML is ever loaded — no checkers,
+    // no fallback logs. config_dir stays for favicon/robots static files.
     let config_dir = std::env::var("ZEROWRAPPER_CONFIG_DIR")
         .map(PathBuf::from)
         .unwrap_or_else(|_| std::path::PathBuf::from("config"));
-    // Bare single-user deploys ship no landing/sitesettings YAML — missing file
-    // is the normal case, so fall back silently (warn only on parse errors).
-    let settings = if std::path::Path::new(&settings_path).exists() {
-        ch_web_ui::config::load_site_settings(&settings_path).unwrap_or_else(|e| {
-            tracing::warn!("Failed to parse {}: {e}", settings_path);
-            ch_web_ui::config::SiteSettings::bare_default()
-        })
-    } else {
-        tracing::info!("no {settings_path}, using built-in site defaults");
-        ch_web_ui::config::SiteSettings::bare_default()
-    };
-    let landing = if std::path::Path::new(&landing_path).exists() {
-        ch_web_ui::config::load_landing(&landing_path).unwrap_or_else(|e| {
-            tracing::warn!("Failed to parse {}: {e}", landing_path);
-            ch_web_ui::config::LandingData::bare_default()
-        })
-    } else {
-        tracing::info!("no {landing_path}, using built-in landing defaults");
-        ch_web_ui::config::LandingData::bare_default()
-    };
 
     let ui_ctx = ch_web_ui::context::AppContext::new(
         registry_handle,
@@ -153,8 +127,6 @@ async fn main() -> anyhow::Result<()> {
         &config.ch_web.agent,
         config.ch_web.upload_dir.clone(),
         config_dir,
-        settings,
-        landing,
     )
     .with_whiteboard(whiteboard.clone())
     .with_materials(materials)

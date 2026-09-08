@@ -1,5 +1,5 @@
 use topcoat::Result;
-use topcoat::router::{Body, Response, StatusCode, route, to_bytes, headers};
+use topcoat::router::{Body, Response, StatusCode, route, to_bytes};
 use topcoat::context::{Cx, app_context};
 
 use crate::context::AppContext;
@@ -7,29 +7,9 @@ use zw_mcp::dispatch::handle_request;
 
 /// Serve the MCP server over HTTP (streamable-http compatible) on the same
 /// running web instance, so the DB-backed whiteboard tool stays single-process.
+/// Single process on localhost: no bearer — it just connects.
 #[route(POST "/mcp")]
 pub async fn mcp_route(cx: &Cx, body: Body) -> Result<Response> {
-    if let Ok(expected) = std::env::var("ZEROWRAPPER__MCP_TOKEN") {
-        if !expected.is_empty() {
-            let provided = headers(cx)
-                .get("Authorization")
-                .and_then(|v| v.to_str().ok())
-                .unwrap_or("")
-                .strip_prefix("Bearer ")
-                .unwrap_or("");
-            if provided != expected {
-                return Ok(Response::builder()
-                    .status(StatusCode::UNAUTHORIZED)
-                    .header("Content-Type", "application/json")
-                    .body(Body::from(
-                        serde_json::json!({"jsonrpc": "2.0", "error": {"code": -32000, "message": "unauthorized"}})
-                            .to_string(),
-                    ))
-                    .unwrap());
-            }
-        }
-    }
-
     let ctx: &AppContext = app_context(cx);
     let Some(providers) = &ctx.mcp else {
         return Ok(Response::builder()
