@@ -455,7 +455,7 @@ impl ZeroClawBridge {
         // SessionCreated went direct (not via forwarder); the prompt itself
         // streamed iff the forwarder saw events.
         match res {
-            Ok(text) => Ok((text, streamed)),
+            Ok((text, _)) => Ok((text, streamed)),
             Err(e) => Err((e, streamed)),
         }
     }
@@ -590,7 +590,9 @@ impl ZeroClawConnection {
         self.writer.write_all(line.as_bytes()).await?;
 
         let mut full_text = String::new();
-        let mut streamed = false;
+        // Assigned on every path that reads it (id-match and update arms);
+        // the no-event bail paths never read it.
+        let mut streamed: bool;
         loop {
             let mut buf = String::new();
             let n = self.reader.read_line(&mut buf).await?;
