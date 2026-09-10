@@ -82,16 +82,28 @@ impl ChannelRegistryHandle {
 pub struct ZeroClawHandle {
     tx: mpsc::Sender<ZeroClawCommand>,
     status_tx: tokio::sync::broadcast::Sender<bool>,
+    status_state: std::sync::Arc<std::sync::Mutex<Option<bool>>>,
 }
 
 impl ZeroClawHandle {
-    pub fn new(tx: mpsc::Sender<ZeroClawCommand>, status_tx: tokio::sync::broadcast::Sender<bool>) -> Self {
-        Self { tx, status_tx }
+    pub fn new(
+        tx: mpsc::Sender<ZeroClawCommand>,
+        status_tx: tokio::sync::broadcast::Sender<bool>,
+        status_state: std::sync::Arc<std::sync::Mutex<Option<bool>>>,
+    ) -> Self {
+        Self { tx, status_tx, status_state }
     }
 
     /// Subscribe to daemon reachability changes (true = socket answers).
     pub fn subscribe_status(&self) -> tokio::sync::broadcast::Receiver<bool> {
         self.status_tx.subscribe()
+    }
+
+    /// Latest watchdog reading, if any tick has run. Late subscribers
+    /// (fresh browser sockets) use this for an immediate status frame
+    /// instead of waiting for the next transition.
+    pub fn current_status(&self) -> Option<bool> {
+        self.status_state.lock().ok().and_then(|g| *g)
     }
 
     pub async fn prompt(&self, session_id: String, prompt: String) -> anyhow::Result<String> {

@@ -72,7 +72,15 @@ pub async fn handle_ws_connection(
     let ws_sender = Arc::new(tokio::sync::Mutex::new(ws_sender));
 
     // Proactive daemon-status push: watchdog transitions become visible in
-    // the browser without waiting for a chat send to fail.
+    // the browser without waiting for a chat send to fail. Plus an immediate
+    // frame with the latest known reading: broadcast has no replay, so a
+    // fresh socket would otherwise wait for the next transition (and the UI
+    // banner would sit on "reconnecting" despite a healthy link).
+    if let Some(online) = zeroclaw.current_status() {
+        let frame = serde_json::json!({"type": "daemon_status", "online": online}).to_string();
+        let mut sender = ws_sender.lock().await;
+        let _ = sender.send(Message::Text(frame.into())).await;
+    }
     {
         let ws = ws_sender.clone();
         let mut status_rx = zeroclaw.subscribe_status();

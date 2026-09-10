@@ -11,6 +11,10 @@ pub struct ZeroClawBridge {
     cmd_tx: tokio::sync::mpsc::Sender<ZeroClawCommand>,
     cmd_rx: Option<tokio::sync::mpsc::Receiver<ZeroClawCommand>>,
     status_tx: tokio::sync::broadcast::Sender<bool>,
+    /// Last watchdog reading (shared with handles so late subscribers —
+    /// e.g. a freshly opened browser socket — learn the current state
+    /// immediately instead of waiting for the next transition).
+    status_state: std::sync::Arc<std::sync::Mutex<Option<bool>>>,
     db: DbPool,
     whiteboard: Option<zw_whiteboard::WhiteboardHandle>,
 }
@@ -22,6 +26,7 @@ impl Clone for ZeroClawBridge {
             cmd_tx: self.cmd_tx.clone(),
             cmd_rx: None,
             status_tx: self.status_tx.clone(),
+            status_state: self.status_state.clone(),
             db: self.db.clone(),
             whiteboard: self.whiteboard.clone(),
         }
@@ -86,6 +91,7 @@ impl ZeroClawBridge {
             cmd_tx,
             cmd_rx: Some(cmd_rx),
             status_tx,
+            status_state: std::sync::Arc::new(std::sync::Mutex::new(None)),
             db,
             whiteboard: None,
         }
@@ -96,7 +102,11 @@ impl ZeroClawBridge {
     }
 
     pub fn handle(&self) -> ZeroClawHandle {
-        ZeroClawHandle::new(self.cmd_tx.clone(), self.status_tx.clone())
+        ZeroClawHandle::new(
+            self.cmd_tx.clone(),
+            self.status_tx.clone(),
+            self.status_state.clone(),
+        )
     }
 
     /// Background watchdog: dials the daemon socket every `interval`,
@@ -106,6 +116,7 @@ impl ZeroClawBridge {
     pub fn spawn_watchdog(&self, interval: std::time::Duration) -> tokio::task::JoinHandle<()> {
         let socket_path = self.socket_path.clone();
         let status_tx = self.status_tx.clone();
+        let status_state = self.status_state.clone();
         tokio::spawn(async move {
             let mut ticker = tokio::time::interval(interval);
             // Skip the immediate first tick so boot doesn't probe mid-startup.
@@ -115,9 +126,20 @@ impl ZeroClawBridge {
             loop {
                 ticker.tick().await;
                 let online = Self::probe(&socket_path).await;
+                // Mirror every reading for late subscribers (fresh browser
+                // sockets ask current_status() on connect).
+                if let Ok(mut guard) = status_state.lock() {
+                    *guard = Some(online);
+                }
                 match (last, online) {
                     (None, _) => {
                         last = Some(online);
+                        // ALWAYS publish the baseline: subscribers (browser
+                        // UI banner) start "reconnecting" and only clear on
+                        // an online:true frame. Skipping it when the daemon
+                        // wins the startup race leaves the UI stuck forever
+                        // on a healthy link.
+                        let _ = status_tx.send(online);
                         if !online {
                             down_since = Some(std::time::Instant::now());
                             tracing::warn!("ZeroClaw watchdog: daemon socket unreachable at boot: {}", socket_path);
