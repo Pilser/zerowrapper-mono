@@ -51,7 +51,17 @@ jobs:
         with:
           bun-version: latest
 
+      - name: Cache UI bundle
+        id: ui-cache
+        uses: actions/cache@v4
+        with:
+          # The generated app.js is committed; skip the rebuild (and the
+          # downstream crate relink it triggers) when JS sources are unchanged.
+          path: crates/ch-web-ui/assets/js/chat/app.js
+          key: zw-ui-${{ hashFiles('crates/ch-web-ui/assets/js/chat/**', '!crates/ch-web-ui/assets/js/chat/app.js') }}
+
       - name: Bundle frontend JS
+        if: steps.ui-cache.outputs.cache-hit != 'true'
         # app.js is served by the binary (layout.rs asset!) — rebuild from
         # modules BEFORE cargo build so the binary embeds fresh frontend.
         run: |
@@ -81,11 +91,27 @@ jobs:
           retention-days: 14
           if-no-files-found: error
 
+      - name: Cache topcoat-cli
+        id: topcoat-cache
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.event_name == 'workflow_dispatch'
+        uses: actions/cache@v4
+        with:
+          # cargo install recompiles from source every run (~minutes);
+          # reuse until the lockfile changes.
+          path: /tmp/topcoat-cli
+          key: topcoat-cli-${{ hashFiles('Cargo.lock') }}
+
       - name: Bundle assets
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.event_name == 'workflow_dispatch'
         run: |
-          cargo install topcoat-cli --locked --root /tmp/topcoat-cli || true
+          if [ "${{ steps.topcoat-cache.outputs.cache-hit }}" != 'true' ]; then
+            cargo install topcoat-cli --locked --root /tmp/topcoat-cli || true
+          fi
           /tmp/topcoat-cli/bin/topcoat asset bundle --bin zw --release --out bundle-assets || topcoat asset bundle --bin zw --release --out bundle-assets
+
+      - name: sccache stats
+        if: always()
+        run: sccache --show-stats || true
 
       - name: Upload assets bundle
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.event_name == 'workflow_dispatch'
