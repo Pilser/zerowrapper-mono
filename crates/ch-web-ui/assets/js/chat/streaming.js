@@ -3,10 +3,10 @@ import { els } from './dom.js'
 import { BOT_AVATAR } from './constants.js'
 import { render as renderMarkdown } from './markdown.js'
 import { autoScroll } from './scroll.js'
+import * as activity from './activity.js'
 
 let el = null
 let content = ''
-let activeThought = null
 let streamId = 0
 let renderPending = false
 let onFinalize = null
@@ -47,34 +47,13 @@ function scheduleRender(id) {
 }
 
 export function appendThought(content, container) {
-  const target = container || els.messages
-  if (!target) return
-  if (!activeThought) {
-    const pill = document.createElement('div')
-    pill.className = 'thought-pill'
-    pill.innerHTML = '<div class="tc-pill-inner">+ thoughts</div>' +
-      '<div class="tc-pill-detail hidden"><pre></pre></div>'
-    pill.addEventListener('click', () => {
-      const detail = pill.querySelector('.tc-pill-detail')
-      if (detail) detail.classList.toggle('hidden')
-    })
-    target.appendChild(pill)
-    const detail = pill.querySelector('.tc-pill-detail')
-    if (detail) detail.classList.remove('hidden')
-    autoScroll()
-    activeThought = pill
-  }
-  const pre = activeThought.querySelector('.tc-pill-detail pre')
-  if (pre) pre.textContent += (content || '')
+  // Thoughts render in the turn's stacked activity fold (single Thinking row
+  // with a live count), regardless of container.
+  activity.pushThought(content || '')
 }
 
-export function closeThought() {
-  if (activeThought) {
-    const detail = activeThought.querySelector('.tc-pill-detail')
-    if (detail) detail.classList.add('hidden')
-    activeThought = null
-  }
-}
+// Kept for API compatibility; the activity fold manages open state now.
+export function closeThought() {}
 
 function finalizeThought() { closeThought() }
 
@@ -92,6 +71,7 @@ export function handleChunk(text) {
 
 export function finalize() {
   finalizeThought()
+  activity.finishTurn()
   if (!el) { if (onFinalize) onFinalize(); return }
   const target = el
   const trimmed = content.trim()
@@ -106,7 +86,7 @@ export function finalize() {
 }
 
 export function finalizeIfActive() {
-  if (activeThought || content) finalize()
+  if (content) finalize()
 }
 
 export function handleDone(text) {
@@ -127,11 +107,7 @@ export function cancel() {
 }
 
 export function reset() {
-  if (activeThought) {
-    const parent = activeThought.parentElement
-    if (parent) parent.remove()
-    activeThought = null
-  }
+  activity.resetTurn()
   if (el) {
     const parent = el.parentElement
     if (parent) parent.remove()

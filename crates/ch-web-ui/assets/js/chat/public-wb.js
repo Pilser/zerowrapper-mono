@@ -647,12 +647,24 @@ function collectScripts(root) {
   });
   return scripts;
 }
+function canCompileClassic(code) {
+  try {
+    new Function(code);
+    return true;
+  } catch (e) {
+    return e instanceof EvalError;
+  }
+}
 function executeScripts(el) {
   collectScripts(el).forEach((old) => {
     const s = document.createElement("script");
     for (const attr of old.attributes)
       s.setAttribute(attr.name, attr.value);
     s.textContent = old.textContent;
+    if (s.type !== "module" && !canCompileClassic(s.textContent || "")) {
+      old.remove();
+      return;
+    }
     old.replaceWith(s);
   });
 }

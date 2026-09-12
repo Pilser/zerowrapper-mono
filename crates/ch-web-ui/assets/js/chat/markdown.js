@@ -510,11 +510,28 @@ function collectScripts(root) {
   return scripts
 }
 
+function canCompileClassic(code) {
+  try {
+    new Function(code)
+    return true
+  } catch (e) {
+    // A CSP eval block (EvalError) means we cannot validate: keep the old
+    // behavior. A real SyntaxError means the snippet is broken: skip it.
+    return e instanceof EvalError
+  }
+}
+
 function executeScripts(el) {
   collectScripts(el).forEach(old => {
     const s = document.createElement('script')
     for (const attr of old.attributes) s.setAttribute(attr.name, attr.value)
     s.textContent = old.textContent
+    if (s.type !== 'module' && !canCompileClassic(s.textContent || '')) {
+      // Broken embedded script (e.g. a '' string spanning a line break):
+      // leave it inert instead of throwing into the console.
+      old.remove()
+      return
+    }
     old.replaceWith(s)
   })
 }

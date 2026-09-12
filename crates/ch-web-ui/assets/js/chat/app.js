@@ -630,12 +630,24 @@ function collectScripts(root) {
   });
   return scripts;
 }
+function canCompileClassic(code) {
+  try {
+    new Function(code);
+    return true;
+  } catch (e) {
+    return e instanceof EvalError;
+  }
+}
 function executeScripts(el) {
   collectScripts(el).forEach((old) => {
     const s = document.createElement("script");
     for (const attr of old.attributes)
       s.setAttribute(attr.name, attr.value);
     s.textContent = old.textContent;
+    if (s.type !== "module" && !canCompileClassic(s.textContent || "")) {
+      old.remove();
+      return;
+    }
     old.replaceWith(s);
   });
 }
@@ -852,6 +864,206 @@ var init_scroll = __esm(() => {
   init_dom();
 });
 
+// activity.js
+function target() {
+  return els.messages || document.getElementById("chat-messages");
+}
+function ensureBox() {
+  const t = target();
+  if (!t)
+    return null;
+  if (!box || !box.isConnected || !turnOpen) {
+    box = document.createElement("div");
+    box.className = "turn-activity";
+    thinkRow = null;
+    thinkPre = null;
+    thinkCount = 0;
+    actRow = null;
+    actList = null;
+    actionTotal = 0;
+    pending.length = 0;
+    turnOpen = true;
+    t.appendChild(box);
+  }
+  return box;
+}
+function makeRow(kind, label) {
+  const row = document.createElement("div");
+  row.className = "activity-row " + kind + " active open";
+  const head = document.createElement("button");
+  head.className = "activity-head";
+  head.type = "button";
+  head.innerHTML = '<span class="activity-dot"></span><span class="activity-label"></span><span class="activity-num">0</span><span class="activity-chev">' + CHEV + "</span>";
+  head.querySelector(".activity-label").textContent = label;
+  head.addEventListener("click", () => {
+    row.classList.toggle("open");
+    if (row.classList.contains("open"))
+      row.dataset.pinned = "1";
+    else
+      delete row.dataset.pinned;
+  });
+  const detail = document.createElement("div");
+  detail.className = "activity-detail";
+  row.appendChild(head);
+  row.appendChild(detail);
+  return { row, head, detail };
+}
+function setNum(row, n) {
+  const el = row.querySelector(".activity-num");
+  if (el)
+    el.textContent = n;
+}
+function pushThought(text) {
+  const b = ensureBox();
+  if (!b)
+    return;
+  if (!thinkRow) {
+    const made = makeRow("thinking", "Thinking");
+    thinkRow = made.row;
+    thinkPre = document.createElement("pre");
+    made.detail.appendChild(thinkPre);
+    b.appendChild(thinkRow);
+  }
+  thinkCount += 1;
+  setNum(thinkRow, thinkCount);
+  if (text && thinkPre)
+    thinkPre.textContent += text;
+  autoScroll();
+}
+function pushToolCall(id, name, args) {
+  const b = ensureBox();
+  if (!b)
+    return;
+  if (!actRow) {
+    const made = makeRow("acting", "Actions");
+    actRow = made.row;
+    actList = document.createElement("div");
+    actList.className = "action-list";
+    made.detail.appendChild(actList);
+    b.appendChild(actRow);
+  }
+  actionTotal += 1;
+  setNum(actRow, actionTotal);
+  const item = document.createElement("div");
+  item.className = "action-item running";
+  const argsStr = args ? JSON.stringify(args, null, 2) : "";
+  const head = document.createElement("button");
+  head.className = "action-head";
+  head.type = "button";
+  head.innerHTML = '<span class="action-status">◌</span><span class="action-name"></span>';
+  head.querySelector(".action-name").textContent = name || "action";
+  item.appendChild(head);
+  if (argsStr) {
+    const detail = document.createElement("div");
+    detail.className = "action-detail hidden";
+    const pre = document.createElement("pre");
+    pre.textContent = argsStr;
+    detail.appendChild(pre);
+    item.appendChild(detail);
+    head.addEventListener("click", () => detail.classList.toggle("hidden"));
+  }
+  actList.appendChild(item);
+  pending.push({ id: id || "", el: item, name });
+  autoScroll();
+}
+function pushToolResult(id, name, output) {
+  const idx = pending.findIndex((p) => p.id === (id || ""));
+  if (idx === -1)
+    return;
+  const item = pending[idx];
+  pending.splice(idx, 1);
+  const status = item.el.querySelector(".action-status");
+  if (status) {
+    status.className = "action-status done";
+    status.textContent = "✓";
+  }
+  item.el.classList.remove("running");
+  item.el.classList.add("done");
+  if (output) {
+    let detail = item.el.querySelector(".action-detail");
+    if (!detail) {
+      detail = document.createElement("div");
+      detail.className = "action-detail hidden";
+      item.el.appendChild(detail);
+      const head = item.el.querySelector(".action-head");
+      if (head)
+        head.addEventListener("click", () => detail.classList.toggle("hidden"));
+    }
+    if (output.length <= 80) {
+      const span = document.createElement("div");
+      span.className = "action-output";
+      span.textContent = output;
+      detail.appendChild(span);
+      detail.classList.remove("hidden");
+    } else {
+      const det = document.createElement("details");
+      const sum = document.createElement("summary");
+      sum.textContent = output.slice(0, 80) + "...";
+      const pre = document.createElement("pre");
+      pre.textContent = output;
+      det.appendChild(sum);
+      det.appendChild(pre);
+      detail.appendChild(det);
+    }
+  }
+  autoScroll();
+}
+function settleRow(row, receipt) {
+  if (!row)
+    return;
+  row.classList.remove("active");
+  const label = row.querySelector(".activity-label");
+  if (label)
+    label.textContent = receipt;
+  if (row.dataset.pinned !== "1")
+    row.classList.remove("open");
+}
+function finishTurn() {
+  if (!turnOpen)
+    return;
+  turnOpen = false;
+  if (!thinkCount && !actionTotal) {
+    if (box)
+      box.remove();
+    box = null;
+    return;
+  }
+  if (thinkRow) {
+    if (!thinkCount)
+      thinkRow.remove();
+    else
+      settleRow(thinkRow, `Thought · ${thinkCount}`);
+    thinkRow = null;
+  }
+  if (actRow) {
+    if (!actionTotal)
+      actRow.remove();
+    else
+      settleRow(actRow, `Actions · ${actionTotal} ✓`);
+    actRow = null;
+  }
+  pending.length = 0;
+}
+function resetTurn() {
+  if (box)
+    box.remove();
+  box = null;
+  turnOpen = false;
+  thinkRow = null;
+  thinkPre = null;
+  thinkCount = 0;
+  actRow = null;
+  actList = null;
+  actionTotal = 0;
+  pending.length = 0;
+}
+var box = null, turnOpen = false, thinkRow = null, thinkPre = null, thinkCount = 0, actRow = null, actList = null, actionTotal = 0, pending, CHEV = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>';
+var init_activity = __esm(() => {
+  init_dom();
+  init_scroll();
+  pending = [];
+});
+
 // streaming.js
 import { marked as marked2 } from "marked";
 function setOnFinalize(cb) {
@@ -882,47 +1094,19 @@ function scheduleRender(id) {
     renderPending = false;
     if (streamId !== id)
       return;
-    const target = getEl();
+    const target2 = getEl();
     let html = "";
     if (content) {
       html += marked2.parse(content);
     }
-    render(target, html);
+    render(target2, html);
     autoScroll();
   });
 }
 function appendThought(content2, container2) {
-  const target = container2 || els.messages;
-  if (!target)
-    return;
-  if (!activeThought) {
-    const pill = document.createElement("div");
-    pill.className = "thought-pill";
-    pill.innerHTML = '<div class="tc-pill-inner">+ thoughts</div>' + '<div class="tc-pill-detail hidden"><pre></pre></div>';
-    pill.addEventListener("click", () => {
-      const detail2 = pill.querySelector(".tc-pill-detail");
-      if (detail2)
-        detail2.classList.toggle("hidden");
-    });
-    target.appendChild(pill);
-    const detail = pill.querySelector(".tc-pill-detail");
-    if (detail)
-      detail.classList.remove("hidden");
-    autoScroll();
-    activeThought = pill;
-  }
-  const pre = activeThought.querySelector(".tc-pill-detail pre");
-  if (pre)
-    pre.textContent += content2 || "";
+  pushThought(content2 || "");
 }
-function closeThought() {
-  if (activeThought) {
-    const detail = activeThought.querySelector(".tc-pill-detail");
-    if (detail)
-      detail.classList.add("hidden");
-    activeThought = null;
-  }
-}
+function closeThought() {}
 function finalizeThought() {
   closeThought();
 }
@@ -939,16 +1123,17 @@ function handleChunk(text) {
 }
 function finalize() {
   finalizeThought();
+  finishTurn();
   if (!el) {
     if (onFinalize)
       onFinalize();
     return;
   }
-  const target = el;
+  const target2 = el;
   const trimmed = content.trim();
   if (trimmed) {
-    target.className = "msg-content chat-markdown";
-    render(target, marked2.parse(trimmed));
+    target2.className = "msg-content chat-markdown";
+    render(target2, marked2.parse(trimmed));
   }
   el = null;
   content = "";
@@ -957,7 +1142,7 @@ function finalize() {
     onFinalize();
 }
 function finalizeIfActive() {
-  if (activeThought || content)
+  if (content)
     finalize();
 }
 function handleDone(text) {
@@ -968,12 +1153,7 @@ function handleDone(text) {
   finalize();
 }
 function reset() {
-  if (activeThought) {
-    const parent = activeThought.parentElement;
-    if (parent)
-      parent.remove();
-    activeThought = null;
-  }
+  resetTurn();
   if (el) {
     const parent = el.parentElement;
     if (parent)
@@ -995,11 +1175,12 @@ function hideTyping() {
     els.typingEl.classList.remove("active");
   }
 }
-var el = null, content = "", activeThought = null, streamId = 0, renderPending = false, onFinalize = null;
+var el = null, content = "", streamId = 0, renderPending = false, onFinalize = null;
 var init_streaming = __esm(() => {
   init_dom();
   init_markdown();
   init_scroll();
+  init_activity();
 });
 
 // messages.js
@@ -1674,61 +1855,15 @@ init_messages();
 init_streaming();
 
 // tool-calls.js
-init_dom();
-init_scroll();
-var pending = [];
+init_activity();
 function handleToolCall(id, name, args, container2) {
-  const target = container2 || els.messages;
-  if (!target)
-    return;
-  const pill = document.createElement("div");
-  pill.className = "tool-call-pill";
-  pill.dataset.id = id || "";
-  const argsStr = args ? JSON.stringify(args, null, 2) : null;
-  pill.innerHTML = '<div class="tc-pill-inner">' + "+ acting" + '<span class="tc-pill-status running">◌</span>' + "</div>" + (argsStr ? '<div class="tc-pill-detail hidden"><pre>' + escapeHtml(argsStr) + "</pre></div>" : "");
-  pill.addEventListener("click", () => {
-    const detail = pill.querySelector(".tc-pill-detail");
-    if (detail)
-      detail.classList.toggle("hidden");
-  });
-  target.appendChild(pill);
-  autoScroll();
-  pending.push({ id: id || "", el: pill, name });
+  pushToolCall(id, name, args);
 }
 function handleToolResult(id, name, output) {
-  const idx = pending.findIndex((p) => p.id === id);
-  if (idx === -1)
-    return;
-  const item = pending[idx];
-  pending.splice(idx, 1);
-  const status = item.el.querySelector(".tc-pill-status");
-  if (status) {
-    status.className = "tc-pill-status done";
-    status.innerHTML = "✓";
-  }
-  if (output) {
-    let detail = item.el.querySelector(".tc-pill-detail");
-    const existed = !!detail;
-    if (!detail) {
-      detail = document.createElement("div");
-      detail.className = "tc-pill-detail hidden";
-      item.el.appendChild(detail);
-    }
-    if (output.length <= 80) {
-      detail.textContent = output;
-    } else {
-      detail.innerHTML = "<details><summary>" + output.slice(0, 80) + "...</summary><pre>" + escapeHtml(output) + "</pre></details>";
-    }
-    if (!existed) {
-      item.el.addEventListener("click", () => {
-        detail.classList.toggle("hidden");
-      });
-    }
-  }
-  autoScroll();
+  pushToolResult(id, name, output);
 }
 function clearPending() {
-  pending = [];
+  resetTurn();
 }
 
 // connection.js
