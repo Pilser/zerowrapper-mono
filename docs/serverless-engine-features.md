@@ -463,7 +463,7 @@ Every action may also carry an optional per-action `when` condition (evaluated a
 - **Upload** — `POST /api/srv/{board_id}/upload`:
   - Body: `multipart/form-data` (first `filename=` part is the file; other name-only parts become **record payload metadata**) OR raw binary with `X-Filename` / `Content-Type` headers.
   - Size cap 25 MB.
-  - Stored at `{whiteboard_dir}/sessions/{owner}/apps/{board_id}/files/{file_id}.bin` (`file_id` = `f_` + 16 base-36 chars).
+  - Stored at `{whiteboard_dir}/whiteboard/apps/{board_id}/files/{file_id}.bin` (`file_id` = `f_` + 16 base-36 chars), shared by all sessions. Reads also fall back to the legacy `sessions/{owner}/apps/{board_id}/files/` path (pre-migration data).
   - A record is inserted with payload `{file: "files/<id>.bin", name, type, size, <extra fields>, customer_id?}` — so uploads are ordinary records: they validate against schema, fire recipes, publish realtime, enqueue webhooks.
   - Returns `{"ok":true, "seq":…, "file":"files/<id>.bin"}`.
 - **Download** — `GET /api/srv/{board_id}/file?file=files/<id>.bin`:
@@ -508,8 +508,9 @@ Used for computed fields, validation rules, recipe conditions (`match_json`, act
 ## 22. Two-Tier Database Layout (`session_store.rs`)
 
 - **System DB** (`ZEROWRAPPER__DB_PATH`): accounts, sessions, `wb_keys`, `srv_board_index`, hook delivery queue, jobs, public slugs, templates.
-- **Session DBs**: one file per session under `{root}/sessions/{sid}/{sid}.db`; lazily opened and cached (Mutex<HashMap>), migrated on first open. Holds boards, records, hooks config, links, audit, recipes, secrets, whiteboards.
-- `SessionStore` is the facade used by the HTTP layer and MCP: `session(sid)`, `board_pool(board_id)` (resolves board → owning session pool via `srv_board_index`), `create_board`, `key_issue/list/revoke`, `hook_enqueue/reschedule/deliveries`, `ttl_sweep_all`.
+- **Shared serverless DB**: a single file at `{root}/whiteboard/serverless.db`, lazily opened, cached, and migrated on first open. Holds boards, records, hooks config, links, audit, recipes, secrets, whiteboards for **all** sessions (rows stay keyed by `session_id`), so switching chat sessions never orphans apps or the board. Legacy per-session files (`sessions/{sid}/{sid}.db`) are imported once on first open (newest wins, WAL/SHM sidecars included) and then left untouched.
+- The whiteboard mirror file is likewise shared: `{root}/whiteboard/whiteboard.wb` (migrated from the newest legacy `sessions/<sid>/whiteboard.wb`).
+- `SessionStore` is the facade used by the HTTP layer and MCP: `session(sid)` (sid ignored — always the shared pool), `board_pool(board_id)` (still verifies the board via `srv_board_index`, then returns the shared pool), `create_board`, `key_issue/list/revoke`, `hook_enqueue/reschedule/deliveries`, `ttl_sweep_all` (single sweep over the shared DB).
 - `DbPool` wraps a single `Arc<Mutex<Connection>>` — **all access on one pool is serialized by a mutex**; concurrency comes from multiple pools (multiple sessions), not multiple connections on the same pool.
 
 ---

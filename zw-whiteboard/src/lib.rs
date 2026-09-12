@@ -58,6 +58,14 @@ pub enum WhiteboardEvent {
 
 const SEED_TEMPLATE: &str = "# Whiteboard\n";
 
+/// Shared board layout: a single `<workspace>/whiteboard/whiteboard.wb` file
+/// and a single shared database board (`SHARED_SID`) serve every chat session,
+/// so switching sessions never resets the board or orphans serverless apps.
+/// The caller's `sid` is still used for in-memory tracking keys and echoed in
+/// events, so per-connection forwarding keeps working unchanged.
+pub const SHARED_SID: &str = "shared";
+pub const WHITEBOARD_FILE: &str = "whiteboard.wb";
+
 #[derive(Clone)]
 pub struct WhiteboardHandle {
     dir: PathBuf,
@@ -123,10 +131,10 @@ impl WhiteboardHandle {
 
     pub async fn open(&self, sid: &str, page_no: i64) -> anyhow::Result<()> {
         let store = self.db.as_ref().ok_or_else(|| anyhow::anyhow!("whiteboard db not configured"))?;
-        let pool = store.session(sid).await?;
-        pool.wb_ensure_session(sid).await?;
-        pool.wb_open(sid, page_no).await?;
-        let (pages, _) = pool.wb_state(sid).await?;
+        let pool = store.session(SHARED_SID).await?;
+        pool.wb_ensure_session(SHARED_SID).await?;
+        pool.wb_open(SHARED_SID, page_no).await?;
+        let (pages, _) = pool.wb_state(SHARED_SID).await?;
         let body = pages
             .iter()
             .find(|p| p.page_no == page_no)
@@ -146,9 +154,9 @@ impl WhiteboardHandle {
 
     pub async fn close(&self, sid: &str) -> anyhow::Result<()> {
         let store = self.db.as_ref().ok_or_else(|| anyhow::anyhow!("whiteboard db not configured"))?;
-        let pool = store.session(sid).await?;
-        let (pages, meta) = pool.wb_state(sid).await?;
-        pool.wb_close(sid).await?;
+        let pool = store.session(SHARED_SID).await?;
+        let (pages, meta) = pool.wb_state(SHARED_SID).await?;
+        pool.wb_close(SHARED_SID).await?;
         // Flush the active page's file content to DB on close so an edit is never
         // lost if the next poll/process doesn't run (e.g. a restart right after close).
         if let Some(active) = meta.active_page {
@@ -158,10 +166,10 @@ impl WhiteboardHandle {
                     .find(|p| p.page_no == active)
                     .map(|p| p.title.clone())
                     .unwrap_or_default();
-                let _ = pool.wb_write_page(sid, active, &title, &raw).await;
+                let _ = pool.wb_write_page(SHARED_SID, active, &title, &raw).await;
                 // Bug A: a page that is already public must be re-snapshotted on close,
                 // otherwise /w/<slug> keeps serving the stale pre-edit snapshot forever.
-                if let Ok(Some(slug)) = pool.wb_public_slug(sid, active).await {
+                if let Ok(Some(slug)) = pool.wb_public_slug(SHARED_SID, active).await {
                     let pins = pool
                         .wb_public_snapshot(&slug)
                         .await
@@ -184,30 +192,33 @@ impl WhiteboardHandle {
     }
 
     pub async fn add(&self, sid: &str, title: &str) -> anyhow::Result<i64> {
+        let _ = sid; // shared board: every session maps to SHARED_SID
         let store = self.db.as_ref().ok_or_else(|| anyhow::anyhow!("whiteboard db not configured"))?;
-        let pool = store.session(sid).await?;
-        pool.wb_add_page(sid, title).await
+        let pool = store.session(SHARED_SID).await?;
+        pool.wb_add_page(SHARED_SID, title).await
     }
 
     pub async fn delete(&self, sid: &str, page_no: i64) -> anyhow::Result<()> {
+        let _ = sid; // shared board: every session maps to SHARED_SID
         let store = self.db.as_ref().ok_or_else(|| anyhow::anyhow!("whiteboard db not configured"))?;
-        let pool = store.session(sid).await?;
-        pool.wb_delete_page(sid, page_no).await
+        let pool = store.session(SHARED_SID).await?;
+        pool.wb_delete_page(SHARED_SID, page_no).await
     }
 
     pub async fn move_pages(&self, sid: &str, from: i64, to: i64) -> anyhow::Result<()> {
+        let _ = sid; // shared board: every session maps to SHARED_SID
         let store = self.db.as_ref().ok_or_else(|| anyhow::anyhow!("whiteboard db not configured"))?;
-        let pool = store.session(sid).await?;
-        pool.wb_move_page(sid, from, to).await
+        let pool = store.session(SHARED_SID).await?;
+        pool.wb_move_page(SHARED_SID, from, to).await
     }
 
     pub async fn set_public(&self, sid: &str, page_no: i64, public: bool) -> anyhow::Result<Option<String>> {
         let store = self.db.as_ref().ok_or_else(|| anyhow::anyhow!("whiteboard db not configured"))?;
-        let slug = store.set_page_public(sid, page_no, public).await?;
+        let slug = store.set_page_public(SHARED_SID, page_no, public).await?;
         if let Some(slug) = &slug {
             let state = self.build_state(sid).await?;
             if let Some(page) = state.pages.iter().find(|p| p.page_no == page_no) {
-                let pool = store.session(sid).await?;
+                let pool = store.session(SHARED_SID).await?;
                 pool.wb_set_public_content(slug, &page.body_md, &serde_json::to_string(&page.pins)?).await?;
             }
         }
@@ -217,15 +228,15 @@ impl WhiteboardHandle {
     pub async fn ensure(&self, session_id: &str) -> anyhow::Result<()> {
         let path = session_path(&self.dir, session_id);
         if let Some(store) = &self.db {
-            let pool = store.session(session_id).await?;
-            let pre = pool.wb_state(session_id).await.map(|(p, _)| p).unwrap_or_default();
-            pool.wb_ensure_session(session_id).await?;
+            let pool = store.session(SHARED_SID).await?;
+            let pre = pool.wb_state(SHARED_SID).await.map(|(p, _)| p).unwrap_or_default();
+            pool.wb_ensure_session(SHARED_SID).await?;
             let just_seeded = pre.is_empty();
-            let (pages, _) = pool.wb_state(session_id).await?;
+            let (pages, _) = pool.wb_state(SHARED_SID).await?;
             if just_seeded {
                 if let Ok(raw) = std::fs::read_to_string(&path) {
                     if !raw.trim().is_empty() && raw.trim() != SEED_TEMPLATE.trim() {
-                        let _ = pool.wb_write_page(session_id, 1, "# Whiteboard", &raw).await;
+                        let _ = pool.wb_write_page(SHARED_SID, 1, "# Whiteboard", &raw).await;
                     }
                 }
             }
@@ -304,13 +315,13 @@ async fn build_board_state(
     cache: &Arc<zw_cache::CacheManager>,
     sid: &str,
 ) -> anyhow::Result<BoardState> {
-    let pool = store.session(sid).await?;
-    let (pages, meta) = pool.wb_state(sid).await?;
+    let pool = store.session(SHARED_SID).await?;
+    let (pages, meta) = pool.wb_state(SHARED_SID).await?;
     let mut state_pages = Vec::new();
     for page in &pages {
         let parsed = parser::parse_markdown(&page.body_md);
         let board = resolve::resolve_board(dir, &parsed, cache)?;
-        let public_slug = pool.wb_public_slug(sid, page.page_no).await?;
+        let public_slug = pool.wb_public_slug(SHARED_SID, page.page_no).await?;
         state_pages.push(BoardPage {
             page_no: page.page_no,
             title: page.title.clone(),
@@ -342,8 +353,8 @@ async fn poll_with_db(
         core.has_changed(sid, &path)
     };
     if file_changed {
-        if let Ok(pool) = store.session(sid).await {
-            if let Ok((pages, meta)) = pool.wb_state(sid).await {
+        if let Ok(pool) = store.session(SHARED_SID).await {
+            if let Ok((pages, meta)) = pool.wb_state(SHARED_SID).await {
                 if let Some(active) = meta.active_page {
                     if let Ok(raw) = std::fs::read_to_string(&path) {
                         let title = pages
@@ -351,7 +362,7 @@ async fn poll_with_db(
                             .find(|p| p.page_no == active)
                             .map(|p| p.title.as_str())
                             .unwrap_or_default();
-                        let _ = pool.wb_write_page(sid, active, title, &raw).await;
+                        let _ = pool.wb_write_page(SHARED_SID, active, title, &raw).await;
                     }
                 }
             }
@@ -359,8 +370,8 @@ async fn poll_with_db(
     }
     let rev_changed = {
         let mut core = state.lock().await;
-        match store.session(sid).await {
-            Ok(pool) => match pool.wb_state(sid).await {
+        match store.session(SHARED_SID).await {
+            Ok(pool) => match pool.wb_state(SHARED_SID).await {
                 Ok((pages, meta)) => {
                     let changed = core.rev.get(sid) != Some(&meta.rev);
                     if changed {
@@ -437,20 +448,43 @@ fn set_world_writable(path: &std::path::Path) {
     let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o666));
 }
 
-fn session_path(dir: &Path, sid: &str) -> PathBuf {
-    let sess = dir.join("sessions").join(sid);
-    let path = sess.join("whiteboard.wb");
-    // Migrate old per-sid filenames to the fixed name.
-    // Legacy 1: dir/<sid>.wb (pre-sessions layout)
-    // Legacy 2: dir/sessions/<sid>/<sid>.wb (old per-session filename)
-    let legacy_root = dir.join(format!("{sid}.wb"));
-    let legacy_sess = sess.join(format!("{sid}.wb"));
-    let _ = std::fs::create_dir_all(&sess);
+fn session_path(dir: &Path, _sid: &str) -> PathBuf {
+    // Shared layout: one `<workspace>/whiteboard/whiteboard.wb` for every
+    // session. The sid is ignored so session switches keep the same file.
+    let wb_dir = dir.join("whiteboard");
+    let path = wb_dir.join(WHITEBOARD_FILE);
+    let _ = std::fs::create_dir_all(&wb_dir);
     if !path.exists() {
-        if legacy_sess.is_file() {
-            let _ = std::fs::rename(&legacy_sess, &path);
-        } else if legacy_root.is_file() {
-            let _ = std::fs::rename(&legacy_root, &path);
+        // One-time migration from legacy locations (newest wins):
+        // - dir/sessions/<sid>/whiteboard.wb (sessions layout)
+        // - dir/sessions/<sid>/<sid>.wb (old per-session filename)
+        // - dir/<sid>.wb (pre-sessions layout)
+        let mut legacy: Vec<PathBuf> = Vec::new();
+        if let Ok(entries) = std::fs::read_dir(dir.join("sessions")) {
+            for entry in entries.flatten() {
+                let sdir = entry.path();
+                if !sdir.is_dir() {
+                    continue;
+                }
+                let name = entry.file_name().to_string_lossy().into_owned();
+                for cand in [sdir.join("whiteboard.wb"), sdir.join(format!("{name}.wb"))] {
+                    if cand.is_file() {
+                        legacy.push(cand);
+                    }
+                }
+            }
+        }
+        if let Ok(entries) = std::fs::read_dir(dir) {
+            for entry in entries.flatten() {
+                let p = entry.path();
+                if p.is_file() && p.extension().and_then(|e| e.to_str()) == Some("wb") {
+                    legacy.push(p);
+                }
+            }
+        }
+        legacy.sort_by_key(|p| std::fs::metadata(p).and_then(|m| m.modified()).ok());
+        if let Some(newest) = legacy.last() {
+            let _ = std::fs::copy(newest, &path);
         }
     }
     path

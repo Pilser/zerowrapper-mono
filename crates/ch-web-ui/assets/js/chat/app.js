@@ -705,6 +705,35 @@ var init_markdown = __esm(() => {
   });
 });
 
+// scroll.js
+function container() {
+  return els.messages || document.getElementById("chat-messages");
+}
+function isNearBottom(margin = NEAR_BOTTOM_MARGIN) {
+  const c = container();
+  if (!c)
+    return true;
+  return c.scrollHeight - c.scrollTop - c.clientHeight <= margin;
+}
+function scrollToBottom(smooth = true) {
+  const c = container();
+  if (!c || !c.lastElementChild)
+    return;
+  if (typeof c.scrollTo === "function") {
+    c.scrollTo({ top: c.scrollHeight, behavior: smooth ? "smooth" : "auto" });
+  } else {
+    c.scrollTop = c.scrollHeight;
+  }
+}
+function autoScroll(smooth = true) {
+  if (isNearBottom())
+    scrollToBottom(smooth);
+}
+var NEAR_BOTTOM_MARGIN = 140;
+var init_scroll = __esm(() => {
+  init_dom();
+});
+
 // streaming.js
 import { marked as marked2 } from "marked";
 function setOnFinalize(cb) {
@@ -741,11 +770,11 @@ function scheduleRender(id) {
       html += marked2.parse(content);
     }
     render(target, html);
-    target.scrollIntoView({ behavior: "smooth", block: "end" });
+    autoScroll();
   });
 }
-function appendThought(content2, container) {
-  const target = container || els.messages;
+function appendThought(content2, container2) {
+  const target = container2 || els.messages;
   if (!target)
     return;
   if (!activeThought) {
@@ -761,7 +790,7 @@ function appendThought(content2, container) {
     const detail = pill.querySelector(".tc-pill-detail");
     if (detail)
       detail.classList.remove("hidden");
-    pill.scrollIntoView({ behavior: "smooth", block: "end" });
+    autoScroll();
     activeThought = pill;
   }
   const pre = activeThought.querySelector(".tc-pill-detail pre");
@@ -779,10 +808,10 @@ function closeThought() {
 function finalizeThought() {
   closeThought();
 }
-function handleThinking(text, container) {
-  if (!container)
+function handleThinking(text, container2) {
+  if (!container2)
     showTyping();
-  appendThought(text, container);
+  appendThought(text, container2);
 }
 function handleChunk(text) {
   finalizeThought();
@@ -852,6 +881,7 @@ var el = null, content = "", activeThought = null, streamId = 0, renderPending =
 var init_streaming = __esm(() => {
   init_dom();
   init_markdown();
+  init_scroll();
 });
 
 // messages.js
@@ -945,13 +975,7 @@ function addMessage(role, text, scroll = true) {
   if (els.hint && els.hint.style.display !== "none")
     els.hint.style.display = "none";
   if (scroll) {
-    row.scrollIntoView({ behavior: "smooth", block: "end" });
-  }
-}
-function scrollToBottom() {
-  const lastMsg = els.messages.lastElementChild;
-  if (lastMsg) {
-    lastMsg.scrollIntoView({ block: "end" });
+    autoScroll();
   }
 }
 function fetchHistory() {
@@ -987,7 +1011,7 @@ function fetchHistory() {
       }
     });
     els.messages.appendChild(frag);
-    scrollToBottom();
+    scrollToBottom(false);
   }).catch(() => {});
 }
 function abortHistoryFetch() {
@@ -1001,6 +1025,7 @@ var init_messages = __esm(() => {
   init_dom();
   init_markdown();
   init_streaming();
+  init_scroll();
 });
 
 // whiteboard-render.js
@@ -1019,15 +1044,15 @@ function humanSize(bytes) {
   } while (n >= 1024 && i < units.length - 1);
   return n.toFixed(1) + " " + units[i];
 }
-function renderBody(container, bodyMd) {
-  if (!container)
+function renderBody(container2, bodyMd) {
+  if (!container2)
     return;
-  container.classList.add("chat-markdown");
+  container2.classList.add("chat-markdown");
   if (!bodyMd || !bodyMd.trim()) {
-    container.innerHTML = "";
+    container2.innerHTML = "";
     return;
   }
-  render(container, marked4.parse(decodeEntities(bodyMd)), true);
+  render(container2, marked4.parse(decodeEntities(bodyMd)), true);
 }
 function decodeEntities(s) {
   return s.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&apos;/g, "'").replace(/&amp;/g, "&");
@@ -1045,10 +1070,10 @@ function buildCard(pin) {
   card.appendChild(meta);
   return card;
 }
-function renderPins(container, pins) {
-  if (!container)
+function renderPins(container2, pins) {
+  if (!container2)
     return;
-  container.innerHTML = "";
+  container2.innerHTML = "";
   if (!pins || pins.length === 0)
     return;
   const frag = document.createDocumentFragment();
@@ -1087,7 +1112,7 @@ function renderPins(container, pins) {
     }
     frag.appendChild(card);
   });
-  container.appendChild(frag);
+  container2.appendChild(frag);
 }
 function renderBoard(bodyContainer, pinsContainer, board) {
   renderBody(bodyContainer, board && board.body_md);
@@ -1525,9 +1550,10 @@ init_streaming();
 
 // tool-calls.js
 init_dom();
+init_scroll();
 var pending = [];
-function handleToolCall(id, name, args, container) {
-  const target = container || els.messages;
+function handleToolCall(id, name, args, container2) {
+  const target = container2 || els.messages;
   if (!target)
     return;
   const pill = document.createElement("div");
@@ -1541,7 +1567,7 @@ function handleToolCall(id, name, args, container) {
       detail.classList.toggle("hidden");
   });
   target.appendChild(pill);
-  pill.scrollIntoView({ behavior: "smooth", block: "end" });
+  autoScroll();
   pending.push({ id: id || "", el: pill, name });
 }
 function handleToolResult(id, name, output) {
@@ -1574,7 +1600,7 @@ function handleToolResult(id, name, output) {
       });
     }
   }
-  item.el.scrollIntoView({ behavior: "smooth", block: "end" });
+  autoScroll();
 }
 function clearPending() {
   pending = [];
@@ -1820,8 +1846,8 @@ function updateNavButtons() {
 function init3(messagesEl) {
   messagesEl.addEventListener("click", (e) => {
     if (e.target.tagName === "IMG" && e.target.closest(".chat-markdown")) {
-      const container = e.target.closest(".chat-markdown");
-      const imgs = Array.from(container.querySelectorAll("img"));
+      const container2 = e.target.closest(".chat-markdown");
+      const imgs = Array.from(container2.querySelectorAll("img"));
       images = imgs.map((img) => img.src);
       currentIndex = imgs.indexOf(e.target);
       if (currentIndex === -1)

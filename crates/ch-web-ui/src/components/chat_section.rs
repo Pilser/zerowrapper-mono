@@ -7,8 +7,8 @@ pub async fn chat_section(cx: &Cx) -> Result {
     // Bare page: request context intentionally unused (no settings/landing).
     let _ = cx;
     view! {
-        <section class="px-6 py-8 md:px-10 mb-2 md:mb-4" style="border-top: 1px solid var(--color-border-weak);">
-            <div id="chat-messages">
+        <section class="px-6 py-8 md:px-10 mb-2 md:mb-4" style="border-top: 1px solid var(--color-border-weak); display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0;">
+            <div id="chat-messages" style="flex: 1 1 auto; min-height: 0; overflow-y: auto;">
                 <div id="fallback-hint" class="flex flex-col items-center justify-center py-12 gap-3">
                     <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--color-text-weak)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="opacity: 0.5;"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
                     <p id="chat-hint-text" class="text-center leading-relaxed" style="color: var(--color-text-weak); font-size: 0.8125rem;" data-fallback="Connecting to backend…">"Connecting to backend…"</p>
@@ -25,7 +25,7 @@ pub async fn chat_section(cx: &Cx) -> Result {
                     <span class="w-3 h-3 rounded-full" style="background: var(--color-text-weak); animation: chat-typing-bounce 1.4s infinite ease-in-out both; animation-delay: 0.32s;"></span>
                 </div>
             </div>
-            <div id="chat-bottom-bar" style="position: sticky; bottom: 0; z-index: 10; background: var(--color-bg); padding-top: 12px; margin-top: 8px;">
+            <div id="chat-bottom-bar" style="flex-shrink: 0; z-index: 10; background: var(--color-bg); padding-top: 12px; margin-top: 8px;">
                 <div id="daemon-banner" class="hidden text-xs px-3 py-1.5 rounded-lg" style="border: 1px solid var(--color-status-error); background: color-mix(in srgb, var(--color-status-error) 12%, transparent); color: var(--color-text-strong); text-align: center;">"Daemon reconnecting… chats will send once it is back."</div>
                 <div id="session-bar" class="flex items-center gap-2 mt-4 px-3 py-1.5 rounded-lg" style="border: 1px solid var(--color-border-weak); background: var(--color-bg-weak);">
                     <span class="text-xs" style="color: var(--color-text-weak);">"Session"</span>

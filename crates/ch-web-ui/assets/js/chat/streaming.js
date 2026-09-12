@@ -2,6 +2,7 @@ import { marked } from 'marked'
 import { els } from './dom.js'
 import { BOT_AVATAR } from './constants.js'
 import { render as renderMarkdown } from './markdown.js'
+import { autoScroll } from './scroll.js'
 
 let el = null
 let content = ''
@@ -41,7 +42,7 @@ function scheduleRender(id) {
       html += marked.parse(content)
     }
     renderMarkdown(target, html)
-    target.scrollIntoView({ behavior: 'smooth', block: 'end' })
+    autoScroll()
   })
 }
 
@@ -60,7 +61,7 @@ export function appendThought(content, container) {
     target.appendChild(pill)
     const detail = pill.querySelector('.tc-pill-detail')
     if (detail) detail.classList.remove('hidden')
-    pill.scrollIntoView({ behavior: 'smooth', block: 'end' })
+    autoScroll()
     activeThought = pill
   }
   const pre = activeThought.querySelector('.tc-pill-detail pre')

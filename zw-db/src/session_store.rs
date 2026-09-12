@@ -16,6 +16,17 @@ pub struct SessionStore {
     open: Arc<Mutex<HashMap<String, Arc<DbPool>>>>,
 }
 
+/// Shared serverless layout.
+///
+/// There is exactly one serverless database per agent workspace:
+/// `<workspace>/whiteboard/serverless.db`. Every chat session reads and writes
+/// the same file, so switching sessions never orphans boards, records, or the
+/// whiteboard — rows inside stay keyed by `session_id`, but the file is shared.
+/// Legacy per-session files (`sessions/<sid>/<sid>.db`) are imported once on
+/// first open (newest wins) and then left untouched.
+pub const SHARED_DB_FILE: &str = "serverless.db";
+const SHARED_KEY: &str = "shared";
+
 impl SessionStore {
     pub fn new(root: PathBuf, system: DbPool) -> Self {
         Self {
@@ -29,24 +40,91 @@ impl SessionStore {
         &self.system
     }
 
-    fn session_path(&self, sid: &str) -> PathBuf {
-        self.root.join("sessions").join(sid).join(format!("{sid}.db"))
+    fn shared_path(&self) -> PathBuf {
+        self.root.join("whiteboard").join(SHARED_DB_FILE)
     }
 
-    pub async fn session(&self, sid: &str) -> anyhow::Result<Arc<DbPool>> {
+    /// Legacy per-session database files from before the shared layout.
+    fn legacy_candidates(&self) -> Vec<PathBuf> {
+        let sessions = self.root.join("sessions");
+        let entries = match std::fs::read_dir(&sessions) {
+            Ok(e) => e,
+            Err(_) => return Vec::new(),
+        };
+        let mut out = Vec::new();
+        for entry in entries.flatten() {
+            let dir = entry.path();
+            if !dir.is_dir() {
+                continue;
+            }
+            let name = entry.file_name().to_string_lossy().into_owned();
+            let db = dir.join(format!("{name}.db"));
+            if db.is_file() {
+                out.push(db);
+            }
+        }
+        // Newest first so a single copy picks up the freshest data.
+        out.sort_by_key(|p| {
+            std::fs::metadata(p)
+                .and_then(|m| m.modified())
+                .ok()
+        });
+        out.reverse();
+        out
+    }
+
+    /// One-time migration: if the shared DB does not exist yet but legacy
+    /// per-session DBs do, copy the newest one (plus its WAL/SHM sidecars so
+    /// uncheckpointed pages survive) into the shared location.
+    fn import_legacy_once(&self) {
+        let shared = self.shared_path();
+        if shared.exists() {
+            return;
+        }
+        let candidates = self.legacy_candidates();
+        let Some(newest) = candidates.first() else {
+            return;
+        };
+        if let Some(parent) = shared.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        if std::fs::copy(newest, &shared).is_ok() {
+            // Copy WAL/SHM sidecars when present so uncheckpointed data survives.
+            // For `<sid>.db` the sidecars are `<sid>.db-wal` / `<sid>.db-shm`.
+            for suffix in ["-wal", "-shm"] {
+                let src = format!("{}{}", newest.display(), suffix);
+                let dst = format!("{}{}", shared.display(), suffix);
+                let _ = std::fs::copy(&src, &dst);
+            }
+            tracing::info!(
+                "serverless store: migrated {} -> {}",
+                newest.display(),
+                shared.display()
+            );
+            if candidates.len() > 1 {
+                tracing::warn!(
+                    "serverless store: {} legacy session DBs found; only the newest was imported, the rest stay in sessions/",
+                    candidates.len()
+                );
+            }
+        }
+    }
+
+    pub async fn session(&self, _sid: &str) -> anyhow::Result<Arc<DbPool>> {
         let mut open = self.open.lock().await;
-        if let Some(pool) = open.get(sid) {
+        if let Some(pool) = open.get(SHARED_KEY) {
             return Ok(pool.clone());
         }
-        let path = self.session_path(sid).to_str().unwrap().to_string();
+        self.import_legacy_once();
+        let path = self.shared_path().to_str().unwrap().to_string();
         let pool = Arc::new(DbPool::open(&path).await?);
         pool.migrate_session().await?;
-        open.insert(sid.to_string(), pool.clone());
+        open.insert(SHARED_KEY.to_string(), pool.clone());
         Ok(pool)
     }
 
-    pub async fn discard(&self, sid: &str) {
-        self.open.lock().await.remove(sid);
+    pub async fn discard(&self, _sid: &str) {
+        self.open.lock().await.remove(SHARED_KEY);
     }
 
     pub async fn session_id_for_board(&self, board_id: &str) -> anyhow::Result<String> {
@@ -67,8 +145,10 @@ impl SessionStore {
     }
 
     pub async fn board_pool(&self, board_id: &str) -> anyhow::Result<Arc<DbPool>> {
-        let sid = self.session_id_for_board(board_id).await?;
-        self.session(&sid).await
+        // The board index is still consulted so unknown boards keep 404ing;
+        // the data itself always lives in the single shared database.
+        let _ = self.session_id_for_board(board_id).await?;
+        self.session(SHARED_KEY).await
     }
 
     pub async fn register_board(&self, sid: &str, board_id: &str, owner_key: &str) -> anyhow::Result<()> {
@@ -92,15 +172,34 @@ impl SessionStore {
     }
 
     pub async fn all_session_ids(&self) -> anyhow::Result<Vec<String>> {
-        let dir = self.root.join("sessions");
+        // Shared layout: distinct session_ids that actually have rows in the
+        // shared DB, plus any legacy on-disk session dirs (pre-migration).
         let mut out = Vec::new();
-        let mut entries = match tokio::fs::read_dir(&dir).await {
-            Ok(e) => e,
-            Err(_) => return Ok(out),
-        };
-        while let Ok(Some(entry)) = entries.next_entry().await {
-            if entry.file_type().await.map(|t| t.is_dir()).unwrap_or(false) {
-                out.push(entry.file_name().to_string_lossy().into_owned());
+        if let Ok(pool) = self.session(SHARED_KEY).await {
+            let conn = pool.conn().await;
+            if let Ok(mut rows) = conn
+                .query(
+                    "SELECT DISTINCT session_id FROM whiteboard_meta",
+                    turso::params::Params::None,
+                )
+                .await
+            {
+                while let Ok(Some(row)) = rows.next().await {
+                    if let Ok(turso::Value::Text(s)) = row.get_value(0) {
+                        out.push(s);
+                    }
+                }
+            }
+        }
+        let dir = self.root.join("sessions");
+        if let Ok(entries) = std::fs::read_dir(&dir) {
+            for entry in entries.flatten() {
+                if entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+                    let name = entry.file_name().to_string_lossy().into_owned();
+                    if !out.contains(&name) {
+                        out.push(name);
+                    }
+                }
             }
         }
         out.sort();
@@ -227,11 +326,8 @@ impl SessionStore {
     }
 
     pub async fn ttl_sweep_all(&self) -> anyhow::Result<u64> {
-        let mut total = 0u64;
-        for sid in self.all_session_ids().await? {
-            let pool = self.session(&sid).await?;
-            total += pool.srv_ttl_sweep().await?;
-        }
-        Ok(total)
+        // Single shared database: one sweep covers every session.
+        let pool = self.session(SHARED_KEY).await?;
+        Ok(pool.srv_ttl_sweep().await?)
     }
 }

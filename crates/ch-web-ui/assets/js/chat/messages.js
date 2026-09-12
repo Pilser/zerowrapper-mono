@@ -3,6 +3,9 @@ import { els } from './dom.js'
 import { USER_AVATAR, BOT_AVATAR, escapeHtml } from './constants.js'
 import { render as renderMarkdown } from './markdown.js'
 import { finalize } from './streaming.js'
+import { scrollToBottom, autoScroll } from './scroll.js'
+
+export { scrollToBottom }
 
 let abortController = null
 
@@ -90,14 +93,7 @@ export function addMessage(role, text, scroll = true) {
   els.messages.appendChild(row)
   if (els.hint && els.hint.style.display !== 'none') els.hint.style.display = 'none'
   if (scroll) {
-    row.scrollIntoView({ behavior: 'smooth', block: 'end' })
-  }
-}
-
-export function scrollToBottom() {
-  const lastMsg = els.messages.lastElementChild
-  if (lastMsg) {
-    lastMsg.scrollIntoView({ block: 'end' })
+    autoScroll()
   }
 }
 
@@ -134,7 +130,7 @@ export function fetchHistory() {
         }
       })
       els.messages.appendChild(frag)
-      scrollToBottom()
+      scrollToBottom(false)
     })
     .catch(() => {})
 }

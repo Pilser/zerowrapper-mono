@@ -1,5 +1,6 @@
 import { els } from './dom.js'
 import { escapeHtml } from './constants.js'
+import { autoScroll } from './scroll.js'
 
 let pending = []
 
@@ -22,7 +23,7 @@ export function handleToolCall(id, name, args, container) {
   })
 
   target.appendChild(pill)
-  pill.scrollIntoView({ behavior: 'smooth', block: 'end' })
+  autoScroll()
   pending.push({ id: id || '', el: pill, name: name })
 }
 
@@ -57,7 +58,7 @@ export function handleToolResult(id, name, output) {
       })
     }
   }
-  item.el.scrollIntoView({ behavior: 'smooth', block: 'end' })
+  autoScroll()
 }
 
 export function clearPending() {

@@ -1043,35 +1043,65 @@ fn unset_path(target: &mut serde_json::Value, segs: Vec<crate::filters::PathSeg>
     }
 }
 
-pub fn srv_session_dir(root: &Path, owner: &str) -> PathBuf {
-    root.join("sessions").join(owner)
+/// Shared serverless layout: uploaded board files live under
+/// `<workspace>/whiteboard/apps/<board_id>/files/`, independent of chat
+/// session. `_owner` is kept for call-site compatibility and legacy fallback.
+pub fn srv_session_dir(root: &Path, _owner: &str) -> PathBuf {
+    root.join("whiteboard").join("apps")
 }
 
-pub fn srv_board_files_dir(root: &Path, owner: &str, board_id: &str) -> PathBuf {
-    srv_session_dir(root, owner).join("apps").join(board_id).join("files")
+pub fn srv_board_files_dir(root: &Path, _owner: &str, board_id: &str) -> PathBuf {
+    srv_session_dir(root, _owner).join(board_id).join("files")
 }
 
 pub fn srv_board_file_path(root: &Path, owner: &str, board_id: &str, file_id: &str) -> PathBuf {
     srv_board_files_dir(root, owner, board_id).join(format!("{file_id}.bin"))
 }
 
-pub fn srv_list_files(root: &Path, owner: &str, board_id: &str) -> anyhow::Result<Vec<(String, u64)>> {
-    let dir = srv_board_files_dir(root, owner, board_id);
-    if !dir.is_dir() {
-        return Ok(Vec::new());
+/// Legacy pre-shared-layout location: `sessions/<owner>/apps/<board>/files`.
+pub fn srv_board_files_dir_legacy(root: &Path, owner: &str, board_id: &str) -> PathBuf {
+    root.join("sessions").join(owner).join("apps").join(board_id).join("files")
+}
+
+/// Resolve an existing board file, preferring the shared location and falling
+/// back to the legacy per-session path (pre-migration data).
+pub fn srv_board_file_path_existing(root: &Path, owner: &str, board_id: &str, file_id: &str) -> Option<PathBuf> {
+    let shared = srv_board_file_path(root, owner, board_id, file_id);
+    if shared.is_file() {
+        return Some(shared);
     }
+    let legacy = srv_board_files_dir_legacy(root, owner, board_id).join(format!("{file_id}.bin"));
+    if legacy.is_file() {
+        return Some(legacy);
+    }
+    None
+}
+
+pub fn srv_list_files(root: &Path, owner: &str, board_id: &str) -> anyhow::Result<Vec<(String, u64)>> {
+    // Merge shared + legacy locations so pre-migration uploads stay visible.
     let mut out = Vec::new();
-    for entry in std::fs::read_dir(&dir)? {
-        let entry = entry?;
-        let path = entry.path();
-        if path.extension().and_then(|e| e.to_str()) == Some("bin") {
-            let meta = std::fs::metadata(&path)?;
-            let file_id = path
-                .file_stem()
-                .and_then(|s| s.to_str())
-                .unwrap_or_default()
-                .to_string();
-            out.push((file_id, meta.len()));
+    let mut seen = std::collections::HashSet::new();
+    for dir in [
+        srv_board_files_dir(root, owner, board_id),
+        srv_board_files_dir_legacy(root, owner, board_id),
+    ] {
+        if !dir.is_dir() {
+            continue;
+        }
+        for entry in std::fs::read_dir(&dir)? {
+            let entry = entry?;
+            let path = entry.path();
+            if path.extension().and_then(|e| e.to_str()) == Some("bin") {
+                let meta = std::fs::metadata(&path)?;
+                let file_id = path
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or_default()
+                    .to_string();
+                if seen.insert(file_id.clone()) {
+                    out.push((file_id, meta.len()));
+                }
+            }
         }
     }
     Ok(out)

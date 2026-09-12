@@ -996,6 +996,9 @@ pub async fn srv_file(cx: &Cx) -> Result<Response> {
     if !path.starts_with(&files_dir) {
         return Ok(json_response(StatusCode::FORBIDDEN, serde_json::json!({"error": "forbidden"})));
     }
+    // Shared layout first, legacy per-session path as fallback (pre-migration).
+    let path = zw_db::serverless::srv_board_file_path_existing(root, &app.owner_key, board_id, &file_id)
+        .unwrap_or(path);
     if !path.is_file() {
         return Ok(json_response(StatusCode::NOT_FOUND, serde_json::json!({"error": "not found"})));
     }
