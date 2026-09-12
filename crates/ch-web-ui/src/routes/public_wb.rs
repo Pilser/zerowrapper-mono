@@ -22,6 +22,10 @@ pub async fn public_wb(cx: &Cx) -> Result<Response> {
 /// via `?wb=<slug>` behind a tenant prefix — asset URLs are base-relative so
 /// they keep working in both cases.
 pub async fn render_snapshot(ctx: &AppContext, cx: &Cx, slug: &str, base_href: &str) -> Result<Response> {
+    // `view!` expands to helpers taking `__cx: &Cx`, normally injected by the
+    // `#[route]`/`#[component]` attributes — bind it manually here since this
+    // shared helper carries no attribute.
+    let __cx: &Cx = cx;
     let snap = match ctx.db.public_snapshot(slug).await {
         Ok(Some(s)) => s,
         _ => {
