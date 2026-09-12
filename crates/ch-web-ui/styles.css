@@ -207,6 +207,44 @@
   .chat-markdown pre code { font-family: var(--font-mono); font-size: 0.8125rem; line-height: 1.6; }
   .chat-markdown :not(pre) > code { background: var(--color-bg-weak); padding: 2px 6px; border-radius: 4px; font-size: 0.8125rem; color: var(--color-text-strong); }
   .chat-markdown blockquote { border-left: 3px solid var(--color-border-weak); padding-left: 1rem; margin: 0.75rem 0; color: var(--color-text-weak); }
+  /* Callouts: `> [!NOTE|TIP|WARNING|CAUTION|IMPORTANT]` colored cards. */
+  .chat-markdown .callout {
+    border: 1px solid var(--color-border-weak);
+    border-left: 4px solid var(--callout, var(--color-border));
+    border-radius: 8px;
+    padding: 10px 14px;
+    margin: 0.75rem 0;
+    background: var(--color-bg-weak);
+  }
+  .chat-markdown .callout-note { --callout: var(--color-border); }
+  .chat-markdown .callout-tip { --callout: var(--color-status-success); }
+  .chat-markdown .callout-warning { --callout: var(--color-bg-interactive); }
+  .chat-markdown .callout-caution { --callout: var(--color-status-error); }
+  .chat-markdown .callout-important { --callout: #9b59b6; }
+  .chat-markdown .callout-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--callout, var(--color-border));
+    margin-bottom: 4px;
+  }
+  .chat-markdown .callout-title svg { width: 14px; height: 14px; }
+  .chat-markdown .callout-body > :first-child { margin-top: 0; }
+  .chat-markdown .callout-body > :last-child { margin-bottom: 0; }
+  /* Footnotes: numbered refs with a notes section appended per message. */
+  .chat-markdown .footnote-ref a { color: var(--color-border); text-decoration: none; font-weight: 700; }
+  .chat-markdown .footnotes {
+    margin-top: 1rem;
+    border-top: 1px solid var(--color-border-weak);
+    padding-top: 0.5rem;
+    font-size: 0.8rem;
+    color: var(--color-text-weak);
+  }
+  .chat-markdown .footnotes ol { margin: 0.25rem 0; padding-left: 1.5rem; }
+  .chat-markdown .footnote-back { color: var(--color-text-weak); text-decoration: none; margin-left: 0.25em; }
+  .chat-markdown .footnote-missing { color: var(--color-status-error); }
   .chat-markdown .table-outer-wrap { position: relative; margin: 0.75rem 0; }
   .chat-markdown .table-wrap { overflow-x: auto; }
   .chat-markdown .table-wrap table { border-collapse: collapse; width: 100%; min-width: 480px; margin: 0; }

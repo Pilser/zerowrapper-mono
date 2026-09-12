@@ -8,7 +8,62 @@ function escapeHtml(s) {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 }
 
+// Footnote state: reset per parse via hooks.preprocess, so streaming
+// re-renders and concurrent messages never share numbering.
+let footnoteDoc = 0
+let footnoteNums = new Map()
+let footnoteItems = new Map()
+
+function footnoteSlug(label) {
+  const s = String(label).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+  return s || 'note'
+}
+
+function footnoteId(label) {
+  return `fn-${footnoteDoc}-${footnoteSlug(label)}`
+}
+
+function footnoteNum(label) {
+  let n = footnoteNums.get(label)
+  if (n === undefined) {
+    n = footnoteNums.size + 1
+    footnoteNums.set(label, n)
+  }
+  return n
+}
+
+function footnoteSection() {
+  if (footnoteNums.size === 0) return ''
+  const rows = [...footnoteNums.entries()]
+    .sort((a, b) => a[1] - b[1])
+    .map(([label]) => {
+      const it = footnoteItems.get(label)
+      if (it) return it
+      return `<li id="${footnoteId(label)}" class="footnote-missing">Missing note.</li>`
+    })
+  return `<section class="footnotes"><ol>${rows.join('')}</ol></section>`
+}
+
+const CALLOUT_KINDS = {
+  note: { label: 'Note', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>' },
+  tip: { label: 'Tip', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.4 1 2.3h6c0-.9.4-1.8 1-2.3A7 7 0 0 0 12 2z"/></svg>' },
+  warning: { label: 'Warning', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>' },
+  caution: { label: 'Caution', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="7.86 2 16.14 2 22 7.86 22 16.14 16.14 22 7.86 22 2 16.14 2 7.86 7.86 2"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>' },
+  important: { label: 'Important', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>' },
+}
+
 marked.use({
+  hooks: {
+    preprocess(src) {
+      footnoteDoc += 1
+      footnoteNums = new Map()
+      footnoteItems = new Map()
+      return src
+    },
+    postprocess(html) {
+      return html + footnoteSection()
+    },
+  },
   extensions: [
     {
       name: 'mathBlock',
@@ -55,6 +110,66 @@ marked.use({
       },
       renderer(token) {
         return `<div class="mermaid">${escapeHtml(token.text)}</div>`
+      },
+    },
+    {
+      name: 'markInline',
+      level: 'inline',
+      start(src) { return src.indexOf('==') },
+      tokenizer(src) {
+        const match = /^==([^\s=](?:[^=\n]*?[^\s=])?)==/.exec(src)
+        if (!match) return undefined
+        return { type: 'markInline', raw: match[0], text: match[1], tokens: this.lexer.inlineTokens(match[1]) }
+      },
+      renderer(token) {
+        return `<mark>${this.parser.parseInline(token.tokens)}</mark>`
+      },
+    },
+    {
+      name: 'footnoteRef',
+      level: 'inline',
+      start(src) { return src.indexOf('[^') },
+      tokenizer(src) {
+        const match = /^\[\^([^\]\n]+)\]/.exec(src)
+        if (!match) return undefined
+        return { type: 'footnoteRef', raw: match[0], label: match[1] }
+      },
+      renderer(token) {
+        const n = footnoteNum(token.label)
+        const id = footnoteId(token.label)
+        return `<sup class="footnote-ref"><a href="#${id}" id="${id}-ref">${n}</a></sup>`
+      },
+    },
+    {
+      name: 'footnoteDef',
+      level: 'block',
+      start(src) { return src.indexOf('[^') },
+      tokenizer(src) {
+        const match = /^ {0,3}\[\^([^\]\n]+)\]:[ \t]*([^\n]*)(?:\n|$)/.exec(src)
+        if (!match) return undefined
+        return { type: 'footnoteDef', raw: match[0], label: match[1], text: match[2], tokens: this.lexer.inlineTokens(match[2]) }
+      },
+      renderer(token) {
+        const n = footnoteNum(token.label)
+        const id = footnoteId(token.label)
+        footnoteItems.set(token.label, `<li id="${id}">${this.parser.parseInline(token.tokens)} <a class="footnote-back" href="#${id}-ref">\u2191</a></li>`)
+        return ''
+      },
+    },
+    {
+      name: 'callout',
+      level: 'block',
+      start(src) { return src.indexOf('> [!') },
+      tokenizer(src) {
+        const match = /^ {0,3}> \[!(NOTE|TIP|WARNING|CAUTION|IMPORTANT)\][ \t]*(?:\n|$)((?: {0,3}>[^\n]*(?:\n|$))*)/.exec(src)
+        if (!match) return undefined
+        const kind = match[1].toLowerCase()
+        const inner = match[2].replace(/^ {0,3}> ?/gm, '')
+        return { type: 'callout', raw: match[0], kind, tokens: this.lexer.blockTokens(inner) }
+      },
+      renderer(token) {
+        const meta = CALLOUT_KINDS[token.kind] || CALLOUT_KINDS.note
+        return `<div class="callout callout-${token.kind}"><div class="callout-title">${meta.icon}<span>${meta.label}</span></div><div class="callout-body">${this.parser.parse(token.tokens)}</div></div>`
       },
     },
   ],
