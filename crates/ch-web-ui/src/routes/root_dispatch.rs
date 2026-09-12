@@ -21,7 +21,11 @@ use crate::ws::handler::handle_ws_connection;
 ///   GET  /?ws=1                           -> WebSocket upgrade
 ///   GET  /?file={hash}                    -> cached file/media
 ///   GET  /?asset={bundled-filename}       -> bundled asset (JS/CSS)
+///   GET  /?wb={slug}                      -> public whiteboard snapshot
 ///   GET  /                                -> root HTML (chat, via next)
+///
+/// `?wb=` is honored on any path, so an embed behind a tenant prefix
+/// (`/tenant_<id>/?wb=<slug>`) resolves without needing a dedicated route.
 #[derive(Debug, Clone, Default)]
 pub struct RootDispatchLayer;
 
@@ -75,6 +79,12 @@ impl Layer for RootDispatchLayer {
             // Cached file/media: `/?file=<hash>`
             if let Some(hash) = query_value(cx, "file") {
                 return serve_file(cx, &hash).await;
+            }
+
+            // Public whiteboard snapshot: `/?wb=<slug>` (any path, so it
+            // also works as `/tenant_<id>/?wb=<slug>` behind an embed prefix).
+            if let Some(slug) = query_value(cx, "wb") {
+                return serve_public_snapshot(cx, &slug).await;
             }
 
             // API: `/?api=history&session_id=...`, `/?api=sessions`, `/?api=upload`
@@ -324,4 +334,29 @@ async fn serve_file(cx: &Cx, hash: &str) -> Result<Response> {
             .body(Body::from("File not found"))
             .unwrap()),
     }
+}
+
+/// Public whiteboard snapshot via `?wb=<slug>`, honored on any path so embeds
+/// behind a prefix (`/tenant_<id>/?wb=<slug>`) work. Assets render against the
+/// request directory as `<base href>`, mirroring the chat layout.
+async fn serve_public_snapshot(cx: &Cx, slug: &str) -> Result<Response> {
+    let app: &AppContext = app_context(cx);
+    let clean: String = slug.chars().filter(|c| c.is_alphanumeric()).collect();
+    if clean.is_empty() {
+        return Ok(Response::builder()
+            .status(StatusCode::NOT_FOUND)
+            .header("Content-Type", "text/html; charset=utf-8")
+            .body(Body::from("<h1>Page not found</h1>"))
+            .unwrap());
+    }
+    let req_path = uri(cx).path().to_string();
+    let base_href = if req_path.ends_with('/') {
+        req_path.clone()
+    } else {
+        match req_path.rfind('/') {
+            Some(idx) => req_path[..=idx].to_string(),
+            None => "/".to_string(),
+        }
+    };
+    crate::routes::public_wb::render_snapshot(app, cx, &clean, &base_href).await
 }

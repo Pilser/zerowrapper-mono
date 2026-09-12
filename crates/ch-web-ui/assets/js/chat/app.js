@@ -1288,8 +1288,15 @@ function init2() {
   });
   applyMode();
 }
+function pageBase() {
+  const base = document.querySelector("base")?.getAttribute("href") || "/";
+  return base.endsWith("/") ? base : base + "/";
+}
 function publicUrl(slug) {
-  return location.origin + "/w/" + slug;
+  const base = pageBase();
+  if (base === "/")
+    return location.origin + "/w/" + slug;
+  return location.origin + base + "?wb=" + encodeURIComponent(slug);
 }
 function openPublicUrl(slug) {
   window.open(publicUrl(slug), "_blank", "noopener,noreferrer");

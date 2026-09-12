@@ -14,7 +14,14 @@ struct WbSlug(str);
 pub async fn public_wb(cx: &Cx) -> Result<Response> {
     let ctx: &AppContext = app_context(cx);
     let slug = path_param::<WbSlug>(cx);
+    render_snapshot(ctx, cx, &slug, "/").await
+}
 
+/// Render a public whiteboard snapshot. `base_href` is `/` for the canonical
+/// `/w/<slug>` route, or the embed prefix (e.g. `/tenant_<id>/`) when served
+/// via `?wb=<slug>` behind a tenant prefix — asset URLs are base-relative so
+/// they keep working in both cases.
+pub async fn render_snapshot(ctx: &AppContext, cx: &Cx, slug: &str, base_href: &str) -> Result<Response> {
     let snap = match ctx.db.public_snapshot(slug).await {
         Ok(Some(s)) => s,
         _ => {
@@ -31,11 +38,13 @@ pub async fn public_wb(cx: &Cx) -> Result<Response> {
         .lines()
         .find_map(|l| l.strip_prefix("# ").map(|s| s.trim().to_string()))
         .unwrap_or_else(|| "Shared Whiteboard Page".to_string());
-    let favicon = "/favicon.svg";
+    let favicon = "favicon.svg";
     let brand = "chat";
 
-    let css_url = format!("/?asset={}", bundled_asset(cx, STYLESHEET).name());
-    let wb_js_url = format!("/?asset={}", bundled_asset(cx, PUBLIC_WB_JS).name());
+    // Base-relative asset URLs (see layout.rs): work at `/` and under a
+    // tenant/embed prefix alike.
+    let css_url = format!("?asset={}", bundled_asset(cx, STYLESHEET).name());
+    let wb_js_url = format!("?asset={}", bundled_asset(cx, PUBLIC_WB_JS).name());
 
     let pins = serde_json::from_str::<serde_json::Value>(&snap.pins)
         .unwrap_or_else(|_| serde_json::json!([]));
@@ -52,6 +61,7 @@ pub async fn public_wb(cx: &Cx) -> Result<Response> {
             <head>
                 <meta charset="utf-8">
                 <meta name="viewport" content="width=device-width, initial-scale=1">
+                <base href=(base_href)>
                 <title>(&page_title)</title>
                 <meta name="description" content="Shared whiteboard page">
                 <meta property="og:type" content="website">
@@ -80,7 +90,7 @@ pub async fn public_wb(cx: &Cx) -> Result<Response> {
             <body class="flex flex-col min-h-screen" style="font-family: var(--font-sans); color: var(--color-text); background: var(--color-bg);">
                 <div id="page-root" class="w-full mx-auto flex flex-col" style="max-width: 67.5rem; min-height: 100dvh; border-left: 1px solid var(--color-border-weak); border-right: 1px solid var(--color-border-weak);">
                     <header class="flex items-center justify-between px-6 py-4" style="border-bottom: 1px solid var(--color-border-weak);">
-                        <a href="/" class="no-underline text-sm font-semibold" style="color: var(--color-text-strong);">(brand)</a>
+                        <a href="./" class="no-underline text-sm font-semibold" style="color: var(--color-text-strong);">(brand)</a>
                         <span class="text-xs" style="color: var(--color-text-weak);">"Shared whiteboard page"</span>
                     </header>
                     <main class="flex-1 flex flex-col min-h-0">

@@ -154,8 +154,20 @@ export function init() {
   applyMode()
 }
 
+function pageBase() {
+  // The chat may be served at `/` or embedded under a prefix such as
+  // `/tenant_<id>/` (mirrored in the document <base href>). Build share links
+  // against wherever the page was actually loaded.
+  const base = document.querySelector('base')?.getAttribute('href') || '/'
+  return base.endsWith('/') ? base : base + '/'
+}
+
 function publicUrl(slug) {
-  return location.origin + '/w/' + slug
+  const base = pageBase()
+  // Canonical pretty link at the root; prefix-relative snapshot (?wb=) when
+  // embedded, so the link stays inside the same base path.
+  if (base === '/') return location.origin + '/w/' + slug
+  return location.origin + base + '?wb=' + encodeURIComponent(slug)
 }
 
 function openPublicUrl(slug) {
