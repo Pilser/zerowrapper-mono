@@ -159,7 +159,7 @@ impl DbPool {
             match res {
                 Ok(v) => return Ok(v),
                 Err(e) => {
-                    let msg = format!("{e:#}").toLowerCase();
+                    let msg = format!("{e:#}").to_lowercase();
                     if msg.contains("busy") || msg.contains("locked") {
                         last_err = Some(e);
                         tokio::time::sleep(std::time::Duration::from_millis(15 * (attempt + 1))).await;
