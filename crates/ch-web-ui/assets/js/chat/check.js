@@ -7,7 +7,7 @@
 import { html2canvas } from './html2canvas.js'
 import * as network from './network.js'
 
-// --- Global error wrappers (window.onerror / unhandledrejection / console.error) ---
+// --- Global error wrappers (window.onerror / unhandledrejection / console.error + fetch) ---
 let installed = false
 function ensureWrappers() {
   if (installed) return
@@ -23,6 +23,17 @@ function ensureWrappers() {
     console.error = function (...args) {
       try { report({ type: 'console_error', check: 'js', ok: false, msg: args.map(String).join(' '), url: location.href, ts: Date.now() }) } catch {}
       return orig.apply(console, args)
+    }
+    const _fetch = window.fetch
+    window.fetch = async (...a) => {
+      const url = String(a[0] || '')
+      // don't self-report b_collect / upload noise
+      const isInternal = url.includes('b_collect') || url.includes('stream_buffer')
+      const r = await _fetch(...a)
+      if (!r.ok && !isInternal) {
+        try { report({ type: 'fetch_error', check: 'e2e', ok: false, msg: `${url} [${r.status} ${r.statusText}]`, url: location.href, ts: Date.now() }) } catch {}
+      }
+      return r
     }
   } catch {}
 }

@@ -97,7 +97,7 @@ function handleMessage(e) {
         }
         break
       case 'snap': {
-        // Agent-triggered snap via WS: {type:'snap', target:'#whiteboard-body'}
+        // Agent-triggered snap via WS: {type:'snap', target:'#whiteboard-body'} — real automation, no file creation
         try {
           const sel = data.target || data.selector || '#whiteboard-body'
           const btn = document.getElementById('snap')
@@ -106,9 +106,31 @@ function handleMessage(e) {
         } catch {}
         break
       }
-      case 'check':
+      case 'check': {
+        // Agent real check without creating a file: {type:'check', kind:'js'|'mermaid'|'html', code:'...'}
+        try {
+          import('./check.js').then(m => {
+            const kind = data.kind || data.check || 'js'
+            const code = data.code || data.html || ''
+            let r
+            if (kind === 'js') r = m.checkJS(code)
+            else if (kind === 'mermaid') r = m.checkMermaid(code)
+            else if (kind === 'html') r = m.checkHTML(code)
+            else r = { ok: false, msg: 'unknown kind' }
+            m.report({ type:'check', check:kind, ok:r.ok, msg:r.msg||'', url:location.href })
+          }).catch(()=>{})
+        } catch {}
+        break
+      }
+      case 'runE2E': {
+        // Agent real automation: {type:'runE2E', steps:[{action:'fill', target:'#title3', value:'Hi'}, {action:'click', target:'#submit3'}]}
+        try {
+          import('./check.js').then(m => m.runE2E(data.steps||[]).catch(()=>{})).catch(()=>{})
+        } catch {}
+        break
+      }
       case 'check_result':
-        // Server-initiated check (optional, no-op — report already handled in check.js)
+        // Server ack, no-op
         break
     }
   } catch (e2) {

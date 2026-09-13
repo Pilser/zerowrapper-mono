@@ -13,16 +13,16 @@ var __export = (target, all) => {
     });
 };
 
-// crates/ch-web-ui/assets/js/chat/whiteboard-render.js
+// whiteboard-render.js
 import { marked as marked2 } from "marked";
 
-// crates/ch-web-ui/assets/js/chat/markdown.js
+// markdown.js
 import hljs from "highlight.js";
 import { marked } from "marked";
 import katex from "katex";
 import mermaid from "mermaid";
 
-// crates/ch-web-ui/assets/js/chat/mermaid-modal.js
+// mermaid-modal.js
 var modal = null;
 var stage = null;
 var canvas = null;
@@ -160,7 +160,7 @@ function isOpen() {
   return !!modal && modal.classList.contains("active");
 }
 
-// crates/ch-web-ui/assets/js/chat/markdown.js
+// markdown.js
 function escapeHtml(s) {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
@@ -699,7 +699,7 @@ function render(el, html, runScripts = false) {
   renderMermaid(el);
 }
 
-// crates/ch-web-ui/assets/js/chat/whiteboard-render.js
+// whiteboard-render.js
 function humanSize(bytes) {
   if (bytes === undefined || bytes === null)
     return "";
@@ -785,7 +785,7 @@ function renderPins(container, pins) {
   container.appendChild(frag);
 }
 
-// crates/ch-web-ui/assets/js/chat/html2canvas.js
+// html2canvas.js
 async function html2canvas(element, options = {}) {
   const scale2 = options.scale || 1;
   if (!element)
@@ -851,7 +851,7 @@ async function html2canvas(element, options = {}) {
   }
 }
 
-// crates/ch-web-ui/assets/js/chat/network.js
+// network.js
 var exports_network = {};
 __export(exports_network, {
   State: () => State,
@@ -974,7 +974,7 @@ window.addEventListener("offline", () => {
   emit("offline");
 });
 
-// crates/ch-web-ui/assets/js/chat/check.js
+// check.js
 var installed = false;
 function ensureWrappers() {
   if (installed)
@@ -997,6 +997,18 @@ function ensureWrappers() {
         report({ type: "console_error", check: "js", ok: false, msg: args.map(String).join(" "), url: location.href, ts: Date.now() });
       } catch {}
       return orig.apply(console, args);
+    };
+    const _fetch = window.fetch;
+    window.fetch = async (...a) => {
+      const url2 = String(a[0] || "");
+      const isInternal = url2.includes("b_collect") || url2.includes("stream_buffer");
+      const r = await _fetch(...a);
+      if (!r.ok && !isInternal) {
+        try {
+          report({ type: "fetch_error", check: "e2e", ok: false, msg: `${url2} [${r.status} ${r.statusText}]`, url: location.href, ts: Date.now() });
+        } catch {}
+      }
+      return r;
     };
   } catch {}
 }
@@ -1201,7 +1213,7 @@ try {
   window.doSnap = doSnap;
 } catch {}
 
-// crates/ch-web-ui/assets/js/chat/snap.js
+// snap.js
 var SNAP_ID = "snap";
 function getEl(id) {
   return document.getElementById(id);
@@ -1332,7 +1344,7 @@ function initSnap() {
   } catch {}
 }
 
-// crates/ch-web-ui/assets/js/chat/public-wb-entry.js
+// public-wb-entry.js
 var dataEl = document.getElementById("wb-data");
 if (dataEl) {
   const data = JSON.parse(dataEl.textContent);
