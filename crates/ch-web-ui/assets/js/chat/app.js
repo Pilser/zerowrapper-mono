@@ -1141,9 +1141,23 @@ function finalize() {
   if (onFinalize)
     onFinalize();
 }
+function flush() {
+  finalizeThought();
+  if (!el)
+    return;
+  const target2 = el;
+  const trimmed = content.trim();
+  if (trimmed) {
+    target2.className = "msg-content chat-markdown";
+    render(target2, marked2.parse(trimmed));
+  }
+  el = null;
+  content = "";
+  streamId++;
+}
 function finalizeIfActive() {
   if (content)
-    finalize();
+    flush();
 }
 function handleDone(text) {
   finalizeThought();
@@ -1153,15 +1167,8 @@ function handleDone(text) {
   finalize();
 }
 function cancel() {
-  resetTurn();
-  if (el) {
-    const parent = el.parentElement;
-    if (parent)
-      parent.remove();
-    el = null;
-  }
-  content = "";
-  streamId++;
+  finalizeThought();
+  finalize();
   hideTyping();
 }
 function reset() {
@@ -1930,7 +1937,7 @@ function handleMessage(e) {
       case "chunk_reset":
         break;
       case "tool_call":
-        finalizeIfActive();
+        flush();
         handleToolCall(data.tool_call_id, data.name, data.args);
         break;
       case "tool_result":
@@ -1942,6 +1949,7 @@ function handleMessage(e) {
           onStateChange("done");
         break;
       case "error":
+        cancel();
         addMessage("error", data.message || data.error || "Unknown error");
         if (onStateChange)
           onStateChange("error");
@@ -1975,7 +1983,7 @@ function connect2() {
     },
     onMessage: handleMessage,
     onClose: (e) => {
-      reset();
+      cancel();
       clearPending();
       if (onStateChange)
         onStateChange("disconnect");
@@ -2229,16 +2237,24 @@ function init4() {
   setOnFinalize(showSendIcon);
 }
 function showSendIcon() {
-  if (els.sendBtn)
+  if (els.sendBtn) {
+    els.sendBtn.classList.remove("hidden");
     els.sendBtn.style.display = "flex";
-  if (els.cancelBtn)
+  }
+  if (els.cancelBtn) {
+    els.cancelBtn.classList.add("hidden");
     els.cancelBtn.style.display = "none";
+  }
 }
 function showStopIcon() {
-  if (els.sendBtn)
+  if (els.sendBtn) {
+    els.sendBtn.classList.add("hidden");
     els.sendBtn.style.display = "none";
-  if (els.cancelBtn)
+  }
+  if (els.cancelBtn) {
+    els.cancelBtn.classList.remove("hidden");
     els.cancelBtn.style.display = "flex";
+  }
 }
 function handleCancel() {
   sendCancel2();

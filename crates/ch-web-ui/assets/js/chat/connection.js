@@ -54,7 +54,7 @@ function handleMessage(e) {
       case 'chunk_reset':
         break
       case 'tool_call':
-        streaming.finalizeIfActive()
+        streaming.flush()
         toolCalls.handleToolCall(data.tool_call_id, data.name, data.args)
         break
       case 'tool_result':
@@ -65,6 +65,7 @@ function handleMessage(e) {
         if (onStateChange) onStateChange('done')
         break
       case 'error':
+        streaming.cancel()
         addMessage('error', data.message || data.error || 'Unknown error')
         if (onStateChange) onStateChange('error')
         break
@@ -99,7 +100,7 @@ export function connect() {
     },
     onMessage: handleMessage,
     onClose: (e) => {
-      streaming.reset()
+      streaming.cancel()
       toolCalls.clearPending()
       if (onStateChange) onStateChange('disconnect')
     },

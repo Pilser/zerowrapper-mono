@@ -69,13 +69,13 @@ export function init() {
 }
 
 function showSendIcon() {
-  if (els.sendBtn) els.sendBtn.style.display = 'flex'
-  if (els.cancelBtn) els.cancelBtn.style.display = 'none'
+  if (els.sendBtn) { els.sendBtn.classList.remove('hidden'); els.sendBtn.style.display = 'flex' }
+  if (els.cancelBtn) { els.cancelBtn.classList.add('hidden'); els.cancelBtn.style.display = 'none' }
 }
 
 function showStopIcon() {
-  if (els.sendBtn) els.sendBtn.style.display = 'none'
-  if (els.cancelBtn) els.cancelBtn.style.display = 'flex'
+  if (els.sendBtn) { els.sendBtn.classList.add('hidden'); els.sendBtn.style.display = 'none' }
+  if (els.cancelBtn) { els.cancelBtn.classList.remove('hidden'); els.cancelBtn.style.display = 'flex' }
 }
 
 function handleCancel() {

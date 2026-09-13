@@ -85,8 +85,26 @@ export function finalize() {
   if (onFinalize) onFinalize()
 }
 
+export function flush() {
+  // Flush any pending streamed markdown to the DOM without ending the
+  // turn's activity fold or toggling the send/cancel button. Used before a
+  // tool-call so the text that preceded it becomes a finished bubble but
+  // the Thinking/Actions stack stays open for the next actions.
+  finalizeThought()
+  if (!el) return
+  const target = el
+  const trimmed = content.trim()
+  if (trimmed) {
+    target.className = 'msg-content chat-markdown'
+    renderMarkdown(target, marked.parse(trimmed))
+  }
+  el = null
+  content = ''
+  streamId++
+}
+
 export function finalizeIfActive() {
-  if (content) finalize()
+  if (content) flush()
 }
 
 export function handleDone(text) {
@@ -101,14 +119,8 @@ export function isActive() {
 }
 
 export function cancel() {
-  activity.resetTurn()
-  if (el) {
-    const parent = el.parentElement
-    if (parent) parent.remove()
-    el = null
-  }
-  content = ''
-  streamId++
+  finalizeThought()
+  finalize()
   hideTyping()
 }
 
