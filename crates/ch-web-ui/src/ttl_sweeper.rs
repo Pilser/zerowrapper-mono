@@ -14,6 +14,14 @@ pub fn spawn_ttl_sweeper(store: SessionStore, every: Duration) -> tokio::task::J
                 }
                 Err(e) => tracing::warn!("ttl sweeper: {e}"),
             }
+            // Ephemeral replay buffer: drain 10 min after turn_complete,
+            // 60 min for orphaned (server went off). NOT session storage.
+            if let Err(e) = store.system().stream_buffer_sweep().await {
+                tracing::warn!("stream_buffer sweep: {e}");
+            } else {
+                // also try memory purge for old sessions (best-effort)
+                // memory buffer is bounded to 500 per session already
+            }
         }
     })
 }

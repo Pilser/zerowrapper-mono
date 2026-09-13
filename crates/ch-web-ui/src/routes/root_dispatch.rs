@@ -105,10 +105,11 @@ async fn root_ws(cx: &Cx, body: Body) -> Result<Response> {
     let zeroclaw = app.zeroclaw.clone();
     let agent = Arc::new(app.agent.clone());
     let whiteboard = app.whiteboard().cloned();
+    let buffer_db = app.db.system().clone();
 
     let upgrade = WebSocketUpgrade::from_request(cx, body).await?;
     upgrade.on_upgrade(move |socket: WebSocket| async move {
-        handle_ws_connection(socket, registry, zeroclaw, agent, whiteboard).await;
+        handle_ws_connection(socket, registry, zeroclaw, agent, whiteboard, buffer_db).await;
     })
 }
 

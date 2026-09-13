@@ -1,8 +1,59 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 use futures_util::{SinkExt, StreamExt};
 use tokio::sync::mpsc;
 use topcoat::router::content::websocket::{Message, WebSocket};
 use zw_core::{Attachment, ChannelMessage, ChannelRegistryHandle, ZeroClawHandle, StreamEvent};
+
+// Ephemeral replay buffer: hybrid memory + DB. Memory for fast reconnect
+// within the same process, DB for cross-restart resumption. This is NOT
+// session message storage — agent DB remains the source of truth for
+// history. Buffer drains 10 min after turn_complete, 60 min for orphaned.
+use std::sync::LazyLock;
+static MEM_BUFFER: LazyLock<tokio::sync::Mutex<HashMap<String, Vec<serde_json::Value>>>> =
+    LazyLock::new(|| tokio::sync::Mutex::new(HashMap::new()));
+
+async fn mem_append(session_id: &str, event: serde_json::Value, seq: i64) {
+    let mut buf = MEM_BUFFER.lock().await;
+    let v = buf.entry(session_id.to_string()).or_default();
+    let mut tagged = event;
+    if let Some(obj) = tagged.as_object_mut() {
+        obj.insert("seq".to_string(), serde_json::json!(seq));
+    }
+    v.push(tagged);
+    if v.len() > 500 {
+        let drain = v.len() - 500;
+        v.drain(0..drain);
+    }
+}
+
+async fn mem_replay(session_id: &str, since: i64) -> Vec<serde_json::Value> {
+    let buf = MEM_BUFFER.lock().await;
+    if let Some(v) = buf.get(session_id) {
+        return v
+            .iter()
+            .filter(|e| e.get("seq").and_then(|s| s.as_i64()).unwrap_or(0) > since)
+            .cloned()
+            .collect();
+    }
+    Vec::new()
+}
+
+async fn buffer_event(db: &zw_db::DbPool, session_id: &str, event: &StreamEvent) -> Option<serde_json::Value> {
+    let mut json = match serde_json::to_value(event) {
+        Ok(v) => v,
+        Err(_) => return None,
+    };
+    let seq = match db.stream_buffer_append(session_id, &json).await {
+        Ok(s) if s > 0 => s,
+        _ => return Some(json),
+    };
+    if let Some(obj) = json.as_object_mut() {
+        obj.insert("seq".to_string(), serde_json::json!(seq));
+    }
+    mem_append(session_id, json.clone(), seq).await;
+    Some(json)
+}
 
 fn spawn_whiteboard_forwarding(
     ws_sender: &Arc<tokio::sync::Mutex<futures_util::stream::SplitSink<WebSocket, Message>>>,
@@ -67,7 +118,9 @@ pub async fn handle_ws_connection(
     zeroclaw: Arc<ZeroClawHandle>,
     agent: Arc<String>,
     whiteboard: Option<zw_whiteboard::WhiteboardHandle>,
+    buffer_db: zw_db::DbPool,
 ) {
+    let (ws_sender, mut ws_receiver) = socket.split();
     let (ws_sender, mut ws_receiver) = socket.split();
     let ws_sender = Arc::new(tokio::sync::Mutex::new(ws_sender));
 
@@ -139,6 +192,44 @@ pub async fn handle_ws_connection(
                 });
             if let Some(sid) = sid {
                 let _ = zeroclaw.cancel_session(sid.to_string()).await;
+            }
+            continue;
+        }
+
+        if parsed.get("type").and_then(|v| v.as_str()) == Some("resume") {
+            let sid = parsed.get("session_id").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            let since = parsed.get("since").and_then(|v| v.as_i64()).unwrap_or(0);
+            if !sid.is_empty() {
+                current_session_id = sid.clone();
+                // Hybrid replay: memory first, then DB for anything not in memory
+                let mem = mem_replay(&sid, since).await;
+                let mut to_send = mem;
+                // If DB has more (e.g. after restart), merge DB replay
+                if let Ok(db_events) = buffer_db.stream_buffer_replay(&sid, since).await {
+                    // DB events are BufferedEvent; convert to JSON values
+                    for be in db_events {
+                        if !to_send.iter().any(|v: &serde_json::Value| v.get("seq").and_then(|s| s.as_i64()) == Some(be.seq)) {
+                            let mut val = be.payload;
+                            if let Some(obj) = val.as_object_mut() {
+                                obj.insert("seq".to_string(), serde_json::json!(be.seq));
+                            }
+                            to_send.push(val);
+                        }
+                    }
+                    to_send.sort_by_key(|v| v.get("seq").and_then(|s| s.as_i64()).unwrap_or(0));
+                }
+                for val in to_send {
+                    let mut sender = ws_sender.lock().await;
+                    if sender.send(Message::Text(val.to_string().into())).await.is_err() {
+                        break;
+                    }
+                }
+                // Also tell client the current max seq so it can continue
+                if let Ok(max) = buffer_db.stream_buffer_max_seq(&sid).await {
+                    let ack = serde_json::json!({"type":"resumed","session_id":sid,"since":since,"max_seq":max});
+                    let mut sender = ws_sender.lock().await;
+                    let _ = sender.send(Message::Text(ack.to_string().into())).await;
+                }
             }
             continue;
         }
@@ -237,21 +328,30 @@ pub async fn handle_ws_connection(
             attachments,
         };
 
-        current_session_id = session_id;
+        current_session_id = session_id.clone();
         if let Some(handle) = whiteboard.clone() {
             spawn_whiteboard_forwarding(&ws_sender, handle, current_session_id.clone(), &mut whiteboard_forwarding_for);
         }
         let (event_tx, mut event_rx) = mpsc::channel::<StreamEvent>(256);
         let ws = ws_sender.clone();
         let registry = registry.clone();
+        let db_for_buffer = buffer_db.clone();
+        let sid_for_buffer = session_id.clone();
 
         tokio::spawn(async move {
             while let Some(event) = event_rx.recv().await {
-                if let Ok(json) = serde_json::to_string(&event) {
-                    let mut sender = ws.lock().await;
-                    if sender.send(Message::Text(json.into())).await.is_err() {
-                        break;
-                    }
+                // Hybrid buffer: persist to DB + memory before sending live.
+                // This is the ephemeral replay buffer, NOT session message storage.
+                let to_send = if let Some(tagged) = buffer_event(&db_for_buffer, &sid_for_buffer, &event).await {
+                    tagged
+                } else if let Ok(v) = serde_json::to_value(&event) {
+                    v
+                } else {
+                    continue;
+                };
+                let mut sender = ws.lock().await;
+                if sender.send(Message::Text(to_send.to_string().into())).await.is_err() {
+                    break;
                 }
             }
         });

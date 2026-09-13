@@ -16,6 +16,7 @@ pub mod secrets;
 pub mod serverless;
 pub mod sessions;
 pub mod session_store;
+pub mod stream_buffer;
 pub mod templates;
 pub mod ttl;
 pub mod users;

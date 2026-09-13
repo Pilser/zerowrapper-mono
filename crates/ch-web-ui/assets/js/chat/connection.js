@@ -30,9 +30,27 @@ function setHint(state) {
 
 network.on('stateChange', setHint)
 
+function lastSeqKey(sid) { return 'zerowrapper_lastSeq_' + (sid || '') }
+function getLastSeq(sid) {
+  const v = localStorage.getItem(lastSeqKey(sid))
+  const n = v ? parseInt(v, 10) : 0
+  return isNaN(n) ? 0 : n
+}
+function setLastSeq(sid, seq) {
+  if (!sid || !seq) return
+  const cur = getLastSeq(sid)
+  if (seq > cur) localStorage.setItem(lastSeqKey(sid), String(seq))
+}
+function bumpSeqFrom(data) {
+  const seq = data && typeof data.seq === 'number' ? data.seq : 0
+  const sid = data && data.session_id ? data.session_id : authState.sessionId
+  if (seq) setLastSeq(sid, seq)
+}
+
 function handleMessage(e) {
   try {
     const data = JSON.parse(e.data)
+    if (data && typeof data.seq === 'number') bumpSeqFrom(data)
     switch (data.type) {
       case 'session_created':
         if (data.session_id && data.session_id !== authState.sessionId) {
@@ -44,6 +62,9 @@ function handleMessage(e) {
       case 'whiteboard_update':
         if (data.session_id) whiteboard.setSession(data.session_id)
         whiteboard.setBoard(data)
+        break
+      case 'resumed':
+        // Server ack of replay window; nothing to render
         break
       case 'thinking':
         streaming.handleThinking(data.content)
@@ -97,11 +118,22 @@ export function connect() {
       fetchHistory()
       whiteboard.setSession(authState.sessionId)
       whiteboard.sync()
+      // Ephemeral replay: if we were mid-stream when the socket dropped,
+      // ask the server to replay buffered deltas since our last seq.
+      // This is NOT history — history stays agent DB. Buffer drains 10 min
+      // after turn_complete so it never grows.
+      const sid = authState.sessionId || localStorage.getItem('zerowrapper_session') || ''
+      const since = getLastSeq(sid)
+      if (sid && since > 0) {
+        try { network.send(JSON.stringify({ type: 'resume', session_id: sid, since })) } catch {}
+      }
     },
     onMessage: handleMessage,
     onClose: (e) => {
-      streaming.cancel()
-      toolCalls.clearPending()
+      // Network blip: local-only. Do NOT cancel the server turn — it
+      // keeps buffering via consumeStream so resume can replay it.
+      // Only explicit red-button cancel sends {type:cancel}.
+      streaming.hideTyping()
       if (onStateChange) onStateChange('disconnect')
     },
   })

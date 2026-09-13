@@ -96,6 +96,17 @@ CREATE TABLE IF NOT EXISTS templates (
     created_at      TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+CREATE TABLE IF NOT EXISTS stream_buffer (
+    session_id TEXT NOT NULL,
+    seq        INTEGER NOT NULL,
+    type       TEXT NOT NULL,
+    payload    TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (session_id, seq)
+);
+CREATE INDEX IF NOT EXISTS idx_stream_buffer_session ON stream_buffer(session_id, seq);
+CREATE INDEX IF NOT EXISTS idx_stream_buffer_created ON stream_buffer(created_at);
 ";
 
 pub const SESSION_SCHEMA: &str = "

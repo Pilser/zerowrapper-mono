@@ -1912,9 +1912,32 @@ function setHint(state3) {
   }
 }
 on("stateChange", setHint);
+function lastSeqKey(sid) {
+  return "zerowrapper_lastSeq_" + (sid || "");
+}
+function getLastSeq(sid) {
+  const v = localStorage.getItem(lastSeqKey(sid));
+  const n = v ? parseInt(v, 10) : 0;
+  return isNaN(n) ? 0 : n;
+}
+function setLastSeq(sid, seq) {
+  if (!sid || !seq)
+    return;
+  const cur = getLastSeq(sid);
+  if (seq > cur)
+    localStorage.setItem(lastSeqKey(sid), String(seq));
+}
+function bumpSeqFrom(data) {
+  const seq = data && typeof data.seq === "number" ? data.seq : 0;
+  const sid = data && data.session_id ? data.session_id : state2.sessionId;
+  if (seq)
+    setLastSeq(sid, seq);
+}
 function handleMessage(e) {
   try {
     const data = JSON.parse(e.data);
+    if (data && typeof data.seq === "number")
+      bumpSeqFrom(data);
     switch (data.type) {
       case "session_created":
         if (data.session_id && data.session_id !== state2.sessionId) {
@@ -1927,6 +1950,8 @@ function handleMessage(e) {
         if (data.session_id)
           setSession(data.session_id);
         setBoard(data);
+        break;
+      case "resumed":
         break;
       case "thinking":
         handleThinking(data.content);
@@ -1980,11 +2005,17 @@ function connect2() {
       fetchHistory();
       setSession(state2.sessionId);
       sync();
+      const sid = state2.sessionId || localStorage.getItem("zerowrapper_session") || "";
+      const since = getLastSeq(sid);
+      if (sid && since > 0) {
+        try {
+          send(JSON.stringify({ type: "resume", session_id: sid, since }));
+        } catch {}
+      }
     },
     onMessage: handleMessage,
     onClose: (e) => {
-      cancel();
-      clearPending();
+      hideTyping();
       if (onStateChange)
         onStateChange("disconnect");
     }
