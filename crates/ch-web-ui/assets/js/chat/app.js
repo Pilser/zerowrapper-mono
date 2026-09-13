@@ -14,7 +14,7 @@ var __export = (target, all) => {
 };
 var __esm = (fn, res) => () => (fn && (res = fn(fn = 0)), res);
 
-// network.js
+// crates/ch-web-ui/assets/js/chat/network.js
 var exports_network = {};
 __export(exports_network, {
   State: () => State,
@@ -134,7 +134,12 @@ var init_network = __esm(() => {
   });
 });
 
-// dom.js
+// crates/ch-web-ui/assets/js/chat/dom.js
+var exports_dom = {};
+__export(exports_dom, {
+  els: () => els,
+  init: () => init
+});
 function init() {
   els.form = document.getElementById("chat-form");
   els.input = document.getElementById("chat-input");
@@ -165,7 +170,7 @@ var init_dom = __esm(() => {
   els = {};
 });
 
-// constants.js
+// crates/ch-web-ui/assets/js/chat/constants.js
 function escapeHtml(str) {
   if (!str)
     return "";
@@ -173,7 +178,7 @@ function escapeHtml(str) {
 }
 var USER_AVATAR = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>', BOT_AVATAR = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
 
-// mermaid-modal.js
+// crates/ch-web-ui/assets/js/chat/mermaid-modal.js
 function clamp(v, lo, hi) {
   return Math.max(lo, Math.min(hi, v));
 }
@@ -303,7 +308,7 @@ var init_mermaid_modal = __esm(() => {
   pointers = new Map;
 });
 
-// markdown.js
+// crates/ch-web-ui/assets/js/chat/markdown.js
 import hljs from "highlight.js";
 import { marked } from "marked";
 import katex from "katex";
@@ -849,7 +854,7 @@ var init_markdown = __esm(() => {
   });
 });
 
-// scroll.js
+// crates/ch-web-ui/assets/js/chat/scroll.js
 function container() {
   return els.messages || document.getElementById("chat-messages");
 }
@@ -878,7 +883,7 @@ var init_scroll = __esm(() => {
   init_dom();
 });
 
-// activity.js
+// crates/ch-web-ui/assets/js/chat/activity.js
 function target() {
   return els.messages || document.getElementById("chat-messages");
 }
@@ -1078,7 +1083,7 @@ var init_activity = __esm(() => {
   pending = [];
 });
 
-// streaming.js
+// crates/ch-web-ui/assets/js/chat/streaming.js
 import { marked as marked2 } from "marked";
 function setOnFinalize(cb) {
   onFinalize = cb;
@@ -1216,7 +1221,7 @@ var init_streaming = __esm(() => {
   init_activity();
 });
 
-// messages.js
+// crates/ch-web-ui/assets/js/chat/messages.js
 var exports_messages = {};
 __export(exports_messages, {
   abortHistoryFetch: () => abortHistoryFetch,
@@ -1360,7 +1365,7 @@ var init_messages = __esm(() => {
   init_scroll();
 });
 
-// whiteboard-render.js
+// crates/ch-web-ui/assets/js/chat/whiteboard-render.js
 import { marked as marked4 } from "marked";
 function humanSize(bytes) {
   if (bytes === undefined || bytes === null)
@@ -1454,7 +1459,7 @@ var init_whiteboard_render = __esm(() => {
   init_markdown();
 });
 
-// whiteboard.js
+// crates/ch-web-ui/assets/js/chat/whiteboard.js
 var exports_whiteboard = {};
 __export(exports_whiteboard, {
   init: () => init2,
@@ -1785,7 +1790,7 @@ var init_whiteboard = __esm(() => {
   init_whiteboard_render();
 });
 
-// html2canvas.js
+// crates/ch-web-ui/assets/js/chat/html2canvas.js
 async function html2canvas(element, options = {}) {
   const scale2 = options.scale || 1;
   if (!element)
@@ -1852,7 +1857,28 @@ async function html2canvas(element, options = {}) {
 }
 var init_html2canvas = () => {};
 
-// check.js
+// crates/ch-web-ui/assets/js/chat/acorn.js
+var acorn;
+var init_acorn = __esm(() => {
+  try {
+    window.acorn = window.acorn || {
+      parse(code, opts) {
+        try {
+          new Function(String(code));
+        } catch (e) {
+          const msg = e && e.message ? e.message : String(e);
+          const m = /\(?(\d+):(\d+)\)?/.exec(msg);
+          if (m)
+            e.loc = { line: parseInt(m[1], 10), column: parseInt(m[2], 10) };
+          throw e;
+        }
+      }
+    };
+  } catch {}
+  acorn = typeof window !== "undefined" && window.acorn ? window.acorn : null;
+});
+
+// crates/ch-web-ui/assets/js/chat/check.js
 var exports_check = {};
 __export(exports_check, {
   checkHTML: () => checkHTML,
@@ -1887,7 +1913,7 @@ function ensureWrappers() {
     const _fetch = window.fetch;
     window.fetch = async (...a) => {
       const url2 = String(a[0] || "");
-      const isInternal = url2.includes("b_collect") || url2.includes("stream_buffer");
+      const isInternal = url2.includes("inspect-reports") || url2.includes("stream_buffer");
       const r = await _fetch(...a);
       if (!r.ok && !isInternal) {
         try {
@@ -1905,9 +1931,9 @@ function checkJS(code) {
   if (!String(code).trim())
     return { ok: true, msg: "empty" };
   try {
-    const acorn = window.acorn || null;
-    if (acorn && typeof acorn.parse === "function") {
-      acorn.parse(String(code), { ecmaVersion: "latest", sourceType: "module" });
+    const acorn2 = window.acorn || null;
+    if (acorn2 && typeof acorn2.parse === "function") {
+      acorn2.parse(String(code), { ecmaVersion: "latest", sourceType: "module" });
       return { ok: true };
     }
   } catch (e) {
@@ -2013,9 +2039,9 @@ function report(obj) {
   ensureWrappers();
   const payload = Object.assign({ ts: Date.now(), url: location.href }, obj || {});
   try {
-    fetch("/api/srv/b_collect/submit", {
+    fetch("/api/srv/inspect-reports/submit", {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: "Bearer b_collect" },
+      headers: { "Content-Type": "application/json", Authorization: "Bearer inspect-reports" },
       body: JSON.stringify(payload)
     }).catch(() => {});
     try {
@@ -2070,19 +2096,18 @@ async function doSnap(targetSelector) {
     let fileUrl = "";
     if (p) {
       const h = await hashPath(p);
-      if (h) {
+      if (h)
         fileUrl = "/files/" + h;
-      } else {
+      else
         fileUrl = p;
-      }
     }
     if (data.hash)
       fileUrl = "/files/" + data.hash;
     if (!fileUrl)
       fileUrl = "/files/unknown";
-    const snapPayload = { type: "snap", check: "snap", ok: true, url: fileUrl, target: sel, ts: Date.now(), href: location.href };
+    const snapPayload = { type: "snap", check: "snap", ok: true, url: fileUrl, path: data.path || "", hash: data.hash || "", target: sel, ts: Date.now(), href: location.href };
     report(snapPayload);
-    return { ok: true, url: fileUrl, target: sel };
+    return { ok: true, url: fileUrl, path: data.path || "", hash: data.hash || "", target: sel, blob };
   } catch (e) {
     const msg = e && e.message ? e.message : String(e);
     report({ type: "snap", check: "snap", ok: false, msg, target: sel, url: location.href, ts: Date.now() });
@@ -2092,6 +2117,7 @@ async function doSnap(targetSelector) {
 var installed = false;
 var init_check = __esm(() => {
   init_html2canvas();
+  init_acorn();
   init_network();
   ensureWrappers();
   try {
@@ -2104,12 +2130,65 @@ var init_check = __esm(() => {
   } catch {}
 });
 
-// main.js
+// crates/ch-web-ui/assets/js/chat/file-upload.js
+var exports_file_upload = {};
+__export(exports_file_upload, {
+  createAttachmentChip: () => createAttachmentChip,
+  uploadFile: () => uploadFile,
+  uploadState: () => uploadState
+});
+async function uploadFile(file) {
+  try {
+    const formData = new FormData;
+    formData.append("file", file);
+    const res = await fetch("?api=upload", {
+      method: "POST",
+      headers: { "X-Filename": file.name },
+      body: file
+    });
+    const data = await res.json();
+    if (data.error)
+      throw new Error(data.error);
+    return data;
+  } catch (err) {
+    throw err;
+  }
+}
+function createAttachmentChip(fileInfo) {
+  const chip = document.createElement("div");
+  chip.className = "attachment-chip";
+  chip.style.cssText = "display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 6px; border: 1px solid var(--color-border-weak); background: var(--color-bg-weak); font-size: 0.75rem; margin-bottom: 4px;";
+  chip.innerHTML = `
+    <span style="color: var(--color-text-strong);">${fileInfo.filename}</span>
+    <span style="color: var(--color-text-weak); font-size: 0.625rem;">${formatSize(fileInfo.size)}</span>
+    <button class="remove-attachment" style="background: none; border: none; cursor: pointer; color: var(--color-status-error); font-size: 0.875rem; padding: 0; line-height: 1;">&times;</button>
+  `;
+  chip.querySelector(".remove-attachment").addEventListener("click", () => {
+    chip.remove();
+    uploadState.pending = uploadState.pending.filter((a) => a.path !== fileInfo.path);
+  });
+  return chip;
+}
+function formatSize(bytes) {
+  if (bytes < 1024)
+    return bytes + " B";
+  if (bytes < 1024 * 1024)
+    return (bytes / 1024).toFixed(1) + " KB";
+  return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+}
+var uploadState;
+var init_file_upload = __esm(() => {
+  uploadState = {
+    pending: []
+  };
+});
+
+// crates/ch-web-ui/assets/js/chat/main.js
 init_network();
 init_dom();
 init_dom();
 
-// auth.js
+// crates/ch-web-ui/assets/js/chat/auth.js
 init_dom();
 var STORAGE_SESSION = "zerowrapper_session";
 var state2 = {
@@ -2200,13 +2279,13 @@ function showBadge() {
     els.userBadge.classList.add("hidden");
 }
 
-// connection.js
+// crates/ch-web-ui/assets/js/chat/connection.js
 init_network();
 init_dom();
 init_messages();
 init_streaming();
 
-// tool-calls.js
+// crates/ch-web-ui/assets/js/chat/tool-calls.js
 init_activity();
 function handleToolCall(id, name, args, container2) {
   pushToolCall(id, name, args);
@@ -2218,7 +2297,7 @@ function clearPending() {
   resetTurn();
 }
 
-// connection.js
+// crates/ch-web-ui/assets/js/chat/connection.js
 init_whiteboard();
 var onStateChange = null;
 function setHint(state3) {
@@ -2320,13 +2399,33 @@ function handleMessage(e) {
             els.daemonBanner.classList.remove("hidden");
         }
         break;
-      case "snap": {
+      case "snap":
+      case "webscreenshot": {
         try {
           const sel = data.target || data.selector || "#whiteboard-body";
           const btn = document.getElementById("snap");
           if (btn)
             btn.dataset.target = sel;
-          Promise.resolve().then(() => (init_check(), exports_check)).then((m) => m.doSnap(sel)).catch(() => {});
+          Promise.resolve().then(() => (init_check(), exports_check)).then(async (m) => {
+            const res = await m.doSnap(sel);
+            if (res && res.ok && res.blob) {
+              try {
+                const r2 = await fetch("/api/inspect/snap", { method: "POST", headers: { "X-Filename": "snap.png", "X-Target": sel }, body: res.blob });
+                const data2 = await r2.json().catch(() => ({}));
+                const payload = { type: "webscreenshot_result", ok: true, url: data2.url || res.url, path: data2.path || res.path || "", hash: data2.hash || res.hash || "", target: sel };
+                try {
+                  m.report({ type: "snap", check: "snap", ok: true, url: payload.url, path: payload.path, hash: payload.hash, target: sel, agent: true });
+                } catch {}
+                try {
+                  send(JSON.stringify(payload));
+                } catch {}
+              } catch {
+                try {
+                  send(JSON.stringify({ type: "webscreenshot_result", ok: true, url: res.url, path: res.path || "", hash: res.hash || "", target: sel }));
+                } catch {}
+              }
+            }
+          }).catch(() => {});
         } catch {}
         break;
       }
@@ -2349,12 +2448,15 @@ function handleMessage(e) {
         } catch {}
         break;
       }
-      case "runE2E": {
+      case "runE2E":
+      case "frontend-automation": {
         try {
-          Promise.resolve().then(() => (init_check(), exports_check)).then((m) => m.runE2E(data.steps || []).catch(() => {})).catch(() => {});
+          const steps = data.steps || data.payload || [];
+          Promise.resolve().then(() => (init_check(), exports_check)).then((m) => m.runE2E(steps).catch(() => {})).catch(() => {});
         } catch {}
         break;
       }
+      case "webscreenshot_result":
       case "check_result":
         break;
     }
@@ -2415,11 +2517,11 @@ function sendCancel2() {
   sendCancel(state2.sessionId);
 }
 
-// main.js
+// crates/ch-web-ui/assets/js/chat/main.js
 init_streaming();
 init_messages();
 
-// lightbox.js
+// crates/ch-web-ui/assets/js/chat/lightbox.js
 var lightbox = null;
 var loadingEl = null;
 var images = [];
@@ -2540,51 +2642,8 @@ function init3(messagesEl) {
   });
 }
 
-// file-upload.js
-var uploadState = {
-  pending: []
-};
-async function uploadFile(file) {
-  try {
-    const formData = new FormData;
-    formData.append("file", file);
-    const res = await fetch("?api=upload", {
-      method: "POST",
-      headers: { "X-Filename": file.name },
-      body: file
-    });
-    const data = await res.json();
-    if (data.error)
-      throw new Error(data.error);
-    return data;
-  } catch (err) {
-    throw err;
-  }
-}
-function createAttachmentChip(fileInfo) {
-  const chip = document.createElement("div");
-  chip.className = "attachment-chip";
-  chip.style.cssText = "display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 6px; border: 1px solid var(--color-border-weak); background: var(--color-bg-weak); font-size: 0.75rem; margin-bottom: 4px;";
-  chip.innerHTML = `
-    <span style="color: var(--color-text-strong);">${fileInfo.filename}</span>
-    <span style="color: var(--color-text-weak); font-size: 0.625rem;">${formatSize(fileInfo.size)}</span>
-    <button class="remove-attachment" style="background: none; border: none; cursor: pointer; color: var(--color-status-error); font-size: 0.875rem; padding: 0; line-height: 1;">&times;</button>
-  `;
-  chip.querySelector(".remove-attachment").addEventListener("click", () => {
-    chip.remove();
-    uploadState.pending = uploadState.pending.filter((a) => a.path !== fileInfo.path);
-  });
-  return chip;
-}
-function formatSize(bytes) {
-  if (bytes < 1024)
-    return bytes + " B";
-  if (bytes < 1024 * 1024)
-    return (bytes / 1024).toFixed(1) + " KB";
-  return (bytes / (1024 * 1024)).toFixed(1) + " MB";
-}
-
-// main.js
+// crates/ch-web-ui/assets/js/chat/main.js
+init_file_upload();
 function logPendingResources() {
   const entries = performance.getEntriesByType("resource");
   const pending2 = entries.filter((e) => !e.responseEnd || e.responseEnd <= 0);
@@ -2745,11 +2804,11 @@ function autoGrow() {
   els.input.style.height = Math.min(els.input.scrollHeight, 300) + "px";
 }
 
-// app-entry.js
+// crates/ch-web-ui/assets/js/chat/app-entry.js
 init_whiteboard();
 init_check();
 
-// snap.js
+// crates/ch-web-ui/assets/js/chat/snap.js
 init_check();
 init_network();
 var SNAP_ID = "snap";
@@ -2812,8 +2871,9 @@ function wireButton2(btn) {
   if (!btn || btn.dataset.wired === "1")
     return;
   btn.dataset.wired = "1";
-  btn.addEventListener("click", async () => {
+  btn.addEventListener("click", async (e) => {
     const target2 = btn.dataset.target || "#whiteboard-body";
+    const isHuman = e.isTrusted === true;
     btn.disabled = true;
     btn.style.opacity = "0.6";
     try {
@@ -2823,6 +2883,65 @@ function wireButton2(btn) {
         setTimeout(() => {
           btn.style.borderColor = "";
         }, 900);
+        if (isHuman) {
+          try {
+            const attachments = document.getElementById("attachments");
+            const fileInput = document.getElementById("file-input");
+            const mod = await Promise.resolve().then(() => (init_file_upload(), exports_file_upload)).catch(() => null);
+            const els2 = await Promise.resolve().then(() => (init_dom(), exports_dom)).catch(() => null);
+            const info = {
+              filename: "snap.png",
+              path: res.path || "",
+              hash: res.hash || "",
+              url: res.url,
+              size: res.blob ? res.blob.size : 0,
+              mime_type: "image/png"
+            };
+            if (mod && mod.uploadState) {
+              mod.uploadState.pending.push({ filename: info.filename, path: info.path, hash: info.hash, url: info.url, size: info.size, mime_type: info.mime_type });
+            }
+            if (attachments && mod && mod.createAttachmentChip) {
+              try {
+                const chip = mod.createAttachmentChip({ filename: info.filename, size: info.size, path: info.path });
+                attachments.appendChild(chip);
+              } catch {}
+            } else if (attachments) {
+              const chip = document.createElement("div");
+              chip.className = "attachment-chip";
+              chip.textContent = `snap.png ${res.url}`;
+              attachments.appendChild(chip);
+            }
+          } catch {}
+        } else {
+          try {
+            if (res.blob) {
+              const r2 = await fetch("/api/inspect/snap", {
+                method: "POST",
+                headers: { "X-Filename": "snap.png", "X-Target": target2 },
+                body: res.blob
+              });
+              const data2 = await r2.json().catch(() => ({}));
+              const tempPath = data2.path || res.path || "";
+              const url2 = data2.url || res.url;
+              const hash = data2.hash || res.hash || "";
+              const payload = { type: "webscreenshot_result", ok: true, url: url2, path: tempPath, hash, target: target2 };
+              try {
+                send(JSON.stringify(payload));
+              } catch {}
+              try {
+                if (window.__zw_ws_send)
+                  window.__zw_ws_send(payload);
+              } catch {}
+              const { report: report2 } = await Promise.resolve().then(() => (init_check(), exports_check));
+              report2({ type: "snap", check: "snap", ok: true, url: url2, path: tempPath, hash, target: target2, agent: true });
+            } else {
+              const payload = { type: "webscreenshot_result", ok: true, url: res.url, path: res.path || "", hash: res.hash || "", target: target2 };
+              try {
+                send(JSON.stringify(payload));
+              } catch {}
+            }
+          } catch {}
+        }
       }
     } catch {} finally {
       btn.disabled = false;
@@ -2865,14 +2984,31 @@ function initSnap() {
     window.ws.send = function(data) {
       try {
         const obj = typeof data === "string" ? JSON.parse(data) : data;
-        if (obj && obj.type === "snap") {
+        if (obj && (obj.type === "snap" || obj.type === "webscreenshot")) {
           const sel = obj.target || obj.selector || "#whiteboard-body";
           const b = getEl3(SNAP_ID);
           if (b)
             b.dataset.target = sel;
-          doSnap(sel);
+          Promise.resolve().then(() => (init_check(), exports_check)).then(async (m) => {
+            const res = await m.doSnap(sel);
+            if (res && res.ok && res.blob) {
+              try {
+                const r2 = await fetch("/api/inspect/snap", { method: "POST", headers: { "X-Filename": "snap.png", "X-Target": sel }, body: res.blob });
+                const data2 = await r2.json().catch(() => ({}));
+                const payload = { type: "webscreenshot_result", ok: true, url: data2.url || res.url, path: data2.path || res.path, hash: data2.hash || res.hash, target: sel };
+                try {
+                  send(JSON.stringify(payload));
+                } catch {}
+              } catch {
+                try {
+                  send(JSON.stringify({ type: "webscreenshot_result", ok: true, url: res.url, path: res.path || "", target: sel }));
+                } catch {}
+              }
+            }
+          }).catch(() => {});
           return;
         }
+        if (obj && (obj.type === "check" || obj.type === "frontend-automation" || obj.type === "runE2E")) {}
       } catch {}
       try {
         return send(typeof data === "string" ? data : JSON.stringify(data));
@@ -2882,7 +3018,7 @@ function initSnap() {
   } catch {}
 }
 
-// app-entry.js
+// crates/ch-web-ui/assets/js/chat/app-entry.js
 init4();
 init2();
 initSnap();

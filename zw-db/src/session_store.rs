@@ -145,11 +145,11 @@ impl SessionStore {
     }
 
     pub async fn board_pool(&self, board_id: &str) -> anyhow::Result<Arc<DbPool>> {
-        // b_collect board: auto-create on first use (shared, whiteboard/serverless.db via SHARED_KEY)
-        if board_id == "b_collect" {
+        // inspect-reports board: auto-create on first use (shared, whiteboard/serverless.db via SHARED_KEY)
+        if board_id == "inspect-reports" {
             if let Ok(pool) = self.session(SHARED_KEY).await {
                 if pool.srv_app_by_id(board_id).await.unwrap_or(None).is_none() {
-                    let _ = pool.srv_app_create_with_id(board_id, SHARED_KEY, "b_collect", None, true, None).await;
+                    let _ = pool.srv_app_create_with_id(board_id, SHARED_KEY, "inspect-reports", None, true, None).await;
                     let _ = self.register_board(SHARED_KEY, board_id, SHARED_KEY).await;
                 }
             }

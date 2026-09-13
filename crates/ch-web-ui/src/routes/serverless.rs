@@ -117,11 +117,11 @@ fn url_decode(s: &str) -> String {
 pub async fn srv_submit(cx: &Cx, body: Body) -> Result<Response> {
     let ctx: &AppContext = app_context(cx);
     let board_id = path_param::<BoardId>(cx);
-    // b_collect board: auto-create on first use (shared, whiteboard/serverless.db via SHARED_KEY)
-    if &*board_id == "b_collect" {
+    // inspect-reports board: auto-create on first use (shared, whiteboard/serverless.db via SHARED_KEY)
+    if &*board_id == "inspect-reports" {
         if let Ok(pool) = ctx.db.session("shared").await {
             if pool.srv_app_by_id(board_id).await.unwrap_or(None).is_none() {
-                let _ = pool.srv_app_create_with_id(board_id, "shared", "b_collect", None, true, None).await;
+                let _ = pool.srv_app_create_with_id(board_id, "shared", "inspect-reports", None, true, None).await;
                 let _ = ctx.db.register_board("shared", board_id, "shared").await;
             }
         }
@@ -892,10 +892,10 @@ async fn persist_upload(
 pub async fn srv_upload(cx: &Cx, body: Body) -> Result<Response> {
     let ctx: &AppContext = app_context(cx);
     let board_id = path_param::<BoardId>(cx);
-    if &*board_id == "b_collect" {
+    if &*board_id == "inspect-reports" {
         if let Ok(pool) = ctx.db.session("shared").await {
             if pool.srv_app_by_id(board_id).await.unwrap_or(None).is_none() {
-                let _ = pool.srv_app_create_with_id(board_id, "shared", "b_collect", None, true, None).await;
+                let _ = pool.srv_app_create_with_id(board_id, "shared", "inspect-reports", None, true, None).await;
                 let _ = ctx.db.register_board("shared", board_id, "shared").await;
             }
         }

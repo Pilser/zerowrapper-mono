@@ -12,17 +12,567 @@ var __export = (target, all) => {
       set: __exportSetter.bind(all, name)
     });
 };
+var __esm = (fn, res) => () => (fn && (res = fn(fn = 0)), res);
 
-// whiteboard-render.js
+// crates/ch-web-ui/assets/js/chat/html2canvas.js
+async function html2canvas(element, options = {}) {
+  const scale2 = options.scale || 1;
+  if (!element)
+    throw new Error("html2canvas: target not found");
+  const rect = element.getBoundingClientRect();
+  const w = Math.max(1, Math.ceil(rect.width));
+  const h = Math.max(1, Math.ceil(rect.height));
+  const canvas2 = document.createElement("canvas");
+  canvas2.width = w * scale2;
+  canvas2.height = h * scale2;
+  const ctx = canvas2.getContext("2d");
+  if (!ctx)
+    return canvas2;
+  ctx.scale(scale2, scale2);
+  let bg = "";
+  try {
+    bg = getComputedStyle(document.documentElement).getPropertyValue("--color-bg").trim();
+  } catch {}
+  ctx.fillStyle = bg || "#ffffff";
+  ctx.fillRect(0, 0, w, h);
+  try {
+    const clone = element.cloneNode(true);
+    const serializer = new XMLSerializer;
+    let html = serializer.serializeToString(clone);
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}"><foreignObject width="100%" height="100%"><div xmlns="http://www.w3.org/1999/xhtml" style="width:${w}px;height:${h}px;overflow:hidden;">${html}</div></foreignObject></svg>`;
+    const url = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+    const img = new Image;
+    img.crossOrigin = "anonymous";
+    img.decoding = "sync";
+    img.src = url;
+    await new Promise((resolve, reject) => {
+      const t = setTimeout(() => reject(new Error("svg load timeout")), 1800);
+      img.onload = () => {
+        clearTimeout(t);
+        resolve();
+      };
+      img.onerror = () => {
+        clearTimeout(t);
+        reject(new Error("svg load error"));
+      };
+    });
+    ctx.drawImage(img, 0, 0, w, h);
+    return canvas2;
+  } catch (_e) {
+    try {
+      let fg = "";
+      try {
+        fg = getComputedStyle(document.documentElement).getPropertyValue("--color-text").trim();
+      } catch {}
+      ctx.fillStyle = fg || "#111111";
+      ctx.font = "12px Inter, ui-sans-serif, system-ui, sans-serif";
+      const text = (element.innerText || element.textContent || "").split(`
+`).slice(0, 90);
+      let y = 14;
+      for (const line of text) {
+        if (y > h - 4)
+          break;
+        ctx.fillText(line.slice(0, 150), 8, y);
+        y += 14;
+      }
+    } catch {}
+    return canvas2;
+  }
+}
+var init_html2canvas = () => {};
+
+// crates/ch-web-ui/assets/js/chat/acorn.js
+var acorn;
+var init_acorn = __esm(() => {
+  try {
+    window.acorn = window.acorn || {
+      parse(code, opts) {
+        try {
+          new Function(String(code));
+        } catch (e) {
+          const msg = e && e.message ? e.message : String(e);
+          const m = /\(?(\d+):(\d+)\)?/.exec(msg);
+          if (m)
+            e.loc = { line: parseInt(m[1], 10), column: parseInt(m[2], 10) };
+          throw e;
+        }
+      }
+    };
+  } catch {}
+  acorn = typeof window !== "undefined" && window.acorn ? window.acorn : null;
+});
+
+// crates/ch-web-ui/assets/js/chat/network.js
+var exports_network = {};
+__export(exports_network, {
+  State: () => State,
+  connect: () => connect,
+  disconnect: () => disconnect,
+  getState: () => getState,
+  off: () => off,
+  on: () => on,
+  send: () => send,
+  sendCancel: () => sendCancel
+});
+function getState() {
+  return state;
+}
+function on(event, fn) {
+  if (!listenerMap.has(event))
+    listenerMap.set(event, new Set);
+  listenerMap.get(event).add(fn);
+  return () => listenerMap.get(event)?.delete(fn);
+}
+function off(event, fn) {
+  listenerMap.get(event)?.delete(fn);
+}
+function emit(event, data) {
+  listenerMap.get(event)?.forEach((fn) => fn(data));
+}
+function connect(wsUrl, handlers) {
+  if (wsUrl)
+    url = wsUrl;
+  if (handlers)
+    callbacks = handlers;
+  if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING))
+    return;
+  setState(State.CONNECTING);
+  ws = new WebSocket(url);
+  ws.onopen = onWsOpen;
+  ws.onmessage = onWsMessage;
+  ws.onclose = onWsClose;
+  ws.onerror = onWsError;
+}
+function disconnect() {
+  stopReconnect();
+  reconnectAttempts = 0;
+  if (ws) {
+    ws.onclose = null;
+    ws.onerror = null;
+    ws.close();
+    ws = null;
+  }
+  setState(State.DISCONNECTED);
+}
+function send(data) {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(typeof data === "string" ? data : JSON.stringify(data));
+  }
+}
+function sendCancel(sessionId) {
+  send(JSON.stringify({ type: "cancel", session_id: sessionId || "" }));
+}
+function setState(s) {
+  state = s;
+  emit("stateChange", s);
+}
+function onWsOpen() {
+  setState(State.CONNECTED);
+  reconnectAttempts = 0;
+  if (callbacks.onOpen)
+    callbacks.onOpen();
+}
+function onWsMessage(e) {
+  if (callbacks.onMessage)
+    callbacks.onMessage(e);
+}
+function onWsClose(e) {
+  setState(State.DISCONNECTED);
+  if (callbacks.onClose)
+    callbacks.onClose(e);
+  scheduleReconnect();
+}
+function onWsError() {}
+function scheduleReconnect() {
+  const delay = Math.min(BASE_RECONNECT_DELAY * Math.pow(2, reconnectAttempts), MAX_RECONNECT_DELAY);
+  reconnectAttempts++;
+  emit("reconnecting", { attempt: reconnectAttempts, delay });
+  setState(State.RECONNECTING);
+  reconnectTimer = setTimeout(() => {
+    if (url)
+      connect();
+  }, delay);
+}
+function stopReconnect() {
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
+}
+var MAX_RECONNECT_DELAY = 30000, BASE_RECONNECT_DELAY = 1000, State, ws = null, state, url = "", callbacks, reconnectTimer = null, reconnectAttempts = 0, listenerMap;
+var init_network = __esm(() => {
+  State = {
+    DISCONNECTED: "disconnected",
+    CONNECTING: "connecting",
+    CONNECTED: "connected",
+    RECONNECTING: "reconnecting"
+  };
+  state = State.DISCONNECTED;
+  callbacks = { onOpen: null, onMessage: null, onClose: null };
+  listenerMap = new Map;
+  window.addEventListener("online", () => {
+    if (state === State.RECONNECTING || state === State.DISCONNECTED) {
+      stopReconnect();
+      if (url)
+        connect();
+    }
+  });
+  window.addEventListener("offline", () => {
+    emit("offline");
+  });
+});
+
+// crates/ch-web-ui/assets/js/chat/check.js
+var exports_check = {};
+__export(exports_check, {
+  checkHTML: () => checkHTML,
+  checkJS: () => checkJS,
+  checkMermaid: () => checkMermaid,
+  doSnap: () => doSnap,
+  report: () => report,
+  runE2E: () => runE2E
+});
+function ensureWrappers() {
+  if (installed)
+    return;
+  installed = true;
+  try {
+    window.addEventListener("error", (e) => {
+      try {
+        report({ type: "js_error", check: "js", ok: false, msg: e.message || String(e.error || "error"), url: location.href, ts: Date.now() });
+      } catch {}
+    });
+    window.addEventListener("unhandledrejection", (e) => {
+      try {
+        report({ type: "unhandledrejection", check: "js", ok: false, msg: String(e.reason || e), url: location.href, ts: Date.now() });
+      } catch {}
+    });
+    const orig = console.error;
+    console.error = function(...args) {
+      try {
+        report({ type: "console_error", check: "js", ok: false, msg: args.map(String).join(" "), url: location.href, ts: Date.now() });
+      } catch {}
+      return orig.apply(console, args);
+    };
+    const _fetch = window.fetch;
+    window.fetch = async (...a) => {
+      const url2 = String(a[0] || "");
+      const isInternal = url2.includes("inspect-reports") || url2.includes("stream_buffer");
+      const r = await _fetch(...a);
+      if (!r.ok && !isInternal) {
+        try {
+          report({ type: "fetch_error", check: "e2e", ok: false, msg: `${url2} [${r.status} ${r.statusText}]`, url: location.href, ts: Date.now() });
+        } catch {}
+      }
+      return r;
+    };
+  } catch {}
+}
+function checkJS(code) {
+  ensureWrappers();
+  if (code == null)
+    code = "";
+  if (!String(code).trim())
+    return { ok: true, msg: "empty" };
+  try {
+    const acorn2 = window.acorn || null;
+    if (acorn2 && typeof acorn2.parse === "function") {
+      acorn2.parse(String(code), { ecmaVersion: "latest", sourceType: "module" });
+      return { ok: true };
+    }
+  } catch (e) {
+    return { ok: false, msg: e && e.message ? e.message : String(e), line: e && e.loc ? e.loc.line : undefined, col: e && e.loc ? e.loc.column : undefined };
+  }
+  try {
+    new Function(String(code));
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, msg: e && e.message ? e.message : String(e) };
+  }
+}
+function checkHTML(code) {
+  ensureWrappers();
+  try {
+    const parser = new DOMParser;
+    const doc = parser.parseFromString(String(code), "text/html");
+    if (doc.querySelector("parsererror"))
+      return { ok: false, msg: "HTML parse error" };
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, msg: e.message || String(e) };
+  }
+}
+function checkMermaid(code) {
+  ensureWrappers();
+  const src = String(code || "");
+  if (!src.trim())
+    return { ok: false, msg: "empty mermaid" };
+  try {
+    const mm = window.mermaid;
+    if (mm && typeof mm.parse === "function") {
+      mm.parse(src);
+      return { ok: true };
+    }
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, msg: e && e.message ? e.message : String(e) };
+  }
+}
+async function runE2E(steps) {
+  ensureWrappers();
+  if (!Array.isArray(steps))
+    return { ok: false, msg: "steps must be array" };
+  const results = [];
+  for (let idx = 0;idx < steps.length; idx++) {
+    const s = steps[idx];
+    try {
+      const target = s.target || s.selector || "";
+      const kind = s.kind || s.type || s.action || "";
+      if (kind === "fill" || s.action === "fill") {
+        const el = target ? document.querySelector(target) : null;
+        if (!el)
+          throw new Error("fill target not found: " + target);
+        el.focus && el.focus();
+        if ("value" in el)
+          el.value = s.value != null ? String(s.value) : "";
+        else
+          el.textContent = s.value != null ? String(s.value) : "";
+        el.dispatchEvent(new Event("input", { bubbles: true }));
+        el.dispatchEvent(new Event("change", { bubbles: true }));
+        results.push({ idx, ok: true, target });
+      } else if (kind === "click" || s.action === "click") {
+        const el = target ? document.querySelector(target) : null;
+        if (!el)
+          throw new Error("click target not found: " + target);
+        el.click();
+        results.push({ idx, ok: true, target });
+      } else if (kind === "check" || s.check) {
+        const ck = s.check || s.kind;
+        let r;
+        if (ck === "js")
+          r = checkJS(s.code || "");
+        else if (ck === "mermaid")
+          r = checkMermaid(s.code || "");
+        else if (ck === "html")
+          r = checkHTML(s.code || "");
+        else
+          r = { ok: false, msg: "unknown check kind: " + ck };
+        results.push({ idx, ok: r.ok, msg: r.msg, check: ck });
+        report({ type: "e2e_step", check: ck, ok: r.ok, msg: r.msg || "", step: idx, url: location.href, ts: Date.now() });
+      } else if (s.code != null) {
+        const r = checkJS(s.code);
+        results.push({ idx, ok: r.ok, msg: r.msg });
+      } else {
+        results.push({ idx, ok: false, msg: "unknown step" });
+      }
+      if (s.delay)
+        await new Promise((r) => setTimeout(r, Number(s.delay) || 0));
+      else
+        await new Promise((r) => setTimeout(r, 50));
+    } catch (e) {
+      const msg = e && e.message ? e.message : String(e);
+      results.push({ idx, ok: false, msg });
+      report({ type: "e2e_error", ok: false, msg, step: idx, url: location.href, ts: Date.now() });
+    }
+  }
+  const ok = results.every((r) => r.ok !== false);
+  report({ type: "e2e", check: "e2e", ok, steps: results.length, url: location.href, ts: Date.now() });
+  return { ok, results };
+}
+function report(obj) {
+  ensureWrappers();
+  const payload = Object.assign({ ts: Date.now(), url: location.href }, obj || {});
+  try {
+    fetch("/api/srv/inspect-reports/submit", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer inspect-reports" },
+      body: JSON.stringify(payload)
+    }).catch(() => {});
+    try {
+      if (exports_network && typeof send === "function") {
+        send(JSON.stringify(Object.assign({ type: "check_result" }, payload)));
+      } else if (window.__zw_ws_send) {
+        window.__zw_ws_send(Object.assign({ type: "check_result" }, payload));
+      }
+    } catch {}
+  } catch {}
+  return payload;
+}
+async function hashPath(path) {
+  try {
+    const enc = new TextEncoder().encode(path);
+    const buf = await crypto.subtle.digest("SHA-256", enc);
+    const bytes = new Uint8Array(buf).slice(0, 8);
+    let b64 = btoa(String.fromCharCode(...bytes));
+    b64 = b64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+    return b64;
+  } catch {
+    return "";
+  }
+}
+async function doSnap(targetSelector) {
+  const sel = targetSelector || "#whiteboard-body";
+  let el = null;
+  try {
+    el = document.querySelector(sel);
+  } catch {}
+  if (!el) {
+    el = document.querySelector("#whiteboard-body") || document.querySelector("#chat-messages") || document.querySelector("#wb-root") || document.querySelector("#page-root") || document.body;
+    if (!el)
+      return { ok: false, msg: "no target element" };
+  }
+  let canvas2;
+  try {
+    canvas2 = await html2canvas(el, { scale: 2 });
+  } catch (e) {
+    report({ type: "snap", check: "snap", ok: false, msg: String(e && e.message ? e.message : e), target: sel, url: location.href, ts: Date.now() });
+    return { ok: false, msg: String(e.message || e) };
+  }
+  const blob = await new Promise((resolve) => canvas2.toBlob(resolve, "image/png", 0.92));
+  if (!blob)
+    return { ok: false, msg: "toBlob failed" };
+  try {
+    const up = await fetch("?api=upload", { method: "POST", headers: { "X-Filename": "snap.png" }, body: blob });
+    const data = await up.json().catch(() => ({}));
+    if (!up.ok || data.error)
+      throw new Error(data.error || "upload failed");
+    const p = data.path || "";
+    let fileUrl = "";
+    if (p) {
+      const h = await hashPath(p);
+      if (h)
+        fileUrl = "/files/" + h;
+      else
+        fileUrl = p;
+    }
+    if (data.hash)
+      fileUrl = "/files/" + data.hash;
+    if (!fileUrl)
+      fileUrl = "/files/unknown";
+    const snapPayload = { type: "snap", check: "snap", ok: true, url: fileUrl, path: data.path || "", hash: data.hash || "", target: sel, ts: Date.now(), href: location.href };
+    report(snapPayload);
+    return { ok: true, url: fileUrl, path: data.path || "", hash: data.hash || "", target: sel, blob };
+  } catch (e) {
+    const msg = e && e.message ? e.message : String(e);
+    report({ type: "snap", check: "snap", ok: false, msg, target: sel, url: location.href, ts: Date.now() });
+    return { ok: false, msg };
+  }
+}
+var installed = false;
+var init_check = __esm(() => {
+  init_html2canvas();
+  init_acorn();
+  init_network();
+  ensureWrappers();
+  try {
+    window.checkJS = checkJS;
+    window.checkMermaid = checkMermaid;
+    window.checkHTML = checkHTML;
+    window.runE2E = runE2E;
+    window.reportCheck = report;
+    window.doSnap = doSnap;
+  } catch {}
+});
+
+// crates/ch-web-ui/assets/js/chat/file-upload.js
+var exports_file_upload = {};
+__export(exports_file_upload, {
+  createAttachmentChip: () => createAttachmentChip,
+  uploadFile: () => uploadFile,
+  uploadState: () => uploadState
+});
+async function uploadFile(file) {
+  try {
+    const formData = new FormData;
+    formData.append("file", file);
+    const res = await fetch("?api=upload", {
+      method: "POST",
+      headers: { "X-Filename": file.name },
+      body: file
+    });
+    const data = await res.json();
+    if (data.error)
+      throw new Error(data.error);
+    return data;
+  } catch (err) {
+    throw err;
+  }
+}
+function createAttachmentChip(fileInfo) {
+  const chip = document.createElement("div");
+  chip.className = "attachment-chip";
+  chip.style.cssText = "display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 6px; border: 1px solid var(--color-border-weak); background: var(--color-bg-weak); font-size: 0.75rem; margin-bottom: 4px;";
+  chip.innerHTML = `
+    <span style="color: var(--color-text-strong);">${fileInfo.filename}</span>
+    <span style="color: var(--color-text-weak); font-size: 0.625rem;">${formatSize(fileInfo.size)}</span>
+    <button class="remove-attachment" style="background: none; border: none; cursor: pointer; color: var(--color-status-error); font-size: 0.875rem; padding: 0; line-height: 1;">&times;</button>
+  `;
+  chip.querySelector(".remove-attachment").addEventListener("click", () => {
+    chip.remove();
+    uploadState.pending = uploadState.pending.filter((a) => a.path !== fileInfo.path);
+  });
+  return chip;
+}
+function formatSize(bytes) {
+  if (bytes < 1024)
+    return bytes + " B";
+  if (bytes < 1024 * 1024)
+    return (bytes / 1024).toFixed(1) + " KB";
+  return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+}
+var uploadState;
+var init_file_upload = __esm(() => {
+  uploadState = {
+    pending: []
+  };
+});
+
+// crates/ch-web-ui/assets/js/chat/dom.js
+var exports_dom = {};
+__export(exports_dom, {
+  els: () => els,
+  init: () => init
+});
+function init() {
+  els.form = document.getElementById("chat-form");
+  els.input = document.getElementById("chat-input");
+  els.messages = document.getElementById("chat-messages");
+  els.hint = document.getElementById("fallback-hint");
+  els.hintText = document.getElementById("chat-hint-text");
+  els.chatRefreshBtn = document.getElementById("chat-refresh-btn");
+  els.typingEl = document.getElementById("typing-indicator");
+  els.authSection = document.getElementById("auth-section");
+  els.userBadge = document.getElementById("user-badge");
+  els.badgeDisplay = document.getElementById("badge-display");
+  els.badgeSub = document.getElementById("badge-sub");
+  els.registerBtn = document.getElementById("register-btn");
+  els.emailInput = document.getElementById("email-input");
+  els.authError = document.getElementById("auth-error");
+  els.logoutBtn = document.getElementById("logout-btn");
+  els.daemonBanner = document.getElementById("daemon-banner");
+  els.sessionSelect = document.getElementById("session-select");
+  els.sessionNewBtn = document.getElementById("session-new-btn");
+  els.sendBtn = document.getElementById("send-btn");
+  els.cancelBtn = document.getElementById("cancel-btn");
+  els.uploadBtn = document.getElementById("upload-btn");
+  els.fileInput = document.getElementById("file-input");
+  els.attachments = document.getElementById("attachments");
+}
+var els;
+var init_dom = __esm(() => {
+  els = {};
+});
+
+// crates/ch-web-ui/assets/js/chat/whiteboard-render.js
 import { marked as marked2 } from "marked";
 
-// markdown.js
+// crates/ch-web-ui/assets/js/chat/markdown.js
 import hljs from "highlight.js";
 import { marked } from "marked";
 import katex from "katex";
 import mermaid from "mermaid";
 
-// mermaid-modal.js
+// crates/ch-web-ui/assets/js/chat/mermaid-modal.js
 var modal = null;
 var stage = null;
 var canvas = null;
@@ -160,7 +710,7 @@ function isOpen() {
   return !!modal && modal.classList.contains("active");
 }
 
-// markdown.js
+// crates/ch-web-ui/assets/js/chat/markdown.js
 function escapeHtml(s) {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
@@ -699,7 +1249,7 @@ function render(el, html, runScripts = false) {
   renderMermaid(el);
 }
 
-// whiteboard-render.js
+// crates/ch-web-ui/assets/js/chat/whiteboard-render.js
 function humanSize(bytes) {
   if (bytes === undefined || bytes === null)
     return "";
@@ -785,435 +1335,12 @@ function renderPins(container, pins) {
   container.appendChild(frag);
 }
 
-// html2canvas.js
-async function html2canvas(element, options = {}) {
-  const scale2 = options.scale || 1;
-  if (!element)
-    throw new Error("html2canvas: target not found");
-  const rect = element.getBoundingClientRect();
-  const w = Math.max(1, Math.ceil(rect.width));
-  const h = Math.max(1, Math.ceil(rect.height));
-  const canvas2 = document.createElement("canvas");
-  canvas2.width = w * scale2;
-  canvas2.height = h * scale2;
-  const ctx = canvas2.getContext("2d");
-  if (!ctx)
-    return canvas2;
-  ctx.scale(scale2, scale2);
-  let bg = "";
-  try {
-    bg = getComputedStyle(document.documentElement).getPropertyValue("--color-bg").trim();
-  } catch {}
-  ctx.fillStyle = bg || "#ffffff";
-  ctx.fillRect(0, 0, w, h);
-  try {
-    const clone = element.cloneNode(true);
-    const serializer = new XMLSerializer;
-    let html = serializer.serializeToString(clone);
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}"><foreignObject width="100%" height="100%"><div xmlns="http://www.w3.org/1999/xhtml" style="width:${w}px;height:${h}px;overflow:hidden;">${html}</div></foreignObject></svg>`;
-    const url = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
-    const img = new Image;
-    img.crossOrigin = "anonymous";
-    img.decoding = "sync";
-    img.src = url;
-    await new Promise((resolve, reject) => {
-      const t = setTimeout(() => reject(new Error("svg load timeout")), 1800);
-      img.onload = () => {
-        clearTimeout(t);
-        resolve();
-      };
-      img.onerror = () => {
-        clearTimeout(t);
-        reject(new Error("svg load error"));
-      };
-    });
-    ctx.drawImage(img, 0, 0, w, h);
-    return canvas2;
-  } catch (_e) {
-    try {
-      let fg = "";
-      try {
-        fg = getComputedStyle(document.documentElement).getPropertyValue("--color-text").trim();
-      } catch {}
-      ctx.fillStyle = fg || "#111111";
-      ctx.font = "12px Inter, ui-sans-serif, system-ui, sans-serif";
-      const text = (element.innerText || element.textContent || "").split(`
-`).slice(0, 90);
-      let y = 14;
-      for (const line of text) {
-        if (y > h - 4)
-          break;
-        ctx.fillText(line.slice(0, 150), 8, y);
-        y += 14;
-      }
-    } catch {}
-    return canvas2;
-  }
-}
+// crates/ch-web-ui/assets/js/chat/public-wb-entry.js
+init_check();
 
-// network.js
-var exports_network = {};
-__export(exports_network, {
-  State: () => State,
-  connect: () => connect,
-  disconnect: () => disconnect,
-  getState: () => getState,
-  off: () => off,
-  on: () => on,
-  send: () => send,
-  sendCancel: () => sendCancel
-});
-var MAX_RECONNECT_DELAY = 30000;
-var BASE_RECONNECT_DELAY = 1000;
-var State = {
-  DISCONNECTED: "disconnected",
-  CONNECTING: "connecting",
-  CONNECTED: "connected",
-  RECONNECTING: "reconnecting"
-};
-var ws = null;
-var state = State.DISCONNECTED;
-var url = "";
-var callbacks = { onOpen: null, onMessage: null, onClose: null };
-var reconnectTimer = null;
-var reconnectAttempts = 0;
-var listenerMap = new Map;
-function getState() {
-  return state;
-}
-function on(event, fn) {
-  if (!listenerMap.has(event))
-    listenerMap.set(event, new Set);
-  listenerMap.get(event).add(fn);
-  return () => listenerMap.get(event)?.delete(fn);
-}
-function off(event, fn) {
-  listenerMap.get(event)?.delete(fn);
-}
-function emit(event, data) {
-  listenerMap.get(event)?.forEach((fn) => fn(data));
-}
-function connect(wsUrl, handlers) {
-  if (wsUrl)
-    url = wsUrl;
-  if (handlers)
-    callbacks = handlers;
-  if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING))
-    return;
-  setState(State.CONNECTING);
-  ws = new WebSocket(url);
-  ws.onopen = onWsOpen;
-  ws.onmessage = onWsMessage;
-  ws.onclose = onWsClose;
-  ws.onerror = onWsError;
-}
-function disconnect() {
-  stopReconnect();
-  reconnectAttempts = 0;
-  if (ws) {
-    ws.onclose = null;
-    ws.onerror = null;
-    ws.close();
-    ws = null;
-  }
-  setState(State.DISCONNECTED);
-}
-function send(data) {
-  if (ws && ws.readyState === WebSocket.OPEN) {
-    ws.send(typeof data === "string" ? data : JSON.stringify(data));
-  }
-}
-function sendCancel(sessionId) {
-  send(JSON.stringify({ type: "cancel", session_id: sessionId || "" }));
-}
-function setState(s) {
-  state = s;
-  emit("stateChange", s);
-}
-function onWsOpen() {
-  setState(State.CONNECTED);
-  reconnectAttempts = 0;
-  if (callbacks.onOpen)
-    callbacks.onOpen();
-}
-function onWsMessage(e) {
-  if (callbacks.onMessage)
-    callbacks.onMessage(e);
-}
-function onWsClose(e) {
-  setState(State.DISCONNECTED);
-  if (callbacks.onClose)
-    callbacks.onClose(e);
-  scheduleReconnect();
-}
-function onWsError() {}
-function scheduleReconnect() {
-  const delay = Math.min(BASE_RECONNECT_DELAY * Math.pow(2, reconnectAttempts), MAX_RECONNECT_DELAY);
-  reconnectAttempts++;
-  emit("reconnecting", { attempt: reconnectAttempts, delay });
-  setState(State.RECONNECTING);
-  reconnectTimer = setTimeout(() => {
-    if (url)
-      connect();
-  }, delay);
-}
-function stopReconnect() {
-  if (reconnectTimer) {
-    clearTimeout(reconnectTimer);
-    reconnectTimer = null;
-  }
-}
-window.addEventListener("online", () => {
-  if (state === State.RECONNECTING || state === State.DISCONNECTED) {
-    stopReconnect();
-    if (url)
-      connect();
-  }
-});
-window.addEventListener("offline", () => {
-  emit("offline");
-});
-
-// check.js
-var installed = false;
-function ensureWrappers() {
-  if (installed)
-    return;
-  installed = true;
-  try {
-    window.addEventListener("error", (e) => {
-      try {
-        report({ type: "js_error", check: "js", ok: false, msg: e.message || String(e.error || "error"), url: location.href, ts: Date.now() });
-      } catch {}
-    });
-    window.addEventListener("unhandledrejection", (e) => {
-      try {
-        report({ type: "unhandledrejection", check: "js", ok: false, msg: String(e.reason || e), url: location.href, ts: Date.now() });
-      } catch {}
-    });
-    const orig = console.error;
-    console.error = function(...args) {
-      try {
-        report({ type: "console_error", check: "js", ok: false, msg: args.map(String).join(" "), url: location.href, ts: Date.now() });
-      } catch {}
-      return orig.apply(console, args);
-    };
-    const _fetch = window.fetch;
-    window.fetch = async (...a) => {
-      const url2 = String(a[0] || "");
-      const isInternal = url2.includes("b_collect") || url2.includes("stream_buffer");
-      const r = await _fetch(...a);
-      if (!r.ok && !isInternal) {
-        try {
-          report({ type: "fetch_error", check: "e2e", ok: false, msg: `${url2} [${r.status} ${r.statusText}]`, url: location.href, ts: Date.now() });
-        } catch {}
-      }
-      return r;
-    };
-  } catch {}
-}
-ensureWrappers();
-function checkJS(code) {
-  ensureWrappers();
-  if (code == null)
-    code = "";
-  if (!String(code).trim())
-    return { ok: true, msg: "empty" };
-  try {
-    const acorn = window.acorn || null;
-    if (acorn && typeof acorn.parse === "function") {
-      acorn.parse(String(code), { ecmaVersion: "latest", sourceType: "module" });
-      return { ok: true };
-    }
-  } catch (e) {
-    return { ok: false, msg: e && e.message ? e.message : String(e), line: e && e.loc ? e.loc.line : undefined, col: e && e.loc ? e.loc.column : undefined };
-  }
-  try {
-    new Function(String(code));
-    return { ok: true };
-  } catch (e) {
-    return { ok: false, msg: e && e.message ? e.message : String(e) };
-  }
-}
-function checkHTML(code) {
-  ensureWrappers();
-  try {
-    const parser = new DOMParser;
-    const doc = parser.parseFromString(String(code), "text/html");
-    if (doc.querySelector("parsererror"))
-      return { ok: false, msg: "HTML parse error" };
-    return { ok: true };
-  } catch (e) {
-    return { ok: false, msg: e.message || String(e) };
-  }
-}
-function checkMermaid(code) {
-  ensureWrappers();
-  const src = String(code || "");
-  if (!src.trim())
-    return { ok: false, msg: "empty mermaid" };
-  try {
-    const mm = window.mermaid;
-    if (mm && typeof mm.parse === "function") {
-      mm.parse(src);
-      return { ok: true };
-    }
-    return { ok: true };
-  } catch (e) {
-    return { ok: false, msg: e && e.message ? e.message : String(e) };
-  }
-}
-async function runE2E(steps) {
-  ensureWrappers();
-  if (!Array.isArray(steps))
-    return { ok: false, msg: "steps must be array" };
-  const results = [];
-  for (let idx = 0;idx < steps.length; idx++) {
-    const s = steps[idx];
-    try {
-      const target = s.target || s.selector || "";
-      const kind = s.kind || s.type || s.action || "";
-      if (kind === "fill" || s.action === "fill") {
-        const el = target ? document.querySelector(target) : null;
-        if (!el)
-          throw new Error("fill target not found: " + target);
-        el.focus && el.focus();
-        if ("value" in el)
-          el.value = s.value != null ? String(s.value) : "";
-        else
-          el.textContent = s.value != null ? String(s.value) : "";
-        el.dispatchEvent(new Event("input", { bubbles: true }));
-        el.dispatchEvent(new Event("change", { bubbles: true }));
-        results.push({ idx, ok: true, target });
-      } else if (kind === "click" || s.action === "click") {
-        const el = target ? document.querySelector(target) : null;
-        if (!el)
-          throw new Error("click target not found: " + target);
-        el.click();
-        results.push({ idx, ok: true, target });
-      } else if (kind === "check" || s.check) {
-        const ck = s.check || s.kind;
-        let r;
-        if (ck === "js")
-          r = checkJS(s.code || "");
-        else if (ck === "mermaid")
-          r = checkMermaid(s.code || "");
-        else if (ck === "html")
-          r = checkHTML(s.code || "");
-        else
-          r = { ok: false, msg: "unknown check kind: " + ck };
-        results.push({ idx, ok: r.ok, msg: r.msg, check: ck });
-        report({ type: "e2e_step", check: ck, ok: r.ok, msg: r.msg || "", step: idx, url: location.href, ts: Date.now() });
-      } else if (s.code != null) {
-        const r = checkJS(s.code);
-        results.push({ idx, ok: r.ok, msg: r.msg });
-      } else {
-        results.push({ idx, ok: false, msg: "unknown step" });
-      }
-      if (s.delay)
-        await new Promise((r) => setTimeout(r, Number(s.delay) || 0));
-      else
-        await new Promise((r) => setTimeout(r, 50));
-    } catch (e) {
-      const msg = e && e.message ? e.message : String(e);
-      results.push({ idx, ok: false, msg });
-      report({ type: "e2e_error", ok: false, msg, step: idx, url: location.href, ts: Date.now() });
-    }
-  }
-  const ok = results.every((r) => r.ok !== false);
-  report({ type: "e2e", check: "e2e", ok, steps: results.length, url: location.href, ts: Date.now() });
-  return { ok, results };
-}
-function report(obj) {
-  ensureWrappers();
-  const payload = Object.assign({ ts: Date.now(), url: location.href }, obj || {});
-  try {
-    fetch("/api/srv/b_collect/submit", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: "Bearer b_collect" },
-      body: JSON.stringify(payload)
-    }).catch(() => {});
-    try {
-      if (exports_network && typeof send === "function") {
-        send(JSON.stringify(Object.assign({ type: "check_result" }, payload)));
-      } else if (window.__zw_ws_send) {
-        window.__zw_ws_send(Object.assign({ type: "check_result" }, payload));
-      }
-    } catch {}
-  } catch {}
-  return payload;
-}
-async function hashPath(path) {
-  try {
-    const enc = new TextEncoder().encode(path);
-    const buf = await crypto.subtle.digest("SHA-256", enc);
-    const bytes = new Uint8Array(buf).slice(0, 8);
-    let b64 = btoa(String.fromCharCode(...bytes));
-    b64 = b64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-    return b64;
-  } catch {
-    return "";
-  }
-}
-async function doSnap(targetSelector) {
-  const sel = targetSelector || "#whiteboard-body";
-  let el = null;
-  try {
-    el = document.querySelector(sel);
-  } catch {}
-  if (!el) {
-    el = document.querySelector("#whiteboard-body") || document.querySelector("#chat-messages") || document.querySelector("#wb-root") || document.querySelector("#page-root") || document.body;
-    if (!el)
-      return { ok: false, msg: "no target element" };
-  }
-  let canvas2;
-  try {
-    canvas2 = await html2canvas(el, { scale: 2 });
-  } catch (e) {
-    report({ type: "snap", check: "snap", ok: false, msg: String(e && e.message ? e.message : e), target: sel, url: location.href, ts: Date.now() });
-    return { ok: false, msg: String(e.message || e) };
-  }
-  const blob = await new Promise((resolve) => canvas2.toBlob(resolve, "image/png", 0.92));
-  if (!blob)
-    return { ok: false, msg: "toBlob failed" };
-  try {
-    const up = await fetch("?api=upload", { method: "POST", headers: { "X-Filename": "snap.png" }, body: blob });
-    const data = await up.json().catch(() => ({}));
-    if (!up.ok || data.error)
-      throw new Error(data.error || "upload failed");
-    const p = data.path || "";
-    let fileUrl = "";
-    if (p) {
-      const h = await hashPath(p);
-      if (h) {
-        fileUrl = "/files/" + h;
-      } else {
-        fileUrl = p;
-      }
-    }
-    if (data.hash)
-      fileUrl = "/files/" + data.hash;
-    if (!fileUrl)
-      fileUrl = "/files/unknown";
-    const snapPayload = { type: "snap", check: "snap", ok: true, url: fileUrl, target: sel, ts: Date.now(), href: location.href };
-    report(snapPayload);
-    return { ok: true, url: fileUrl, target: sel };
-  } catch (e) {
-    const msg = e && e.message ? e.message : String(e);
-    report({ type: "snap", check: "snap", ok: false, msg, target: sel, url: location.href, ts: Date.now() });
-    return { ok: false, msg };
-  }
-}
-try {
-  window.checkJS = checkJS;
-  window.checkMermaid = checkMermaid;
-  window.checkHTML = checkHTML;
-  window.runE2E = runE2E;
-  window.reportCheck = report;
-  window.doSnap = doSnap;
-} catch {}
-
-// snap.js
+// crates/ch-web-ui/assets/js/chat/snap.js
+init_check();
+init_network();
 var SNAP_ID = "snap";
 function getEl(id) {
   return document.getElementById(id);
@@ -1274,8 +1401,9 @@ function wireButton(btn) {
   if (!btn || btn.dataset.wired === "1")
     return;
   btn.dataset.wired = "1";
-  btn.addEventListener("click", async () => {
+  btn.addEventListener("click", async (e) => {
     const target = btn.dataset.target || "#whiteboard-body";
+    const isHuman = e.isTrusted === true;
     btn.disabled = true;
     btn.style.opacity = "0.6";
     try {
@@ -1285,6 +1413,65 @@ function wireButton(btn) {
         setTimeout(() => {
           btn.style.borderColor = "";
         }, 900);
+        if (isHuman) {
+          try {
+            const attachments = document.getElementById("attachments");
+            const fileInput = document.getElementById("file-input");
+            const mod = await Promise.resolve().then(() => (init_file_upload(), exports_file_upload)).catch(() => null);
+            const els2 = await Promise.resolve().then(() => (init_dom(), exports_dom)).catch(() => null);
+            const info = {
+              filename: "snap.png",
+              path: res.path || "",
+              hash: res.hash || "",
+              url: res.url,
+              size: res.blob ? res.blob.size : 0,
+              mime_type: "image/png"
+            };
+            if (mod && mod.uploadState) {
+              mod.uploadState.pending.push({ filename: info.filename, path: info.path, hash: info.hash, url: info.url, size: info.size, mime_type: info.mime_type });
+            }
+            if (attachments && mod && mod.createAttachmentChip) {
+              try {
+                const chip = mod.createAttachmentChip({ filename: info.filename, size: info.size, path: info.path });
+                attachments.appendChild(chip);
+              } catch {}
+            } else if (attachments) {
+              const chip = document.createElement("div");
+              chip.className = "attachment-chip";
+              chip.textContent = `snap.png ${res.url}`;
+              attachments.appendChild(chip);
+            }
+          } catch {}
+        } else {
+          try {
+            if (res.blob) {
+              const r2 = await fetch("/api/inspect/snap", {
+                method: "POST",
+                headers: { "X-Filename": "snap.png", "X-Target": target },
+                body: res.blob
+              });
+              const data2 = await r2.json().catch(() => ({}));
+              const tempPath = data2.path || res.path || "";
+              const url2 = data2.url || res.url;
+              const hash = data2.hash || res.hash || "";
+              const payload = { type: "webscreenshot_result", ok: true, url: url2, path: tempPath, hash, target };
+              try {
+                send(JSON.stringify(payload));
+              } catch {}
+              try {
+                if (window.__zw_ws_send)
+                  window.__zw_ws_send(payload);
+              } catch {}
+              const { report: report2 } = await Promise.resolve().then(() => (init_check(), exports_check));
+              report2({ type: "snap", check: "snap", ok: true, url: url2, path: tempPath, hash, target, agent: true });
+            } else {
+              const payload = { type: "webscreenshot_result", ok: true, url: res.url, path: res.path || "", hash: res.hash || "", target };
+              try {
+                send(JSON.stringify(payload));
+              } catch {}
+            }
+          } catch {}
+        }
       }
     } catch {} finally {
       btn.disabled = false;
@@ -1327,14 +1514,31 @@ function initSnap() {
     window.ws.send = function(data) {
       try {
         const obj = typeof data === "string" ? JSON.parse(data) : data;
-        if (obj && obj.type === "snap") {
+        if (obj && (obj.type === "snap" || obj.type === "webscreenshot")) {
           const sel = obj.target || obj.selector || "#whiteboard-body";
           const b = getEl(SNAP_ID);
           if (b)
             b.dataset.target = sel;
-          doSnap(sel);
+          Promise.resolve().then(() => (init_check(), exports_check)).then(async (m) => {
+            const res = await m.doSnap(sel);
+            if (res && res.ok && res.blob) {
+              try {
+                const r2 = await fetch("/api/inspect/snap", { method: "POST", headers: { "X-Filename": "snap.png", "X-Target": sel }, body: res.blob });
+                const data2 = await r2.json().catch(() => ({}));
+                const payload = { type: "webscreenshot_result", ok: true, url: data2.url || res.url, path: data2.path || res.path, hash: data2.hash || res.hash, target: sel };
+                try {
+                  send(JSON.stringify(payload));
+                } catch {}
+              } catch {
+                try {
+                  send(JSON.stringify({ type: "webscreenshot_result", ok: true, url: res.url, path: res.path || "", target: sel }));
+                } catch {}
+              }
+            }
+          }).catch(() => {});
           return;
         }
+        if (obj && (obj.type === "check" || obj.type === "frontend-automation" || obj.type === "runE2E")) {}
       } catch {}
       try {
         return send(typeof data === "string" ? data : JSON.stringify(data));
@@ -1344,7 +1548,7 @@ function initSnap() {
   } catch {}
 }
 
-// public-wb-entry.js
+// crates/ch-web-ui/assets/js/chat/public-wb-entry.js
 var dataEl = document.getElementById("wb-data");
 if (dataEl) {
   const data = JSON.parse(dataEl.textContent);

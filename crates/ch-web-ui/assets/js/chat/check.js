@@ -1,10 +1,11 @@
 // check.js — in-page JS/mermaid/HTML checks + E2E + report, baked into binary.
 // No CDN, no DevTools, no extension — runs in the user's open tab.
 // Exported API: checkJS(code), checkMermaid(code), checkHTML(code), runE2E(steps), report(obj)
-// Report goes to shared b_collect board (whiteboard/serverless.db via SHARED_KEY) and via WS.
-// Snap flow also lives here: html2canvas -> upload -> b_collect submit.
+// Report goes to shared inspect-reports board (whiteboard/serverless.db via SHARED_KEY) and via WS.
+// Snap flow also lives here: html2canvas -> upload -> inspect-reports submit.
 
 import { html2canvas } from './html2canvas.js'
+import './acorn.js'
 import * as network from './network.js'
 
 // --- Global error wrappers (window.onerror / unhandledrejection / console.error + fetch) ---
@@ -27,8 +28,8 @@ function ensureWrappers() {
     const _fetch = window.fetch
     window.fetch = async (...a) => {
       const url = String(a[0] || '')
-      // don't self-report b_collect / upload noise
-      const isInternal = url.includes('b_collect') || url.includes('stream_buffer')
+      // don't self-report inspect-reports / upload noise
+      const isInternal = url.includes('inspect-reports') || url.includes('stream_buffer')
       const r = await _fetch(...a)
       if (!r.ok && !isInternal) {
         try { report({ type: 'fetch_error', check: 'e2e', ok: false, msg: `${url} [${r.status} ${r.statusText}]`, url: location.href, ts: Date.now() }) } catch {}
@@ -44,9 +45,8 @@ export function checkJS(code) {
   ensureWrappers()
   if (code == null) code = ''
   if (!String(code).trim()) return { ok: true, msg: 'empty' }
-  // Try acorn if the page happened to have it (optional)
+  // Try acorn if the page happened to have it (optional, baked via oxc_parser.wasm glue)
   try {
-    // acorn may be provided via bundled glue or global
     const acorn = window.acorn || null
     if (acorn && typeof acorn.parse === 'function') {
       acorn.parse(String(code), { ecmaVersion: 'latest', sourceType: 'module' })
@@ -61,7 +61,6 @@ export function checkJS(code) {
     new Function(String(code))
     return { ok: true }
   } catch (e) {
-    // new Function throws SyntaxError for syntax errors, EvalError for compile
     return { ok: false, msg: e && e.message ? e.message : String(e) }
   }
 }
@@ -71,7 +70,6 @@ export function checkHTML(code) {
   try {
     const parser = new DOMParser()
     const doc = parser.parseFromString(String(code), 'text/html')
-    // parser always succeeds; check for parsererror
     if (doc.querySelector('parsererror')) return { ok: false, msg: 'HTML parse error' }
     return { ok: true }
   } catch (e) {
@@ -89,8 +87,6 @@ export function checkMermaid(code) {
       mm.parse(src)
       return { ok: true }
     }
-    // No global mermaid yet — try dynamic import via importmap
-    // Fallback: consider non-empty mermaid as ok (syntax handled at render)
     return { ok: true }
   } catch (e) {
     return { ok: false, msg: e && e.message ? e.message : String(e) }
@@ -111,7 +107,6 @@ export async function runE2E(steps) {
         const el = target ? document.querySelector(target) : null
         if (!el) throw new Error('fill target not found: ' + target)
         el.focus && el.focus()
-        // Support input, textarea, contenteditable
         if ('value' in el) el.value = s.value != null ? String(s.value) : ''
         else el.textContent = s.value != null ? String(s.value) : ''
         el.dispatchEvent(new Event('input', { bubbles: true }))
@@ -132,13 +127,11 @@ export async function runE2E(steps) {
         results.push({ idx, ok: r.ok, msg: r.msg, check: ck })
         report({ type: 'e2e_step', check: ck, ok: r.ok, msg: r.msg || '', step: idx, url: location.href, ts: Date.now() })
       } else if (s.code != null) {
-        // bare JS code execution (sandboxed via new Function)
         const r = checkJS(s.code)
         results.push({ idx, ok: r.ok, msg: r.msg })
       } else {
         results.push({ idx, ok: false, msg: 'unknown step' })
       }
-      // small delay between steps for rendering
       if (s.delay) await new Promise(r => setTimeout(r, Number(s.delay) || 0))
       else await new Promise(r => setTimeout(r, 50))
     } catch (e) {
@@ -155,15 +148,12 @@ export async function runE2E(steps) {
 export function report(obj) {
   ensureWrappers()
   const payload = Object.assign({ ts: Date.now(), url: location.href }, obj || {})
-  // Prefer serverless b_collect board
   try {
-    fetch('/api/srv/b_collect/submit', {
+    fetch('/api/srv/inspect-reports/submit', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer b_collect' },
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer inspect-reports' },
       body: JSON.stringify(payload)
     }).catch(() => {})
-    // Also try root-dispatch path via tenant prefix
-    // Fallback: topic via WS if available
     try {
       if (network && typeof network.send === 'function') {
         network.send(JSON.stringify(Object.assign({ type: 'check_result' }, payload)))
@@ -175,13 +165,12 @@ export function report(obj) {
   return payload
 }
 
-// --- Snap helper: html2canvas -> upload -> b_collect ---
+// --- Snap helper: html2canvas -> upload -> inspect-reports ---
 async function hashPath(path) {
   try {
     const enc = new TextEncoder().encode(path)
     const buf = await crypto.subtle.digest('SHA-256', enc)
     const bytes = new Uint8Array(buf).slice(0, 8)
-    // base64url no pad
     let b64 = btoa(String.fromCharCode(...bytes))
     b64 = b64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
     return b64
@@ -193,7 +182,6 @@ export async function doSnap(targetSelector) {
   let el = null
   try { el = document.querySelector(sel) } catch {}
   if (!el) {
-    // fallback chain: whiteboard -> chat -> wb-root -> page-root -> body
     el = document.querySelector('#whiteboard-body') || document.querySelector('#chat-messages') || document.querySelector('#wb-root') || document.querySelector('#page-root') || document.body
     if (!el) return { ok: false, msg: 'no target element' }
   }
@@ -212,25 +200,17 @@ export async function doSnap(targetSelector) {
     if (!up.ok || data.error) throw new Error(data.error || 'upload failed')
     const p = data.path || ''
     let fileUrl = ''
-    // Try hash from path via SubtleCrypto (matches zw-cache hash_path)
     if (p) {
       const h = await hashPath(p)
-      if (h) {
-        // Also ensure cache meta exists: the server now writes meta on upload path; hash will resolve
-        fileUrl = '/files/' + h
-      } else {
-        fileUrl = p
-      }
+      if (h) fileUrl = '/files/' + h
+      else fileUrl = p
     }
-    // Also support server-provided hash field if upload handler returns it
     if (data.hash) fileUrl = '/files/' + data.hash
     if (!fileUrl) fileUrl = '/files/unknown'
 
-    const snapPayload = { type: 'snap', check: 'snap', ok: true, url: fileUrl, target: sel, ts: Date.now(), href: location.href }
+    const snapPayload = { type: 'snap', check: 'snap', ok: true, url: fileUrl, path: data.path || '', hash: data.hash || '', target: sel, ts: Date.now(), href: location.href }
     report(snapPayload)
-    // Also try to append a chat markdown image for visibility (optional, best-effort)
-    // The agent can also render ![snap](fileUrl) via whiteboard
-    return { ok: true, url: fileUrl, target: sel }
+    return { ok: true, url: fileUrl, path: data.path || '', hash: data.hash || '', target: sel, blob }
   } catch (e) {
     const msg = e && e.message ? e.message : String(e)
     report({ type: 'snap', check: 'snap', ok: false, msg, target: sel, url: location.href, ts: Date.now() })
@@ -238,7 +218,7 @@ export async function doSnap(targetSelector) {
   }
 }
 
-// Expose globals for agent trigger: document.getElementById('snap').click() and ws.send({type:'snap'})
+// Expose globals for agent trigger
 try {
   window.checkJS = checkJS
   window.checkMermaid = checkMermaid

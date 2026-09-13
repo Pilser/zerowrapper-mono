@@ -29,8 +29,8 @@ async fn main() -> anyhow::Result<()> {
             let db = zw_db::DbPool::open(&db_path).await?;
             db.migrate().await?;
             let store = zw_db::SessionStore::new(whiteboard_dir.clone(), db.clone());
-            let wb = zw_whiteboard::WhiteboardHandle::new(whiteboard_dir.clone(), cache.clone(), std::time::Duration::from_millis(500)).with_db(store);
-            let materials = zw_materials::TemplateStore::new(whiteboard_dir, db);
+            let wb = zw_whiteboard::WhiteboardHandle::new(whiteboard_dir.clone(), cache.clone(), std::time::Duration::from_millis(500)).with_db(store.clone());
+            let materials = zw_materials::TemplateStore::new(whiteboard_dir.clone(), db);
             mcp.register_provider(Box::new(
                 mcp_web_files_render::WebFilesRenderProvider::new(cache.clone())
             )).await;
@@ -42,6 +42,9 @@ async fn main() -> anyhow::Result<()> {
             )).await;
             mcp.register_provider(Box::new(
                 zw_mcp::manage_materials::ManageMaterialsProvider::new(materials)
+            )).await;
+            mcp.register_provider(Box::new(
+                zw_mcp::inspect::InspectProvider::new(store)
             )).await;
         } else {
             let wb = zw_whiteboard::WhiteboardHandle::new(whiteboard_dir, cache.clone(), std::time::Duration::from_millis(500));
@@ -92,6 +95,9 @@ async fn main() -> anyhow::Result<()> {
     let materials = zw_materials::TemplateStore::new(whiteboard_dir.clone(), db.clone());
     mcp.register_provider(Box::new(
         zw_mcp::manage_materials::ManageMaterialsProvider::new(Clone::clone(&materials))
+    )).await;
+    mcp.register_provider(Box::new(
+        zw_mcp::inspect::InspectProvider::new(store.clone())
     )).await;
 
     tracing::info!("Config loaded: zeroclaw_socket={}, db={}, web_channel={{{}}}",
