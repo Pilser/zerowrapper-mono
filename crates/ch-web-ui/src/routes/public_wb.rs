@@ -43,7 +43,7 @@ pub async fn render_snapshot(ctx: &AppContext, cx: &Cx, slug: &str, base_href: &
         .find_map(|l| l.strip_prefix("# ").map(|s| s.trim().to_string()))
         .unwrap_or_else(|| "Shared Whiteboard Page".to_string());
     let favicon = "favicon.svg";
-    let brand = "chat";
+    let brand = "serverless v.0.1";
 
     // Base-relative asset URLs (see layout.rs): work at `/` and under a
     // tenant/embed prefix alike.

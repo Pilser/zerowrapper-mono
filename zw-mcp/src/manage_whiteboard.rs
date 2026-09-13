@@ -74,12 +74,15 @@ impl ManageWhiteboardProvider {
         match action.as_str() {
             "list" => Ok(ok_with(raw, &self.state_json(&sid).await?)),
             "open" => {
-                // lock removed — no-op, kept for compat
-                let _ = req_i64(&rest, "open <page_no>").ok();
+                let n = req_i64(&rest, "open <page_no>")?;
+                self.handle
+                    .open(&sid, n)
+                    .await
+                    .map_err(|e| err_json(&e.to_string(), raw, "open <page_no>", "open <page_no>"))?;
                 Ok(ok_with(raw, &self.state_json(&sid).await?))
             }
             "close" => {
-                // lock removed — no-op
+                // lock removed — no-op, kept for compat
                 Ok(ok_with(raw, &self.state_json(&sid).await?))
             }
             "add" => {

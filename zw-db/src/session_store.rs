@@ -206,11 +206,8 @@ impl SessionStore {
         Ok(out)
     }
 
-    async fn ensure_board_owned(&self, board_id: &str, owner: &str) -> anyhow::Result<()> {
-        let pool = self.board_pool(board_id).await?;
-        if pool.srv_app_owned(board_id, owner).await?.is_none() {
-            anyhow::bail!("board {board_id} is not owned by {owner}");
-        }
+    async fn ensure_board_owned(&self, _board_id: &str, _owner: &str) -> anyhow::Result<()> {
+        // Shared board — no per-session ownership. Keep compat, always ok.
         Ok(())
     }
 
@@ -222,15 +219,17 @@ impl SessionStore {
         public_reads: bool,
         unique_key: Option<&str>,
     ) -> anyhow::Result<String> {
-        let pool = self.session(sid).await?;
-        let board_id = pool.srv_app_create(sid, title, schema_json, public_reads, unique_key).await?;
-        self.register_board(sid, &board_id, sid).await?;
+        let _ = sid; // shared — ignore caller sid, keep compat
+        let pool = self.session(SHARED_KEY).await?;
+        let board_id = pool.srv_app_create(SHARED_KEY, title, schema_json, public_reads, unique_key).await?;
+        self.register_board(SHARED_KEY, &board_id, SHARED_KEY).await?;
         Ok(board_id)
     }
 
     pub async fn delete_board(&self, sid: &str, board_id: &str) -> anyhow::Result<()> {
-        let pool = self.session(sid).await?;
-        pool.srv_app_delete(board_id, sid).await?;
+        let _ = sid;
+        let pool = self.session(SHARED_KEY).await?;
+        pool.srv_app_delete(board_id, SHARED_KEY).await?;
         self.unregister_board(board_id).await?;
         Ok(())
     }
@@ -251,21 +250,22 @@ impl SessionStore {
     }
 
     pub async fn set_page_public(&self, sid: &str, page_no: i64, public: bool) -> anyhow::Result<Option<String>> {
-        let pool = self.session(sid).await?;
-        let slug = pool.wb_set_public(sid, page_no, public).await?;
+        let _ = sid;
+        let pool = self.session(SHARED_KEY).await?;
+        let slug = pool.wb_set_public(SHARED_KEY, page_no, public).await?;
         let conn = self.system.conn().await;
         match &slug {
             Some(slug) => {
                 conn.execute(
                     "INSERT OR REPLACE INTO wb_public_index (slug, session_id, page_no) VALUES (?1, ?2, ?3)",
-                    Params::Positional(vec![Value::from(slug.clone()), Value::from(sid), Value::Integer(page_no)]),
+                    Params::Positional(vec![Value::from(slug.clone()), Value::from(SHARED_KEY), Value::Integer(page_no)]),
                 )
                 .await?;
             }
             None => {
                 conn.execute(
                     "DELETE FROM wb_public_index WHERE session_id = ?1 AND page_no = ?2",
-                    Params::Positional(vec![Value::from(sid), Value::Integer(page_no)]),
+                    Params::Positional(vec![Value::from(SHARED_KEY), Value::Integer(page_no)]),
                 )
                 .await?;
             }
@@ -290,17 +290,19 @@ impl SessionStore {
                 None => return Ok(None),
             }
         };
-        let pool = self.session(&sid).await?;
+        let _ = sid; // shared — ignore, always use shared pool
+        let pool = self.session(SHARED_KEY).await?;
         pool.wb_public_snapshot(slug).await
     }
 
     pub async fn delete_public_by_page(&self, sid: &str, page_no: i64) -> anyhow::Result<()> {
-        let pool = self.session(sid).await?;
-        pool.wb_delete_public_by_page(sid, page_no).await?;
+        let _ = sid;
+        let pool = self.session(SHARED_KEY).await?;
+        pool.wb_delete_public_by_page(SHARED_KEY, page_no).await?;
         let conn = self.system.conn().await;
         conn.execute(
             "DELETE FROM wb_public_index WHERE session_id = ?1 AND page_no = ?2",
-            Params::Positional(vec![Value::from(sid), Value::Integer(page_no)]),
+            Params::Positional(vec![Value::from(SHARED_KEY), Value::Integer(page_no)]),
         )
         .await?;
         Ok(())
