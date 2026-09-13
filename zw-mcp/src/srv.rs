@@ -353,8 +353,9 @@ async fn cmd_apps(store: &SessionStore, sid: &str, verb: &str, args: &[&String],
             Ok(json!({ "status": "ok", "board_id": board_id }))
         }
         "list" => {
+            // Shared board — list all, not per-session. Keeps compat with any sid.
             let pool = store.session(sid).await.map_err(|e| err_json(&e.to_string(), raw, "list", "list apps"))?;
-            let apps = pool.srv_app_list(sid).await.map_err(|e| err_json(&e.to_string(), raw, "list", "list apps"))?;
+            let apps = pool.srv_app_list_all().await.map_err(|e| err_json(&e.to_string(), raw, "list", "list apps"))?;
             Ok(json!({ "status": "ok", "apps": apps }))
         }
         "show" => {

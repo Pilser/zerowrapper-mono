@@ -8,13 +8,12 @@ const ACTIONS: &[&str] = &["about", "list", "open", "close", "add", "delete", "m
 const PREVIEW_CHARS: usize = 600;
 
 const GLOBAL_USAGE: &str =
-    "wb --session <session_id> <action> [args]\n\
+    "wb <action> [args]\n\
      for the full per-command help, run: <action> --help\n\
      actions (short):\n\
        about             what the whiteboard is + how to build serverless apps\n\
-       list              list all pages, active page and lock state\n\
-       open <page_no>    set the active page and load it\n\
-       close             unlock the active page\n\
+       list              list all pages\n\
+       open, close       no-ops now (lock removed, kept for compat)\n\
        add [--title \"t\"] append a new page\n\
        delete <page_no>  remove a page and renumber the rest\n\
        move <from> to <to>  reorder pages\n\
@@ -42,22 +41,14 @@ impl ManageWhiteboardProvider {
     }
 
     async fn execute(&self, tokens: &[String], raw: &str) -> Result<Value, Value> {
-        let mut session: Option<String> = None;
+        // --session is gone — shared board for everyone. Keep compat: if
+        // someone still passes --session X, silently ignore it.
         let mut body: Vec<String> = Vec::new();
         let mut i = 0;
         while i < tokens.len() {
             if tokens[i] == "--session" {
-                if i + 1 < tokens.len() {
-                    session = Some(str_val_index(tokens, i + 1));
-                    i += 2;
-                } else {
-                    return Err(err_json(
-                        "missing value for --session",
-                        raw,
-                        "list",
-                        "--session <session_id>",
-                    ));
-                }
+                // ignore --session and its value
+                i += if i + 1 < tokens.len() { 2 } else { 1 };
             } else {
                 body.push(tokens[i].clone());
                 i += 1;
@@ -78,33 +69,17 @@ impl ManageWhiteboardProvider {
             return Ok(json!({ "status": "ok", "help": action_help(&action) }));
         }
 
-        let sid = match session {
-            Some(s) if !s.is_empty() => s,
-            _ => {
-                return Err(err_json(
-                    "--session <session_id> is required on every command",
-                    raw,
-                    "list",
-                    "--session <session_id>",
-                ));
-            }
-        };
+        let sid = "shared".to_string();
 
         match action.as_str() {
             "list" => Ok(ok_with(raw, &self.state_json(&sid).await?)),
             "open" => {
-                let n = req_i64(&rest, "open <page_no>")?;
-                self.handle
-                    .open(&sid, n)
-                    .await
-                    .map_err(|e| err_json(&e.to_string(), raw, "open <page_no>", &close_hint(&sid)))?;
+                // lock removed — no-op, kept for compat
+                let _ = req_i64(&rest, "open <page_no>").ok();
                 Ok(ok_with(raw, &self.state_json(&sid).await?))
             }
             "close" => {
-                self.handle
-                    .close(&sid)
-                    .await
-                    .map_err(|e| err_json(&e.to_string(), raw, "close", "close the active page"))?;
+                // lock removed — no-op
                 Ok(ok_with(raw, &self.state_json(&sid).await?))
             }
             "add" => {
@@ -123,7 +98,7 @@ impl ManageWhiteboardProvider {
                 self.handle
                     .delete(&sid, n)
                     .await
-                    .map_err(|e| err_json(&e.to_string(), raw, "delete <page_no>", &close_hint(&sid)))?;
+                    .map_err(|e| err_json(&e.to_string(), raw, "delete <page_no>", "delete <page_no>"))?;
                 Ok(ok_with(raw, &self.state_json(&sid).await?))
             }
             "move" => {
@@ -131,7 +106,7 @@ impl ManageWhiteboardProvider {
                 self.handle
                     .move_pages(&sid, from, to)
                     .await
-                    .map_err(|e| err_json(&e.to_string(), raw, "move <from> to <to>", &close_hint(&sid)))?;
+                    .map_err(|e| err_json(&e.to_string(), raw, "move <from> to <to>", "move <from> to <to>"))?;
                 Ok(ok_with(raw, &self.state_json(&sid).await?))
             }
             "set-public" => {

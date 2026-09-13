@@ -250,6 +250,24 @@ impl DbPool {
         Ok(out)
     }
 
+    pub async fn srv_app_list_all(&self) -> anyhow::Result<Vec<SrvApp>> {
+        let conn = self.conn().await;
+        let mut rows = conn
+            .query(
+                "SELECT owner_key, board_id, title, schema_json, public_reads, unique_key, computed_json, validate_json, redact_json, \
+                    (SELECT COUNT(*) FROM wb_records WHERE board_id = wb_apps.board_id), \
+                    created_at \
+                 FROM wb_apps ORDER BY created_at",
+                Params::None,
+            )
+            .await?;
+        let mut out = Vec::new();
+        while let Some(app) = read_app(&mut rows).await? {
+            out.push(app);
+        }
+        Ok(out)
+    }
+
     pub async fn srv_app_update(&self, board_id: &str, owner: &str, title: Option<&str>, schema: Option<Option<&str>>, public_reads: Option<bool>, unique_key: Option<Option<&str>>) -> anyhow::Result<()> {
         let conn = self.conn().await;
         let mut rows = conn

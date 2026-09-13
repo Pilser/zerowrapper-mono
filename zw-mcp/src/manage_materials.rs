@@ -50,24 +50,9 @@ impl ManageMaterialsProvider {
             return Ok(ok(json!({ "help": action_help(&action) })));
         }
 
-        let need_session = matches!(
-            action.as_str(),
-            "publish" | "embed" | "clone" | "commit" | "update"
-        );
-        let sid = if need_session {
-            match session {
-                Some(s) if !s.is_empty() => s,
-                _ => {
-                    return Err(err_json(
-                        "--session <sid> is required on this command",
-                        raw,
-                        &format!("mat --session <sid> {action}"),
-                    ));
-                }
-            }
-        } else {
-            session.unwrap_or_default()
-        };
+        // --session removed — shared templates. Ignore any --session passed for compat.
+        let _ = session;
+        let sid = "shared".to_string();
 
         match action.as_str() {
             "about" => Ok(ok(json!({ "about": ABOUT_TEXT }))),

@@ -125,47 +125,55 @@ impl DbPool {
     }
 
     pub async fn wb_add_page(&self, sid: &str, title: &str) -> anyhow::Result<i64> {
-        let conn = self.conn().await;
-        let mut rows = conn
-            .query(
-                "SELECT COALESCE(MAX(page_no), 0) + 1 FROM whiteboard_pages WHERE session_id = ?1",
-                Params::Positional(vec![Value::from(sid)]),
-            )
-            .await?;
-        let next = match rows.next().await? {
-            Some(row) => match row.get_value(0)? {
-                Value::Integer(i) => i,
-                _ => return Err(anyhow::anyhow!("invalid next page_no")),
-            },
-            None => 1,
-        };
-        let s = sq(sid);
-        let sql = format!(
-            "BEGIN; \
-             INSERT INTO whiteboard_pages (session_id, page_no, title) VALUES ('{s}', {next}, '{}'); \
-             UPDATE whiteboard_meta SET rev = rev + 1, updated_at = datetime('now') WHERE session_id = '{s}'; \
-             COMMIT;",
-            sq(title)
-        );
-        conn.execute_batch(&sql).await?;
-        Ok(next)
+        // Retry on "busy" / "locked" — shared DB has one Connection behind a
+        // Mutex, and the whiteboard poll (500ms) can contend with `add`.
+        let mut last_err = None;
+        for attempt in 0..8 {
+            let res: anyhow::Result<i64> = async {
+                let conn = self.conn().await;
+                let mut rows = conn
+                    .query(
+                        "SELECT COALESCE(MAX(page_no), 0) + 1 FROM whiteboard_pages WHERE session_id = ?1",
+                        Params::Positional(vec![Value::from(sid)]),
+                    )
+                    .await?;
+                let next = match rows.next().await? {
+                    Some(row) => match row.get_value(0)? {
+                        Value::Integer(i) => i,
+                        _ => return Err(anyhow::anyhow!("invalid next page_no")),
+                    },
+                    None => 1,
+                };
+                let s = sq(sid);
+                let sql = format!(
+                    "BEGIN; \
+                     INSERT INTO whiteboard_pages (session_id, page_no, title) VALUES ('{s}', {next}, '{}'); \
+                     UPDATE whiteboard_meta SET rev = rev + 1, updated_at = datetime('now') WHERE session_id = '{s}'; \
+                     COMMIT;",
+                    sq(title)
+                );
+                conn.execute_batch(&sql).await?;
+                Ok(next)
+            }
+            .await;
+            match res {
+                Ok(v) => return Ok(v),
+                Err(e) => {
+                    let msg = format!("{e:#}").toLowerCase();
+                    if msg.contains("busy") || msg.contains("locked") {
+                        last_err = Some(e);
+                        tokio::time::sleep(std::time::Duration::from_millis(15 * (attempt + 1))).await;
+                        continue;
+                    }
+                    return Err(e);
+                }
+            }
+        }
+        Err(last_err.unwrap_or_else(|| anyhow::anyhow!("wb_add_page busy")))
     }
 
     pub async fn wb_delete_page(&self, sid: &str, page_no: i64) -> anyhow::Result<()> {
         let conn = self.conn().await;
-        let mut meta_rows = conn
-            .query(
-                "SELECT active_page, locked, rev FROM whiteboard_meta WHERE session_id = ?1",
-                Params::Positional(vec![Value::from(sid)]),
-            )
-            .await?;
-        if let Some(meta) = read_meta(&mut meta_rows).await? {
-            if meta.locked && meta.active_page == Some(page_no) {
-                anyhow::bail!(
-                    "page {page_no} is the locked active page; close the whiteboard before deleting it"
-                );
-            }
-        }
         let s = sq(sid);
         let sql = format!(
             "BEGIN; \
@@ -185,19 +193,6 @@ impl DbPool {
             return Ok(());
         }
         let conn = self.conn().await;
-        let mut meta_rows = conn
-            .query(
-                "SELECT active_page, locked, rev FROM whiteboard_meta WHERE session_id = ?1",
-                Params::Positional(vec![Value::from(sid)]),
-            )
-            .await?;
-        if let Some(meta) = read_meta(&mut meta_rows).await? {
-            if meta.locked && (meta.active_page == Some(from) || meta.active_page == Some(to)) {
-                anyhow::bail!(
-                    "cannot move a locked page; close the whiteboard before reordering pages"
-                );
-            }
-        }
         let mut page_rows = conn
             .query(
                 "SELECT page_no FROM whiteboard_pages WHERE session_id = ?1 ORDER BY page_no",
@@ -249,7 +244,7 @@ impl DbPool {
     pub async fn wb_open(&self, sid: &str, page_no: i64) -> anyhow::Result<()> {
         let conn = self.conn().await;
         conn.execute(
-            "UPDATE whiteboard_meta SET active_page = ?1, locked = 1, rev = rev + 1, updated_at = datetime('now') WHERE session_id = ?2",
+            "UPDATE whiteboard_meta SET active_page = ?1, rev = rev + 1, updated_at = datetime('now') WHERE session_id = ?2",
             Params::Positional(vec![Value::Integer(page_no), Value::from(sid)]),
         ).await?;
         Ok(())
@@ -258,7 +253,7 @@ impl DbPool {
     pub async fn wb_close(&self, sid: &str) -> anyhow::Result<()> {
         let conn = self.conn().await;
         conn.execute(
-            "UPDATE whiteboard_meta SET locked = 0, rev = rev + 1, updated_at = datetime('now') WHERE session_id = ?1",
+            "UPDATE whiteboard_meta SET rev = rev + 1, updated_at = datetime('now') WHERE session_id = ?1",
             Params::Positional(vec![Value::from(sid)]),
         ).await?;
         Ok(())
