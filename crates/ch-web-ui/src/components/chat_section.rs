@@ -53,7 +53,7 @@ pub async fn chat_section(cx: &Cx) -> Result {
                             <button id="send-btn" class="absolute bottom-2 right-2 z-10 flex items-center justify-center cursor-pointer transition rounded-lg" style="width: 32px; height: 32px; border: none; background: var(--color-bg-interactive); color: var(--color-text-inverted);">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
                             </button>
-                            <button id="cancel-btn" class="absolute bottom-2 right-2 z-10 hidden items-center justify-center cursor-pointer transition rounded-lg" style="width: 32px; height: 32px; border: none; background: var(--color-status-error); color: #fff;">
+                            <button id="cancel-btn" type="button" class="absolute bottom-2 right-2 z-10 items-center justify-center cursor-pointer transition rounded-lg" style="display: none; width: 32px; height: 32px; border: none; background: var(--color-status-error); color: #fff;">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/></svg>
                             </button>
                         </div>

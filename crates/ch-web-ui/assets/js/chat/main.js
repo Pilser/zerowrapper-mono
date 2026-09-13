@@ -80,6 +80,7 @@ function showStopIcon() {
 
 function handleCancel() {
   connection.sendCancel()
+  streaming.cancel()
   showSendIcon()
 }
 

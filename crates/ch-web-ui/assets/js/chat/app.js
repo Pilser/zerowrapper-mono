@@ -1152,6 +1152,18 @@ function handleDone(text) {
     content = text;
   finalize();
 }
+function cancel() {
+  resetTurn();
+  if (el) {
+    const parent = el.parentElement;
+    if (parent)
+      parent.remove();
+    el = null;
+  }
+  content = "";
+  streamId++;
+  hideTyping();
+}
 function reset() {
   resetTurn();
   if (el) {
@@ -2230,6 +2242,7 @@ function showStopIcon() {
 }
 function handleCancel() {
   sendCancel2();
+  cancel();
   showSendIcon();
 }
 async function refreshSessionList() {

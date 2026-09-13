@@ -101,8 +101,14 @@ export function isActive() {
 }
 
 export function cancel() {
-  finalizeThought()
-  finalize()
+  activity.resetTurn()
+  if (el) {
+    const parent = el.parentElement
+    if (parent) parent.remove()
+    el = null
+  }
+  content = ''
+  streamId++
   hideTyping()
 }
 
