@@ -127,22 +127,26 @@ impl DbPool {
     pub async fn wb_add_page(&self, sid: &str, title: &str) -> anyhow::Result<i64> {
         // Retry on "busy" / "locked" — shared DB has one Connection behind a
         // Mutex, and the whiteboard poll (500ms) can contend with `add`.
+        // Fix: drop Rows before execute_batch on the same Connection.
         let mut last_err = None;
         for attempt in 0..8 {
             let res: anyhow::Result<i64> = async {
                 let conn = self.conn().await;
-                let mut rows = conn
-                    .query(
-                        "SELECT COALESCE(MAX(page_no), 0) + 1 FROM whiteboard_pages WHERE session_id = ?1",
-                        Params::Positional(vec![Value::from(sid)]),
-                    )
-                    .await?;
-                let next = match rows.next().await? {
-                    Some(row) => match row.get_value(0)? {
-                        Value::Integer(i) => i,
-                        _ => return Err(anyhow::anyhow!("invalid next page_no")),
-                    },
-                    None => 1,
+                let next = {
+                    let mut rows = conn
+                        .query(
+                            "SELECT COALESCE(MAX(page_no), 0) + 1 FROM whiteboard_pages WHERE session_id = ?1",
+                            Params::Positional(vec![Value::from(sid)]),
+                        )
+                        .await?;
+                    let n = match rows.next().await? {
+                        Some(row) => match row.get_value(0)? {
+                            Value::Integer(i) => i,
+                            _ => return Err(anyhow::anyhow!("invalid next page_no")),
+                        },
+                        None => 1,
+                    };
+                    n
                 };
                 let s = sq(sid);
                 let sql = format!(
@@ -206,6 +210,7 @@ impl DbPool {
                 _ => return Err(anyhow::anyhow!("invalid page_no")),
             }
         }
+        drop(page_rows);
         let fi = order
             .iter()
             .position(|&p| p == from)
