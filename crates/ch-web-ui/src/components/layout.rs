@@ -7,6 +7,7 @@ use topcoat::asset::{asset, bundled_asset};
 use crate::context::AppContext;
 use crate::components::whiteboard_panel::whiteboard_panel;
 use crate::assets::STYLESHEET;
+use crate::assets::MERMAID_JS;
 
 #[layout("/")]
 pub async fn root_layout(cx: &Cx, slot: Result) -> Result {
@@ -18,6 +19,7 @@ pub async fn root_layout(cx: &Cx, slot: Result) -> Result {
     // instead of the host root (served by the RootDispatchLayer via ?asset=).
     let css_url = format!("?asset={}", bundled_asset(cx, STYLESHEET).name());
     let app_js_url = format!("?asset={}", bundled_asset(cx, asset!("assets/js/chat/app.js")).name());
+    let mermaid_url = format!("?asset={}", bundled_asset(cx, MERMAID_JS).name());
 
     // Base href = the directory of the request path, so relative URLs resolve
     // correctly whether the page is served at `/` or under a tenant prefix.
@@ -66,7 +68,7 @@ pub async fn root_layout(cx: &Cx, slot: Result) -> Result {
                 </main>
                 whiteboard_panel()
                 <script>{ (Unescaped::new_unchecked(format!("window.ZW_AGENT = \"{}\";", ctx.agent))) }</script>
-                <script type="importmap">{ (Unescaped::new_unchecked(r#"{"imports":{"marked":"https://cdn.jsdelivr.net/npm/marked@18.0.5/lib/marked.esm.js","highlight.js":"https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.11.1/build/es/highlight.min.js","katex":"https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.mjs","mermaid":"https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.esm.min.mjs"}}"#)) }</script>
+                <script type="importmap">{ (Unescaped::new_unchecked(format!(r#"{{"imports":{{"marked":"https://cdn.jsdelivr.net/npm/marked@18.0.5/lib/marked.esm.js","highlight.js":"https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.11.1/build/es/highlight.min.js","katex":"https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.mjs","mermaid":"{}"}}}}"#, mermaid_url))) }</script>
                 <script type="module" src=(app_js_url)></script>
             </body>
         </html>

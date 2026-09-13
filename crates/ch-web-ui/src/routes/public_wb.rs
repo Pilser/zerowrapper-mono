@@ -5,7 +5,7 @@ use topcoat::context::{Cx, app_context};
 use topcoat::asset::bundled_asset;
 
 use crate::context::AppContext;
-use crate::assets::{STYLESHEET, PUBLIC_WB_JS};
+use crate::assets::{STYLESHEET, PUBLIC_WB_JS, MERMAID_JS};
 
 #[path_param]
 struct WbSlug(str);
@@ -49,6 +49,7 @@ pub async fn render_snapshot(ctx: &AppContext, cx: &Cx, slug: &str, base_href: &
     // tenant/embed prefix alike.
     let css_url = format!("?asset={}", bundled_asset(cx, STYLESHEET).name());
     let wb_js_url = format!("?asset={}", bundled_asset(cx, PUBLIC_WB_JS).name());
+    let mermaid_url = format!("?asset={}", bundled_asset(cx, MERMAID_JS).name());
 
     let pins = serde_json::from_str::<serde_json::Value>(&snap.pins)
         .unwrap_or_else(|_| serde_json::json!([]));
@@ -89,7 +90,7 @@ pub async fn render_snapshot(ctx: &AppContext, cx: &Cx, slug: &str, base_href: &
                         });
                     }
                 })();"#)) }</script>
-                <script type="importmap">{ (Unescaped::new_unchecked(r#"{"imports":{"marked":"https://cdn.jsdelivr.net/npm/marked@18.0.5/lib/marked.esm.js","highlight.js":"https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.11.1/build/es/highlight.min.js","katex":"https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.mjs","mermaid":"https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.esm.min.mjs"}}"#)) }</script>
+                <script type="importmap">{ (Unescaped::new_unchecked(format!(r#"{{"imports":{{"marked":"https://cdn.jsdelivr.net/npm/marked@18.0.5/lib/marked.esm.js","highlight.js":"https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.11.1/build/es/highlight.min.js","katex":"https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.mjs","mermaid":"{}"}}}}"#, mermaid_url))) }</script>
             </head>
             <body class="flex flex-col min-h-screen" style="font-family: var(--font-sans); color: var(--color-text); background: var(--color-bg);">
                 <div id="page-root" class="w-full mx-auto flex flex-col" style="max-width: 67.5rem; min-height: 100dvh; border-left: 1px solid var(--color-border-weak); border-right: 1px solid var(--color-border-weak);">
