@@ -71,6 +71,12 @@ pub async fn upload(cx: &Cx, body: Body) -> Result<Response> {
 
     let abs_path = std::fs::canonicalize(&dest_path)
         .unwrap_or_else(|_| dest_path.clone());
+    let abs_str = abs_path.to_string_lossy().to_string();
+    // Bake cache meta so /files/<hash> works offline for snap and future file renders (baked, no CDN)
+    let hash = match ctx.cache.resolve(&abs_str) {
+        Ok(cf) => cf.hash,
+        Err(_) => zw_cache::disk::hash_path(&abs_str),
+    };
 
     Ok(Response::builder()
         .status(StatusCode::OK)
@@ -78,9 +84,11 @@ pub async fn upload(cx: &Cx, body: Body) -> Result<Response> {
         .body(Body::from(
             serde_json::json!({
                 "filename": safe_name,
-                "path": abs_path.to_string_lossy().to_string(),
+                "path": abs_str,
                 "size": body_bytes.len(),
-                "mime_type": mime_guess::from_path(&safe_name).first_or_octet_stream().to_string()
+                "mime_type": mime_guess::from_path(&safe_name).first_or_octet_stream().to_string(),
+                "hash": hash,
+                "url": format!("/files/{}", hash)
             })
             .to_string(),
         ))

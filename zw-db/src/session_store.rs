@@ -145,6 +145,15 @@ impl SessionStore {
     }
 
     pub async fn board_pool(&self, board_id: &str) -> anyhow::Result<Arc<DbPool>> {
+        // b_collect board: auto-create on first use (shared, whiteboard/serverless.db via SHARED_KEY)
+        if board_id == "b_collect" {
+            if let Ok(pool) = self.session(SHARED_KEY).await {
+                if pool.srv_app_by_id(board_id).await.unwrap_or(None).is_none() {
+                    let _ = pool.srv_app_create_with_id(board_id, SHARED_KEY, "b_collect", None, true, None).await;
+                    let _ = self.register_board(SHARED_KEY, board_id, SHARED_KEY).await;
+                }
+            }
+        }
         // The board index is still consulted so unknown boards keep 404ing;
         // the data itself always lives in the single shared database.
         let _ = self.session_id_for_board(board_id).await?;

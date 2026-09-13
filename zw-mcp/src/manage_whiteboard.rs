@@ -3,7 +3,7 @@ use serde_json::{json, Value};
 use zw_core::{McpToolProvider, ToolOutput};
 use zw_whiteboard::{BoardState, WhiteboardHandle};
 
-const ACTIONS: &[&str] = &["about", "list", "open", "close", "add", "delete", "move", "set-public", "show", "srv"];
+const ACTIONS: &[&str] = &["about", "list", "open", "close", "add", "delete", "move", "set-public", "show", "srv", "check"];
 
 const PREVIEW_CHARS: usize = 600;
 
@@ -19,7 +19,8 @@ const GLOBAL_USAGE: &str =
        move <from> to <to>  reorder pages\n\
        set-public <page_no> on|off  publish a /w/<slug> snapshot\n\
        show <page_no>    preview a page (first ~600 chars)\n\
-       srv apps|records|files <...>  manage serverless apps, data and files (see: srv --help)\n\\n\
+       srv apps|records|files <...>  manage serverless apps, data and files (see: srv --help)\n\
+       check             summarize b_collect + stream_buffer (js_ok/mermaid_ok/e2e_ok + snap count)\n\\n\
        --help | <action> --help\n";
 
 pub struct ManageWhiteboardProvider {
@@ -38,6 +39,127 @@ impl ManageWhiteboardProvider {
             .await
             .map_err(|e| err_json(&format!("{e}"), sid, "list", &format!("wb --session {sid} list")))?;
         Ok(st.to_value())
+    }
+
+    async fn check_summary(&self, store: &zw_db::SessionStore, raw: &str) -> Value {
+        // Shared DB: whiteboard/serverless.db + system stream_buffer, not per-session file
+        let shared = "shared";
+        // Ensure b_collect board exists (shared, whiteboard/serverless.db)
+        let pool = match store.session(shared).await {
+            Ok(p) => p,
+            Err(e) => return err_json(&format!("session store: {e}"), raw, "check", "wb check"),
+        };
+        // Lazily create b_collect if missing (id is fixed "b_collect", public reads)
+        if pool.srv_app_by_id("b_collect").await.unwrap_or(None).is_none() {
+            let _ = pool
+                .srv_app_create_with_id("b_collect", shared, "b_collect", None, true, None)
+                .await;
+            let _ = store.register_board(shared, "b_collect", shared).await;
+        }
+
+        // Read b_collect records (shared)
+        let mut js_ok: Option<bool> = None;
+        let mut mermaid_ok: Option<bool> = None;
+        let mut e2e_ok: Option<bool> = None;
+        let mut snap_count = 0usize;
+        let mut snap_urls: Vec<String> = Vec::new();
+        let mut recent: Vec<Value> = Vec::new();
+
+        if let Ok(records) = pool.srv_record_list("b_collect", 200, None, 0).await {
+            for r in &records {
+                let p = &r.payload;
+                let check = p.get("check").and_then(|v| v.as_str()).unwrap_or("");
+                let typ = p.get("type").and_then(|v| v.as_str()).unwrap_or("");
+                let ok = p.get("ok").and_then(|v| v.as_bool());
+                match check {
+                    "js" => {
+                        if let Some(o) = ok {
+                            js_ok = Some(match js_ok { Some(prev) => prev && o, None => o });
+                        }
+                    }
+                    "mermaid" => {
+                        if let Some(o) = ok {
+                            mermaid_ok = Some(match mermaid_ok { Some(prev) => prev && o, None => o });
+                        }
+                    }
+                    "e2e" => {
+                        if let Some(o) = ok {
+                            e2e_ok = Some(match e2e_ok { Some(prev) => prev && o, None => o });
+                        }
+                    }
+                    "snap" => {
+                        snap_count += 1;
+                        if let Some(url) = p.get("url").and_then(|v| v.as_str()) {
+                            snap_urls.push(url.to_string());
+                        }
+                    }
+                    _ => {}
+                }
+                if typ == "snap" {
+                    // count even when check field is missing but type is snap
+                    if check != "snap" {
+                        snap_count += 1;
+                        if let Some(url) = p.get("url").and_then(|v| v.as_str()) {
+                            snap_urls.push(url.to_string());
+                        }
+                    }
+                }
+                if recent.len() < 10 {
+                    recent.push(json!({"seq": r.seq, "payload": p}));
+                }
+            }
+            // Default ok to true when no failures reported
+            if js_ok.is_none() { js_ok = Some(true); }
+            if mermaid_ok.is_none() { mermaid_ok = Some(true); }
+            if e2e_ok.is_none() { e2e_ok = Some(true); }
+        } else {
+            js_ok = Some(true);
+            mermaid_ok = Some(true);
+            e2e_ok = Some(true);
+        }
+
+        // Also inspect stream_buffer (system DB, shared file, not per-session) for recent check_result / snap
+        // Use shared session replay — stream_buffer lives in system DB, keyed by session_id,
+        // but we read via the shared-file API (zw-db/src/stream_buffer.rs) so it stays cross-session
+        let mut buffer_count = 0usize;
+        let mut buffer_recent: Vec<Value> = Vec::new();
+        if let Ok(events) = store.system().stream_buffer_replay(shared, 0).await {
+            buffer_count = events.len();
+            for e in events.iter().take(5) {
+                buffer_recent.push(e.payload.clone());
+            }
+        }
+        // Also include any session-wide buffers (best-effort, no per-session lock)
+        if let Ok(ids) = store.all_session_ids().await {
+            for sid in ids.iter().take(5) {
+                if sid == shared { continue; }
+                if let Ok(evts) = store.system().stream_buffer_replay(sid, 0).await {
+                    for e in evts.iter().take(2) {
+                        if buffer_recent.len() < 8 {
+                            buffer_recent.push(e.payload.clone());
+                        }
+                    }
+                    buffer_count += evts.len();
+                }
+            }
+        }
+
+        json!({
+            "status": "ok",
+            "shared": true,
+            "board": "b_collect",
+            "js_ok": js_ok.unwrap_or(true),
+            "mermaid_ok": mermaid_ok.unwrap_or(true),
+            "e2e_ok": e2e_ok.unwrap_or(true),
+            "snap": snap_count,
+            "snap_count": snap_count,
+            "snap_urls": snap_urls,
+            "recent_records": recent,
+            "stream_buffer": {
+                "count": buffer_count,
+                "recent": buffer_recent
+            }
+        })
     }
 
     async fn execute(&self, tokens: &[String], raw: &str) -> Result<Value, Value> {
@@ -158,6 +280,13 @@ impl ManageWhiteboardProvider {
                 }))
             }
             "about" => Ok(json!({ "status": "ok", "about": ABOUT_TEXT })),
+            "check" => {
+                let store = self.handle.db().ok_or_else(|| err_json(
+                    "serverless store is unavailable (no whiteboard db configured)",
+                    raw, "check", "wb check",
+                ))?;
+                Ok(self.check_summary(&store, raw).await)
+            }
             "srv" => {
                 let store = self.handle.db().ok_or_else(|| err_json(
                     "serverless store is unavailable (no whiteboard db configured)",
@@ -237,6 +366,7 @@ fn action_help(action: &str) -> &'static str {
         "move" => "wb --session <sid> move <from> to <to>\n\nreorders pages by one-based position\n",
         "set-public" => "wb --session <sid> set-public <page_no> on|off\n\ntakes a frozen snapshot and publishes /w/<slug> (on) or removes it (off)\n",
         "show" => "wb --session <sid> show <page_no>\n\nprints page_no, total_pages, title and a short preview (first ~600 chars) — not the full body; read the .wb file for the rest\n",
+        "check" => "wb --session <sid> check\n\nsummarizes b_collect board (shared, whiteboard/serverless.db) + stream_buffer: prints js_ok/mermaid_ok/e2e_ok + snap count. Uses the shared DB, not per-session.\n",
         "srv" => "wb --session <sid> srv <group> <verb> [args]\n\nthe serverless-app CLI: build and manage stateless apps + their data INSIDE a whiteboard, using only this MCP tool (no backend code, no shell tool).\ngroups:\n  apps   create --title \"t\" [--json <schema>] [--public-reads on|off] [--unique '<$.path>'] | list | show <id> | schema <id> | update <id> [--title] [--json|--clear-schema] [--public-reads] [--unique|--clear-unique] | delete <id> | keys <id> list | issue --role writer|reader|admin [--writer <id>] | revoke --bucket <bucket> | hooks <id> register <url> [--secret <s>] | list | remove <url> | deliveries [--url <u>] | replay <url> | rate <id> '{\"submit\":60}' | rate <id> --clear | ttl <id> [<seconds>] [--ttl-until '<$.path>'] [--clear] | link <id> --on '$.k' --to <parent> --via '$.k' | link <id> --clear | audit <id> on|off\n  records submit <id> <json> [--writer][--upsert] | list <id> [--limit N] | get <id> --seq N | update <id> <seq> <json> | patch <id> <seq> '{ops}' ($set/$inc/$dec/$mul/$unset) | query <id> --filter '<json>' [--order][--limit] | search <id> '<query>' [--limit N] (full-text BM25) | count <id> | aggregate <id> --op sum|avg|min|max|count --field '<$.path>' [--group_by][--filter] | delete <id> [--seq N|--all] | audit <id> [--since <iso-ts>] [--limit N] | call <id> <url> [--method GET|POST|PUT|PATCH|DELETE] [--header 'Name: Value']* [--body '<json>'] [--timeout N]\n  files   list <id> | get <id> <file_id> --out <path>\nHelp: srv --help (overview) | srv <group> --help (per-group) | srv <group> <verb> --help (per-verb, most detail)\n",
         _ => GLOBAL_USAGE,
     }

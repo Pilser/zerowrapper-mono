@@ -14,7 +14,18 @@ var __export = (target, all) => {
 };
 var __esm = (fn, res) => () => (fn && (res = fn(fn = 0)), res);
 
-// network.js
+// crates/ch-web-ui/assets/js/chat/network.js
+var exports_network = {};
+__export(exports_network, {
+  State: () => State,
+  connect: () => connect,
+  disconnect: () => disconnect,
+  getState: () => getState,
+  off: () => off,
+  on: () => on,
+  send: () => send,
+  sendCancel: () => sendCancel
+});
 function getState() {
   return state;
 }
@@ -23,6 +34,9 @@ function on(event, fn) {
     listenerMap.set(event, new Set);
   listenerMap.get(event).add(fn);
   return () => listenerMap.get(event)?.delete(fn);
+}
+function off(event, fn) {
+  listenerMap.get(event)?.delete(fn);
 }
 function emit(event, data) {
   listenerMap.get(event)?.forEach((fn) => fn(data));
@@ -120,7 +134,7 @@ var init_network = __esm(() => {
   });
 });
 
-// dom.js
+// crates/ch-web-ui/assets/js/chat/dom.js
 function init() {
   els.form = document.getElementById("chat-form");
   els.input = document.getElementById("chat-input");
@@ -151,7 +165,7 @@ var init_dom = __esm(() => {
   els = {};
 });
 
-// constants.js
+// crates/ch-web-ui/assets/js/chat/constants.js
 function escapeHtml(str) {
   if (!str)
     return "";
@@ -159,7 +173,7 @@ function escapeHtml(str) {
 }
 var USER_AVATAR = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>', BOT_AVATAR = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
 
-// mermaid-modal.js
+// crates/ch-web-ui/assets/js/chat/mermaid-modal.js
 function clamp(v, lo, hi) {
   return Math.max(lo, Math.min(hi, v));
 }
@@ -289,7 +303,7 @@ var init_mermaid_modal = __esm(() => {
   pointers = new Map;
 });
 
-// markdown.js
+// crates/ch-web-ui/assets/js/chat/markdown.js
 import hljs from "highlight.js";
 import { marked } from "marked";
 import katex from "katex";
@@ -835,7 +849,7 @@ var init_markdown = __esm(() => {
   });
 });
 
-// scroll.js
+// crates/ch-web-ui/assets/js/chat/scroll.js
 function container() {
   return els.messages || document.getElementById("chat-messages");
 }
@@ -864,7 +878,7 @@ var init_scroll = __esm(() => {
   init_dom();
 });
 
-// activity.js
+// crates/ch-web-ui/assets/js/chat/activity.js
 function target() {
   return els.messages || document.getElementById("chat-messages");
 }
@@ -1064,7 +1078,7 @@ var init_activity = __esm(() => {
   pending = [];
 });
 
-// streaming.js
+// crates/ch-web-ui/assets/js/chat/streaming.js
 import { marked as marked2 } from "marked";
 function setOnFinalize(cb) {
   onFinalize = cb;
@@ -1202,7 +1216,7 @@ var init_streaming = __esm(() => {
   init_activity();
 });
 
-// messages.js
+// crates/ch-web-ui/assets/js/chat/messages.js
 var exports_messages = {};
 __export(exports_messages, {
   abortHistoryFetch: () => abortHistoryFetch,
@@ -1346,7 +1360,7 @@ var init_messages = __esm(() => {
   init_scroll();
 });
 
-// whiteboard-render.js
+// crates/ch-web-ui/assets/js/chat/whiteboard-render.js
 import { marked as marked4 } from "marked";
 function humanSize(bytes) {
   if (bytes === undefined || bytes === null)
@@ -1440,7 +1454,7 @@ var init_whiteboard_render = __esm(() => {
   init_markdown();
 });
 
-// whiteboard.js
+// crates/ch-web-ui/assets/js/chat/whiteboard.js
 var exports_whiteboard = {};
 __export(exports_whiteboard, {
   init: () => init2,
@@ -1771,12 +1785,319 @@ var init_whiteboard = __esm(() => {
   init_whiteboard_render();
 });
 
-// main.js
+// crates/ch-web-ui/assets/js/chat/html2canvas.js
+async function html2canvas(element, options = {}) {
+  const scale2 = options.scale || 1;
+  if (!element)
+    throw new Error("html2canvas: target not found");
+  const rect = element.getBoundingClientRect();
+  const w = Math.max(1, Math.ceil(rect.width));
+  const h = Math.max(1, Math.ceil(rect.height));
+  const canvas2 = document.createElement("canvas");
+  canvas2.width = w * scale2;
+  canvas2.height = h * scale2;
+  const ctx = canvas2.getContext("2d");
+  if (!ctx)
+    return canvas2;
+  ctx.scale(scale2, scale2);
+  let bg = "";
+  try {
+    bg = getComputedStyle(document.documentElement).getPropertyValue("--color-bg").trim();
+  } catch {}
+  ctx.fillStyle = bg || "#ffffff";
+  ctx.fillRect(0, 0, w, h);
+  try {
+    const clone = element.cloneNode(true);
+    const serializer = new XMLSerializer;
+    let html = serializer.serializeToString(clone);
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}"><foreignObject width="100%" height="100%"><div xmlns="http://www.w3.org/1999/xhtml" style="width:${w}px;height:${h}px;overflow:hidden;">${html}</div></foreignObject></svg>`;
+    const url2 = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+    const img = new Image;
+    img.crossOrigin = "anonymous";
+    img.decoding = "sync";
+    img.src = url2;
+    await new Promise((resolve, reject) => {
+      const t = setTimeout(() => reject(new Error("svg load timeout")), 1800);
+      img.onload = () => {
+        clearTimeout(t);
+        resolve();
+      };
+      img.onerror = () => {
+        clearTimeout(t);
+        reject(new Error("svg load error"));
+      };
+    });
+    ctx.drawImage(img, 0, 0, w, h);
+    return canvas2;
+  } catch (_e) {
+    try {
+      let fg = "";
+      try {
+        fg = getComputedStyle(document.documentElement).getPropertyValue("--color-text").trim();
+      } catch {}
+      ctx.fillStyle = fg || "#111111";
+      ctx.font = "12px Inter, ui-sans-serif, system-ui, sans-serif";
+      const text = (element.innerText || element.textContent || "").split(`
+`).slice(0, 90);
+      let y = 14;
+      for (const line of text) {
+        if (y > h - 4)
+          break;
+        ctx.fillText(line.slice(0, 150), 8, y);
+        y += 14;
+      }
+    } catch {}
+    return canvas2;
+  }
+}
+var init_html2canvas = () => {};
+
+// crates/ch-web-ui/assets/js/chat/check.js
+var exports_check = {};
+__export(exports_check, {
+  checkHTML: () => checkHTML,
+  checkJS: () => checkJS,
+  checkMermaid: () => checkMermaid,
+  doSnap: () => doSnap,
+  report: () => report,
+  runE2E: () => runE2E
+});
+function ensureWrappers() {
+  if (installed)
+    return;
+  installed = true;
+  try {
+    window.addEventListener("error", (e) => {
+      try {
+        report({ type: "js_error", check: "js", ok: false, msg: e.message || String(e.error || "error"), url: location.href, ts: Date.now() });
+      } catch {}
+    });
+    window.addEventListener("unhandledrejection", (e) => {
+      try {
+        report({ type: "unhandledrejection", check: "js", ok: false, msg: String(e.reason || e), url: location.href, ts: Date.now() });
+      } catch {}
+    });
+    const orig = console.error;
+    console.error = function(...args) {
+      try {
+        report({ type: "console_error", check: "js", ok: false, msg: args.map(String).join(" "), url: location.href, ts: Date.now() });
+      } catch {}
+      return orig.apply(console, args);
+    };
+  } catch {}
+}
+function checkJS(code) {
+  ensureWrappers();
+  if (code == null)
+    code = "";
+  if (!String(code).trim())
+    return { ok: true, msg: "empty" };
+  try {
+    const acorn = window.acorn || null;
+    if (acorn && typeof acorn.parse === "function") {
+      acorn.parse(String(code), { ecmaVersion: "latest", sourceType: "module" });
+      return { ok: true };
+    }
+  } catch (e) {
+    return { ok: false, msg: e && e.message ? e.message : String(e), line: e && e.loc ? e.loc.line : undefined, col: e && e.loc ? e.loc.column : undefined };
+  }
+  try {
+    new Function(String(code));
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, msg: e && e.message ? e.message : String(e) };
+  }
+}
+function checkHTML(code) {
+  ensureWrappers();
+  try {
+    const parser = new DOMParser;
+    const doc = parser.parseFromString(String(code), "text/html");
+    if (doc.querySelector("parsererror"))
+      return { ok: false, msg: "HTML parse error" };
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, msg: e.message || String(e) };
+  }
+}
+function checkMermaid(code) {
+  ensureWrappers();
+  const src = String(code || "");
+  if (!src.trim())
+    return { ok: false, msg: "empty mermaid" };
+  try {
+    const mm = window.mermaid;
+    if (mm && typeof mm.parse === "function") {
+      mm.parse(src);
+      return { ok: true };
+    }
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, msg: e && e.message ? e.message : String(e) };
+  }
+}
+async function runE2E(steps) {
+  ensureWrappers();
+  if (!Array.isArray(steps))
+    return { ok: false, msg: "steps must be array" };
+  const results = [];
+  for (let idx = 0;idx < steps.length; idx++) {
+    const s = steps[idx];
+    try {
+      const target2 = s.target || s.selector || "";
+      const kind = s.kind || s.type || s.action || "";
+      if (kind === "fill" || s.action === "fill") {
+        const el2 = target2 ? document.querySelector(target2) : null;
+        if (!el2)
+          throw new Error("fill target not found: " + target2);
+        el2.focus && el2.focus();
+        if ("value" in el2)
+          el2.value = s.value != null ? String(s.value) : "";
+        else
+          el2.textContent = s.value != null ? String(s.value) : "";
+        el2.dispatchEvent(new Event("input", { bubbles: true }));
+        el2.dispatchEvent(new Event("change", { bubbles: true }));
+        results.push({ idx, ok: true, target: target2 });
+      } else if (kind === "click" || s.action === "click") {
+        const el2 = target2 ? document.querySelector(target2) : null;
+        if (!el2)
+          throw new Error("click target not found: " + target2);
+        el2.click();
+        results.push({ idx, ok: true, target: target2 });
+      } else if (kind === "check" || s.check) {
+        const ck = s.check || s.kind;
+        let r;
+        if (ck === "js")
+          r = checkJS(s.code || "");
+        else if (ck === "mermaid")
+          r = checkMermaid(s.code || "");
+        else if (ck === "html")
+          r = checkHTML(s.code || "");
+        else
+          r = { ok: false, msg: "unknown check kind: " + ck };
+        results.push({ idx, ok: r.ok, msg: r.msg, check: ck });
+        report({ type: "e2e_step", check: ck, ok: r.ok, msg: r.msg || "", step: idx, url: location.href, ts: Date.now() });
+      } else if (s.code != null) {
+        const r = checkJS(s.code);
+        results.push({ idx, ok: r.ok, msg: r.msg });
+      } else {
+        results.push({ idx, ok: false, msg: "unknown step" });
+      }
+      if (s.delay)
+        await new Promise((r) => setTimeout(r, Number(s.delay) || 0));
+      else
+        await new Promise((r) => setTimeout(r, 50));
+    } catch (e) {
+      const msg = e && e.message ? e.message : String(e);
+      results.push({ idx, ok: false, msg });
+      report({ type: "e2e_error", ok: false, msg, step: idx, url: location.href, ts: Date.now() });
+    }
+  }
+  const ok = results.every((r) => r.ok !== false);
+  report({ type: "e2e", check: "e2e", ok, steps: results.length, url: location.href, ts: Date.now() });
+  return { ok, results };
+}
+function report(obj) {
+  ensureWrappers();
+  const payload = Object.assign({ ts: Date.now(), url: location.href }, obj || {});
+  try {
+    fetch("/api/srv/b_collect/submit", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer b_collect" },
+      body: JSON.stringify(payload)
+    }).catch(() => {});
+    try {
+      if (exports_network && typeof send === "function") {
+        send(JSON.stringify(Object.assign({ type: "check_result" }, payload)));
+      } else if (window.__zw_ws_send) {
+        window.__zw_ws_send(Object.assign({ type: "check_result" }, payload));
+      }
+    } catch {}
+  } catch {}
+  return payload;
+}
+async function hashPath(path) {
+  try {
+    const enc = new TextEncoder().encode(path);
+    const buf = await crypto.subtle.digest("SHA-256", enc);
+    const bytes = new Uint8Array(buf).slice(0, 8);
+    let b64 = btoa(String.fromCharCode(...bytes));
+    b64 = b64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+    return b64;
+  } catch {
+    return "";
+  }
+}
+async function doSnap(targetSelector) {
+  const sel = targetSelector || "#whiteboard-body";
+  let el2 = null;
+  try {
+    el2 = document.querySelector(sel);
+  } catch {}
+  if (!el2) {
+    el2 = document.querySelector("#whiteboard-body") || document.querySelector("#chat-messages") || document.querySelector("#wb-root") || document.querySelector("#page-root") || document.body;
+    if (!el2)
+      return { ok: false, msg: "no target element" };
+  }
+  let canvas2;
+  try {
+    canvas2 = await html2canvas(el2, { scale: 2 });
+  } catch (e) {
+    report({ type: "snap", check: "snap", ok: false, msg: String(e && e.message ? e.message : e), target: sel, url: location.href, ts: Date.now() });
+    return { ok: false, msg: String(e.message || e) };
+  }
+  const blob = await new Promise((resolve) => canvas2.toBlob(resolve, "image/png", 0.92));
+  if (!blob)
+    return { ok: false, msg: "toBlob failed" };
+  try {
+    const up2 = await fetch("?api=upload", { method: "POST", headers: { "X-Filename": "snap.png" }, body: blob });
+    const data = await up2.json().catch(() => ({}));
+    if (!up2.ok || data.error)
+      throw new Error(data.error || "upload failed");
+    const p = data.path || "";
+    let fileUrl = "";
+    if (p) {
+      const h = await hashPath(p);
+      if (h) {
+        fileUrl = "/files/" + h;
+      } else {
+        fileUrl = p;
+      }
+    }
+    if (data.hash)
+      fileUrl = "/files/" + data.hash;
+    if (!fileUrl)
+      fileUrl = "/files/unknown";
+    const snapPayload = { type: "snap", check: "snap", ok: true, url: fileUrl, target: sel, ts: Date.now(), href: location.href };
+    report(snapPayload);
+    return { ok: true, url: fileUrl, target: sel };
+  } catch (e) {
+    const msg = e && e.message ? e.message : String(e);
+    report({ type: "snap", check: "snap", ok: false, msg, target: sel, url: location.href, ts: Date.now() });
+    return { ok: false, msg };
+  }
+}
+var installed = false;
+var init_check = __esm(() => {
+  init_html2canvas();
+  init_network();
+  ensureWrappers();
+  try {
+    window.checkJS = checkJS;
+    window.checkMermaid = checkMermaid;
+    window.checkHTML = checkHTML;
+    window.runE2E = runE2E;
+    window.reportCheck = report;
+    window.doSnap = doSnap;
+  } catch {}
+});
+
+// crates/ch-web-ui/assets/js/chat/main.js
 init_network();
 init_dom();
 init_dom();
 
-// auth.js
+// crates/ch-web-ui/assets/js/chat/auth.js
 init_dom();
 var STORAGE_SESSION = "zerowrapper_session";
 var state2 = {
@@ -1867,13 +2188,13 @@ function showBadge() {
     els.userBadge.classList.add("hidden");
 }
 
-// connection.js
+// crates/ch-web-ui/assets/js/chat/connection.js
 init_network();
 init_dom();
 init_messages();
 init_streaming();
 
-// tool-calls.js
+// crates/ch-web-ui/assets/js/chat/tool-calls.js
 init_activity();
 function handleToolCall(id, name, args, container2) {
   pushToolCall(id, name, args);
@@ -1885,7 +2206,7 @@ function clearPending() {
   resetTurn();
 }
 
-// connection.js
+// crates/ch-web-ui/assets/js/chat/connection.js
 init_whiteboard();
 var onStateChange = null;
 function setHint(state3) {
@@ -1987,6 +2308,19 @@ function handleMessage(e) {
             els.daemonBanner.classList.remove("hidden");
         }
         break;
+      case "snap": {
+        try {
+          const sel = data.target || data.selector || "#whiteboard-body";
+          const btn = document.getElementById("snap");
+          if (btn)
+            btn.dataset.target = sel;
+          Promise.resolve().then(() => (init_check(), exports_check)).then((m) => m.doSnap(sel)).catch(() => {});
+        } catch {}
+        break;
+      }
+      case "check":
+      case "check_result":
+        break;
     }
   } catch (e2) {
     addMessage("assistant", e.data);
@@ -2045,11 +2379,11 @@ function sendCancel2() {
   sendCancel(state2.sessionId);
 }
 
-// main.js
+// crates/ch-web-ui/assets/js/chat/main.js
 init_streaming();
 init_messages();
 
-// lightbox.js
+// crates/ch-web-ui/assets/js/chat/lightbox.js
 var lightbox = null;
 var loadingEl = null;
 var images = [];
@@ -2170,7 +2504,7 @@ function init3(messagesEl) {
   });
 }
 
-// file-upload.js
+// crates/ch-web-ui/assets/js/chat/file-upload.js
 var uploadState = {
   pending: []
 };
@@ -2214,7 +2548,7 @@ function formatSize(bytes) {
   return (bytes / (1024 * 1024)).toFixed(1) + " MB";
 }
 
-// main.js
+// crates/ch-web-ui/assets/js/chat/main.js
 function logPendingResources() {
   const entries = performance.getEntriesByType("resource");
   const pending2 = entries.filter((e) => !e.responseEnd || e.responseEnd <= 0);
@@ -2375,7 +2709,144 @@ function autoGrow() {
   els.input.style.height = Math.min(els.input.scrollHeight, 300) + "px";
 }
 
-// app-entry.js
+// crates/ch-web-ui/assets/js/chat/app-entry.js
 init_whiteboard();
+init_check();
+
+// crates/ch-web-ui/assets/js/chat/snap.js
+init_check();
+init_network();
+var SNAP_ID = "snap";
+function getEl3(id) {
+  return document.getElementById(id);
+}
+function activeInput2() {
+  const input = getEl3("chat-input");
+  if (!input)
+    return null;
+  return input;
+}
+function positionSnap() {
+  const btn = getEl3(SNAP_ID);
+  if (!btn)
+    return;
+  const input = activeInput2();
+  let bottom = "16px";
+  if (input) {
+    const style = window.getComputedStyle(input);
+    const visible = input.offsetParent !== null && style.display !== "none" && style.visibility !== "hidden";
+    if (visible)
+      bottom = "80px";
+  }
+  btn.style.bottom = bottom;
+  btn.style.right = "16px";
+  btn.style.left = "auto";
+  btn.style.top = "auto";
+}
+function ensureButton() {
+  let btn = getEl3(SNAP_ID);
+  if (btn)
+    return btn;
+  btn = document.createElement("button");
+  btn.id = SNAP_ID;
+  btn.type = "button";
+  btn.className = "whiteboard-arrow snap-btn";
+  btn.setAttribute("aria-label", "Snap screenshot");
+  btn.title = "Snap screenshot";
+  btn.style.position = "fixed";
+  btn.style.zIndex = "70";
+  btn.style.width = "34px";
+  btn.style.height = "34px";
+  btn.style.borderRadius = "50%";
+  btn.style.border = "1px solid var(--color-border-weak)";
+  btn.style.boxShadow = "0 2px 10px rgba(0,0,0,.18)";
+  btn.style.background = "var(--color-bg)";
+  btn.style.color = "var(--color-text)";
+  btn.style.display = "flex";
+  btn.style.alignItems = "center";
+  btn.style.justifyContent = "center";
+  btn.style.cursor = "pointer";
+  btn.style.right = "16px";
+  btn.style.bottom = "16px";
+  btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18" aria-hidden="true"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"></path><circle cx="12" cy="13" r="4"></circle></svg>';
+  document.body.appendChild(btn);
+  return btn;
+}
+function wireButton2(btn) {
+  if (!btn || btn.dataset.wired === "1")
+    return;
+  btn.dataset.wired = "1";
+  btn.addEventListener("click", async () => {
+    const target2 = btn.dataset.target || "#whiteboard-body";
+    btn.disabled = true;
+    btn.style.opacity = "0.6";
+    try {
+      const res = await doSnap(target2);
+      if (res && res.ok) {
+        btn.style.borderColor = "var(--color-status-success, #2ecc71)";
+        setTimeout(() => {
+          btn.style.borderColor = "";
+        }, 900);
+      }
+    } catch {} finally {
+      btn.disabled = false;
+      btn.style.opacity = "";
+    }
+  });
+}
+function initSnap() {
+  const btn = ensureButton();
+  wireButton2(btn);
+  positionSnap();
+  window.addEventListener("resize", positionSnap);
+  window.addEventListener("scroll", positionSnap, { passive: true });
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden)
+      positionSnap();
+  });
+  try {
+    new MutationObserver(positionSnap).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["class", "style"] });
+  } catch {}
+  const inp = activeInput2();
+  if (inp) {
+    try {
+      new MutationObserver(positionSnap).observe(inp, { attributes: true, attributeFilter: ["class", "style"] });
+    } catch {}
+  }
+  try {
+    window.snap = (sel) => {
+      const b = getEl3(SNAP_ID);
+      if (b)
+        b.dataset.target = sel || "#whiteboard-body";
+      return doSnap(sel);
+    };
+    window.addEventListener("zw-snap", (e) => {
+      const t = e.detail && e.detail.target ? e.detail.target : e.detail || "#whiteboard-body";
+      doSnap(t);
+    });
+    if (!window.ws)
+      window.ws = {};
+    window.ws.send = function(data) {
+      try {
+        const obj = typeof data === "string" ? JSON.parse(data) : data;
+        if (obj && obj.type === "snap") {
+          const sel = obj.target || obj.selector || "#whiteboard-body";
+          const b = getEl3(SNAP_ID);
+          if (b)
+            b.dataset.target = sel;
+          doSnap(sel);
+          return;
+        }
+      } catch {}
+      try {
+        return send(typeof data === "string" ? data : JSON.stringify(data));
+      } catch {}
+    };
+    window.__zw_ws_send = window.ws.send;
+  } catch {}
+}
+
+// crates/ch-web-ui/assets/js/chat/app-entry.js
 init4();
 init2();
+initSnap();

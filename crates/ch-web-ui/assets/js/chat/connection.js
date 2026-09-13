@@ -96,6 +96,20 @@ function handleMessage(e) {
           else els.daemonBanner.classList.remove('hidden')
         }
         break
+      case 'snap': {
+        // Agent-triggered snap via WS: {type:'snap', target:'#whiteboard-body'}
+        try {
+          const sel = data.target || data.selector || '#whiteboard-body'
+          const btn = document.getElementById('snap')
+          if (btn) btn.dataset.target = sel
+          import('./check.js').then(m => m.doSnap(sel)).catch(() => {})
+        } catch {}
+        break
+      }
+      case 'check':
+      case 'check_result':
+        // Server-initiated check (optional, no-op — report already handled in check.js)
+        break
     }
   } catch (e2) {
     addMessage('assistant', e.data)

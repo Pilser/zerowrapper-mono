@@ -48,5 +48,15 @@ pub async fn whiteboard_panel() -> Result {
         >
             icon(data: CHEVRON_UP, size: 18, label: "Shrink whiteboard")
         </button>
+        <button
+            id="snap"
+            type="button"
+            class="whiteboard-arrow"
+            aria-label="Snap screenshot"
+            title="Snap screenshot"
+            style="position:fixed; bottom:16px; right:16px; z-index:70; width:34px; height:34px; border-radius:50%; border:1px solid var(--color-border-weak); background:var(--color-bg); color:var(--color-text); box-shadow:0 2px 10px rgba(0,0,0,.18);"
+        >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18" aria-hidden="true"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"></path><circle cx="12" cy="13" r="4"></circle></svg>
+        </button>
     }
 }

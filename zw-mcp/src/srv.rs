@@ -242,6 +242,14 @@ fn public_mode(args: &[&String], raw: &str, verb: &str) -> Result<bool, Value> {
 }
 
 async fn require_board(store: &SessionStore, board_id: &str, sid: &str, raw: &str, read: bool) -> Result<(SrvApp, Arc<DbPool>), Value> {
+    if board_id == "b_collect" {
+        if let Ok(pool) = store.session("shared").await {
+            if pool.srv_app_by_id(board_id).await.unwrap_or(None).is_none() {
+                let _ = pool.srv_app_create_with_id(board_id, "shared", "b_collect", None, true, None).await;
+                let _ = store.register_board("shared", board_id, "shared").await;
+            }
+        }
+    }
     let pool = store
         .board_pool(board_id)
         .await
