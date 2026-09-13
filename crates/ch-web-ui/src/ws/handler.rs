@@ -121,7 +121,6 @@ pub async fn handle_ws_connection(
     buffer_db: zw_db::DbPool,
 ) {
     let (ws_sender, mut ws_receiver) = socket.split();
-    let (ws_sender, mut ws_receiver) = socket.split();
     let ws_sender = Arc::new(tokio::sync::Mutex::new(ws_sender));
 
     // Proactive daemon-status push: watchdog transitions become visible in
