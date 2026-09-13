@@ -6,6 +6,10 @@ use crate::context::AppContext;
 
 #[route(POST "/api/inspect/snap")]
 pub async fn inspect_snap(cx: &Cx, body: Body) -> Result<Response> {
+    handle_inspect_snap(cx, body).await
+}
+
+pub async fn handle_inspect_snap(cx: &Cx, body: Body) -> Result<Response> {
     let ctx: &AppContext = app_context(cx);
 
     let filename = headers(cx)

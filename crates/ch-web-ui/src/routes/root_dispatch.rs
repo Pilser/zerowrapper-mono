@@ -119,7 +119,7 @@ async fn dispatch_api(cx: &Cx, api: &str, body: Body) -> Result<Response> {
         "sessions" => api_sessions_list(cx).await,
         "sessions_create" => api_sessions_create(cx, body).await,
         "upload" => api_upload(cx, body).await,
-        "inspect_snap" => crate::api::inspect_snap::inspect_snap(cx, body).await,
+        "inspect_snap" => crate::api::inspect_snap::handle_inspect_snap(cx, body).await,
         _ => Ok(Response::builder()
             .status(StatusCode::NOT_FOUND)
             .header("Content-Type", "application/json")
