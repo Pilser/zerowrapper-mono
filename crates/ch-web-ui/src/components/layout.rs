@@ -76,8 +76,16 @@ pub async fn root_layout(cx: &Cx, slot: Result) -> Result {
                 </main>
                 whiteboard_panel()
                 <script>{ (Unescaped::new_unchecked(format!("window.ZW_AGENT = \"{}\";", ctx.agent))) }</script>
-                <script type="importmap">{ (Unescaped::new_unchecked(format!(r#"{{"imports":{{"marked":"{}","highlight.js":"{}","katex":"{}","mermaid":"{}"}}}}"#, marked_url, highlight_url, katex_url, mermaid_url))) }</script>
-                <script type="module">{ (Unescaped::new_unchecked(format!(r#"import m from "{}"; window.mermaid = m.default || m; if (window.mermaid.initialize) {{ try {{ window.mermaid.initialize({{startOnLoad:false}}) }} catch(e) {{}} }}"#, mermaid_url))) }</script>
+                { (Unescaped::new_unchecked({
+                    let imports = serde_json::json!({
+                        "marked": marked_url,
+                        "highlight.js": highlight_url,
+                        "katex": katex_url,
+                        "mermaid": mermaid_url
+                    });
+                    let map = serde_json::json!({ "imports": imports });
+                    format!(r#"<script type="importmap">{}</script><script type="module">import m from "{}"; window.mermaid = m.default || m; if (window.mermaid.initialize) {{ try {{ window.mermaid.initialize({{startOnLoad:false}}) }} catch(e) {{}} }}</script>"#, map, mermaid_url)
+                })) }
                 <script type="module" src=(app_js_url)></script>
             </body>
         </html>

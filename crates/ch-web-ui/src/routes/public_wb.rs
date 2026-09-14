@@ -94,8 +94,16 @@ pub async fn render_snapshot(ctx: &AppContext, cx: &Cx, slug: &str, base_href: &
                         });
                     }
                 })();"#)) }</script>
-                <script type="importmap">{ (Unescaped::new_unchecked(format!(r#"{{"imports":{{"marked":"{}","highlight.js":"{}","katex":"{}","mermaid":"{}"}}}}"#, marked_url, highlight_url, katex_url, mermaid_url))) }</script>
-                <script type="module">{ (Unescaped::new_unchecked(format!(r#"import m from "{}"; window.mermaid = m.default || m; if (window.mermaid.initialize) {{ try {{ window.mermaid.initialize({{startOnLoad:false}}) }} catch(e) {{}} }}"#, mermaid_url))) }</script>
+                { (Unescaped::new_unchecked({
+                    let imports = serde_json::json!({
+                        "marked": marked_url,
+                        "highlight.js": highlight_url,
+                        "katex": katex_url,
+                        "mermaid": mermaid_url
+                    });
+                    let map = serde_json::json!({ "imports": imports });
+                    format!(r#"<script type="importmap">{}</script><script type="module">import m from "{}"; window.mermaid = m.default || m; if (window.mermaid.initialize) {{ try {{ window.mermaid.initialize({{startOnLoad:false}}) }} catch(e) {{}} }}</script>"#, map, mermaid_url)
+                })) }
             </head>
             <body class="flex flex-col min-h-screen" style="font-family: var(--font-sans); color: var(--color-text); background: var(--color-bg);">
                 <div id="page-root" class="w-full mx-auto flex flex-col" style="max-width: 67.5rem; min-height: 100dvh; border-left: 1px solid var(--color-border-weak); border-right: 1px solid var(--color-border-weak);">
