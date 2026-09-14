@@ -91,6 +91,7 @@ pub async fn render_snapshot(ctx: &AppContext, cx: &Cx, slug: &str, base_href: &
                     }
                 })();"#)) }</script>
                 <script type="importmap">{ (Unescaped::new_unchecked(format!(r#"{{"imports":{{"marked":"https://cdn.jsdelivr.net/npm/marked@18.0.5/lib/marked.esm.js","highlight.js":"https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.11.1/build/es/highlight.min.js","katex":"https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.mjs","mermaid":"{}"}}}}"#, mermaid_url))) }</script>
+                <script type="module">{ (Unescaped::new_unchecked(format!(r#"import m from "{}"; window.mermaid = m.default || m; if (window.mermaid.initialize) {{ try {{ window.mermaid.initialize({{startOnLoad:false}}) }} catch(e) {{}} }}"#, mermaid_url))) }</script>
             </head>
             <body class="flex flex-col min-h-screen" style="font-family: var(--font-sans); color: var(--color-text); background: var(--color-bg);">
                 <div id="page-root" class="w-full mx-auto flex flex-col" style="max-width: 67.5rem; min-height: 100dvh; border-left: 1px solid var(--color-border-weak); border-right: 1px solid var(--color-border-weak);">

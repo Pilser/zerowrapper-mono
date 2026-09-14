@@ -78,43 +78,16 @@ export function checkHTML(code) {
 }
 
 async function ensureMermaid() {
+  // Mermaid is pre-loaded via inline module script in layout.rs
   if (window.mermaid && typeof window.mermaid.parse === 'function') {
     return window.mermaid
   }
-  // Try multiple strategies to load mermaid
-  const errors = []
-  // Strategy 1: Use importmap specifier
-  try {
-    const mod = await import('mermaid')
-    window.mermaid = mod.default || mod
-    if (typeof window.mermaid.initialize === 'function') {
-      try { window.mermaid.initialize({ startOnLoad: false }) } catch {}
-    }
-    return window.mermaid
-  } catch (e) { errors.push('importmap: ' + e.message) }
-  // Strategy 2: Use full path from importmap
-  try {
-    const importmap = JSON.parse(document.querySelector('script[type="importmap"]')?.textContent || '{}')
-    const mermaidPath = importmap?.imports?.mermaid
-    if (mermaidPath) {
-      const mod = await import(mermaidPath)
-      window.mermaid = mod.default || mod
-      if (typeof window.mermaid.initialize === 'function') {
-        try { window.mermaid.initialize({ startOnLoad: false }) } catch {}
-      }
+  // Fallback: wait for mermaid to load (in case inline script hasn't run yet)
+  for (let i = 0; i < 50; i++) {
+    if (window.mermaid && typeof window.mermaid.parse === 'function') {
       return window.mermaid
     }
-  } catch (e) { errors.push('fullpath: ' + e.message) }
-  // Strategy 3: Globally known paths
-  for (const path of ['/_topcoat/assets/mermaid.js', '/assets/mermaid.js']) {
-    try {
-      const mod = await import(path)
-      window.mermaid = mod.default || mod
-      if (typeof window.mermaid.initialize === 'function') {
-        try { window.mermaid.initialize({ startOnLoad: false }) } catch {}
-      }
-      return window.mermaid
-    } catch (e) { errors.push(path + ': ' + e.message) }
+    await new Promise(r => setTimeout(r, 100))
   }
   return null
 }

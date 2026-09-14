@@ -13,13 +13,6 @@ var __export = (target, all) => {
     });
 };
 var __esm = (fn, res) => () => (fn && (res = fn(fn = 0)), res);
-var __require = /* @__PURE__ */ ((x) => typeof require !== "undefined" ? require : typeof Proxy !== "undefined" ? new Proxy(x, {
-  get: (a, b) => (typeof require !== "undefined" ? require : a)[b]
-}) : x)(function(x) {
-  if (typeof require !== "undefined")
-    return require.apply(this, arguments);
-  throw Error('Dynamic require of "' + x + '" is not supported');
-});
 
 // network.js
 var exports_network = {};
@@ -1969,48 +1962,11 @@ async function ensureMermaid() {
   if (window.mermaid && typeof window.mermaid.parse === "function") {
     return window.mermaid;
   }
-  const errors = [];
-  try {
-    const mod = await import("mermaid");
-    window.mermaid = mod.default || mod;
-    if (typeof window.mermaid.initialize === "function") {
-      try {
-        window.mermaid.initialize({ startOnLoad: false });
-      } catch {}
-    }
-    return window.mermaid;
-  } catch (e) {
-    errors.push("importmap: " + e.message);
-  }
-  try {
-    const importmap = JSON.parse(document.querySelector('script[type="importmap"]')?.textContent || "{}");
-    const mermaidPath = importmap?.imports?.mermaid;
-    if (mermaidPath) {
-      const mod = await import(mermaidPath);
-      window.mermaid = mod.default || mod;
-      if (typeof window.mermaid.initialize === "function") {
-        try {
-          window.mermaid.initialize({ startOnLoad: false });
-        } catch {}
-      }
+  for (let i = 0;i < 50; i++) {
+    if (window.mermaid && typeof window.mermaid.parse === "function") {
       return window.mermaid;
     }
-  } catch (e) {
-    errors.push("fullpath: " + e.message);
-  }
-  for (const path of ["/_topcoat/assets/mermaid.js", "/assets/mermaid.js"]) {
-    try {
-      const mod = await import(path);
-      window.mermaid = mod.default || mod;
-      if (typeof window.mermaid.initialize === "function") {
-        try {
-          window.mermaid.initialize({ startOnLoad: false });
-        } catch {}
-      }
-      return window.mermaid;
-    } catch (e) {
-      errors.push(path + ": " + e.message);
-    }
+    await new Promise((r) => setTimeout(r, 100));
   }
   return null;
 }

@@ -69,6 +69,7 @@ pub async fn root_layout(cx: &Cx, slot: Result) -> Result {
                 whiteboard_panel()
                 <script>{ (Unescaped::new_unchecked(format!("window.ZW_AGENT = \"{}\";", ctx.agent))) }</script>
                 <script type="importmap">{ (Unescaped::new_unchecked(format!(r#"{{"imports":{{"marked":"https://cdn.jsdelivr.net/npm/marked@18.0.5/lib/marked.esm.js","highlight.js":"https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.11.1/build/es/highlight.min.js","katex":"https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.mjs","mermaid":"{}"}}}}"#, mermaid_url))) }</script>
+                <script type="module">{ (Unescaped::new_unchecked(format!(r#"import m from "{}"; window.mermaid = m.default || m; if (window.mermaid.initialize) {{ try {{ window.mermaid.initialize({{startOnLoad:false}}) }} catch(e) {{}} }}"#, mermaid_url))) }</script>
                 <script type="module" src=(app_js_url)></script>
             </body>
         </html>
