@@ -81,16 +81,14 @@ export function checkMermaid(code) {
   ensureWrappers()
   const src = String(code || '')
   if (!src.trim()) return { ok: false, msg: 'empty mermaid' }
-  try {
-    const mm = window.mermaid
-    if (mm && typeof mm.parse === 'function') {
-      mm.parse(src)
-      return { ok: true }
-    }
-    return { ok: true }
-  } catch (e) {
-    return { ok: false, msg: e && e.message ? e.message : String(e) }
+  const mm = window.mermaid
+  if (!mm || typeof mm.parse !== 'function') {
+    return { ok: false, msg: 'mermaid not loaded' }
   }
+  // mermaid.parse returns a Promise in v11 — return it so callers can await
+  return mm.parse(src)
+    .then(() => ({ ok: true }))
+    .catch(e => ({ ok: false, msg: e && e.message ? e.message : String(e) }))
 }
 
 // steps: [{action:'fill', target:'#id', value:'hello'}, {action:'click', target:'#btn'}, {action:'check', kind:'js', code:'...'}]
@@ -121,7 +119,7 @@ export async function runE2E(steps) {
         const ck = s.check || s.kind
         let r
         if (ck === 'js') r = checkJS(s.code || '')
-        else if (ck === 'mermaid') r = checkMermaid(s.code || '')
+        else if (ck === 'mermaid') r = await checkMermaid(s.code || '')
         else if (ck === 'html') r = checkHTML(s.code || '')
         else r = { ok: false, msg: 'unknown check kind: ' + ck }
         results.push({ idx, ok: r.ok, msg: r.msg, check: ck })

@@ -1963,16 +1963,11 @@ function checkMermaid(code) {
   const src = String(code || "");
   if (!src.trim())
     return { ok: false, msg: "empty mermaid" };
-  try {
-    const mm = window.mermaid;
-    if (mm && typeof mm.parse === "function") {
-      mm.parse(src);
-      return { ok: true };
-    }
-    return { ok: true };
-  } catch (e) {
-    return { ok: false, msg: e && e.message ? e.message : String(e) };
+  const mm = window.mermaid;
+  if (!mm || typeof mm.parse !== "function") {
+    return { ok: false, msg: "mermaid not loaded" };
   }
+  return mm.parse(src).then(() => ({ ok: true })).catch((e) => ({ ok: false, msg: e && e.message ? e.message : String(e) }));
 }
 async function runE2E(steps) {
   ensureWrappers();
@@ -2008,7 +2003,7 @@ async function runE2E(steps) {
         if (ck === "js")
           r = checkJS(s.code || "");
         else if (ck === "mermaid")
-          r = checkMermaid(s.code || "");
+          r = await checkMermaid(s.code || "");
         else if (ck === "html")
           r = checkHTML(s.code || "");
         else
@@ -2431,14 +2426,14 @@ function handleMessage(e) {
       }
       case "check": {
         try {
-          Promise.resolve().then(() => (init_check(), exports_check)).then((m) => {
+          Promise.resolve().then(() => (init_check(), exports_check)).then(async (m) => {
             const kind = data.kind || data.check || "js";
             const code = data.code || data.html || "";
             let r;
             if (kind === "js")
               r = m.checkJS(code);
             else if (kind === "mermaid")
-              r = m.checkMermaid(code);
+              r = await m.checkMermaid(code);
             else if (kind === "html")
               r = m.checkHTML(code);
             else
@@ -2522,27 +2517,38 @@ function handleMessage(e) {
               m.report({ type: "check", check: "e2e", ok: false, msg: "whiteboard-body not found" });
               return;
             }
+            if (window.mermaid) {
+              try {
+                window.mermaid.initialize({ startOnLoad: false });
+              } catch {}
+            }
             const mermaidBlocks = body2.querySelectorAll('pre code.language-mermaid, pre code[data-language="mermaid"], .mermaid');
             let mermaidIdx = 0;
+            let mermaidOk = true;
             for (const block of mermaidBlocks) {
               const code = block.textContent || block.innerText || "";
               if (code.trim()) {
                 const r = await m.checkMermaid(code);
+                if (!r.ok)
+                  mermaidOk = false;
                 m.report({ type: "check", check: "mermaid", ok: r.ok, msg: r.msg || "", idx: mermaidIdx, url: location.href });
                 mermaidIdx++;
               }
             }
             const scripts = body2.querySelectorAll("script");
             let jsIdx = 0;
+            let jsOk = true;
             for (const script of scripts) {
               const code = script.textContent || "";
               if (code.trim()) {
                 const r = m.checkJS(code);
+                if (!r.ok)
+                  jsOk = false;
                 m.report({ type: "check", check: "js", ok: r.ok, msg: r.msg || "", idx: jsIdx, url: location.href });
                 jsIdx++;
               }
             }
-            m.report({ type: "check", check: "e2e", ok: true, msg: `checked ${mermaidIdx} mermaid, ${jsIdx} js blocks`, url: location.href });
+            m.report({ type: "check", check: "e2e", ok: mermaidOk && jsOk, msg: `checked ${mermaidIdx} mermaid, ${jsIdx} js blocks; mermaid_ok=${mermaidOk}, js_ok=${jsOk}`, url: location.href });
           }).catch(() => {});
         } catch {}
         break;

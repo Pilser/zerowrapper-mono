@@ -123,12 +123,12 @@ function handleMessage(e) {
       case 'check': {
         // Agent real check without creating a file: {type:'check', kind:'js'|'mermaid'|'html', code:'...'}
         try {
-          import('./check.js').then(m => {
+          import('./check.js').then(async m => {
             const kind = data.kind || data.check || 'js'
             const code = data.code || data.html || ''
             let r
             if (kind === 'js') r = m.checkJS(code)
-            else if (kind === 'mermaid') r = m.checkMermaid(code)
+            else if (kind === 'mermaid') r = await m.checkMermaid(code)
             else if (kind === 'html') r = m.checkHTML(code)
             else r = { ok: false, msg: 'unknown kind' }
             m.report({ type:'check', check:kind, ok:r.ok, msg:r.msg||'', url:location.href })
@@ -208,13 +208,19 @@ function handleMessage(e) {
               m.report({type:'check', check:'e2e', ok:false, msg:'whiteboard-body not found'})
               return
             }
+            // Initialize mermaid if available
+            if (window.mermaid) {
+              try { window.mermaid.initialize({startOnLoad: false}) } catch {}
+            }
             // Check all mermaid code blocks in the whiteboard
             const mermaidBlocks = body.querySelectorAll('pre code.language-mermaid, pre code[data-language="mermaid"], .mermaid')
             let mermaidIdx = 0
+            let mermaidOk = true
             for (const block of mermaidBlocks) {
               const code = block.textContent || block.innerText || ''
               if (code.trim()) {
                 const r = await m.checkMermaid(code)
+                if (!r.ok) mermaidOk = false
                 m.report({type:'check', check:'mermaid', ok:r.ok, msg:r.msg||'', idx:mermaidIdx, url:location.href})
                 mermaidIdx++
               }
@@ -222,15 +228,17 @@ function handleMessage(e) {
             // Also check any script tags for JS errors
             const scripts = body.querySelectorAll('script')
             let jsIdx = 0
+            let jsOk = true
             for (const script of scripts) {
               const code = script.textContent || ''
               if (code.trim()) {
                 const r = m.checkJS(code)
+                if (!r.ok) jsOk = false
                 m.report({type:'check', check:'js', ok:r.ok, msg:r.msg||'', idx:jsIdx, url:location.href})
                 jsIdx++
               }
             }
-            m.report({type:'check', check:'e2e', ok:true, msg:`checked ${mermaidIdx} mermaid, ${jsIdx} js blocks`, url:location.href})
+            m.report({type:'check', check:'e2e', ok: mermaidOk && jsOk, msg:`checked ${mermaidIdx} mermaid, ${jsIdx} js blocks; mermaid_ok=${mermaidOk}, js_ok=${jsOk}`, url:location.href})
           }).catch(()=>{})
         } catch {}
         break
