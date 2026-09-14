@@ -9,26 +9,55 @@ import './acorn.js'
 import * as network from './network.js'
 
 // --- Global error wrappers (window.onerror / unhandledrejection / console.error + fetch) ---
+// Per-file error tracking: captures which script/stack frame caused the error
+function extractFileFromError(e) {
+  // Try to get filename from error event
+  if (e.filename) return e.filename
+  // Try stack trace
+  const stack = e.error?.stack || e.reason?.stack || ''
+  const m = stack.match(/at\s+(?:.*?\s+\()?(https?:\/\/[^\s)]+|\/[^\s)]+)/)
+  if (m) return m[1]
+  // Try sourceURL
+  const src = e.target?.src || e.target?.currentSrc || ''
+  if (src) return src
+  return ''
+}
+
 let installed = false
 function ensureWrappers() {
   if (installed) return
   installed = true
   try {
     window.addEventListener('error', (e) => {
-      try { report({ type: 'js_error', check: 'js', ok: false, msg: (e.message || String(e.error || 'error')), url: location.href, ts: Date.now() }) } catch {}
+      try {
+        const file = extractFileFromError(e)
+        report({ type: 'js_error', check: 'js', ok: false, msg: (e.message || String(e.error || 'error')), file, lineno: e.lineno, colno: e.colno, url: location.href, ts: Date.now() })
+      } catch {}
     })
     window.addEventListener('unhandledrejection', (e) => {
-      try { report({ type: 'unhandledrejection', check: 'js', ok: false, msg: String(e.reason || e), url: location.href, ts: Date.now() }) } catch {}
+      try {
+        const file = extractFileFromError(e)
+        report({ type: 'unhandledrejection', check: 'js', ok: false, msg: String(e.reason || e), file, url: location.href, ts: Date.now() })
+      } catch {}
     })
     const orig = console.error
     console.error = function (...args) {
-      try { report({ type: 'console_error', check: 'js', ok: false, msg: args.map(String).join(' '), url: location.href, ts: Date.now() }) } catch {}
+      try {
+        // Try to extract file from stack trace of first Error arg
+        let file = ''
+        for (const a of args) {
+          if (a instanceof Error && a.stack) {
+            const m = a.stack.match(/at\s+(?:.*?\s+\()?(https?:\/\/[^\s)]+|\/[^\s)]+)/)
+            if (m) { file = m[1]; break }
+          }
+        }
+        report({ type: 'console_error', check: 'js', ok: false, msg: args.map(String).join(' '), file, url: location.href, ts: Date.now() })
+      } catch {}
       return orig.apply(console, args)
     }
     const _fetch = window.fetch
     window.fetch = async (...a) => {
       const url = String(a[0] || '')
-      // don't self-report inspect-reports / upload noise
       const isInternal = url.includes('inspect-reports') || url.includes('stream_buffer')
       const r = await _fetch(...a)
       if (!r.ok && !isInternal) {
@@ -106,7 +135,76 @@ export async function checkMermaid(code) {
     .catch(e => ({ ok: false, msg: e && e.message ? e.message : String(e) }))
 }
 
-// steps: [{action:'fill', target:'#id', value:'hello'}, {action:'click', target:'#btn'}, {action:'check', kind:'js', code:'...'}]
+// --- Selector resolution: supports CSS, getByText, getByRole, getByLabel, getByPlaceholder, getByTestId ---
+function resolveSelector(target) {
+  if (!target) return null
+  // getByText("Submit") — find element containing exact text
+  const textMatch = target.match(/^getByText\(["'](.+?)["']\)$/)
+  if (textMatch) {
+    const txt = textMatch[1]
+    for (const el of document.querySelectorAll('*')) {
+      if (el.textContent?.trim() === txt && el.children.length === 0) return el
+    }
+    // fallback: partial match
+    for (const el of document.querySelectorAll('*')) {
+      if (el.textContent?.includes(txt) && el.offsetParent !== null) return el
+    }
+    return null
+  }
+  // getByRole("button", {name:"Add"}) — find by ARIA role + accessible name
+  const roleMatch = target.match(/^getByRole\(["'](\w+)["'](?:,\s*\{name:\s*["'](.+?)["']\})?\)$/)
+  if (roleMatch) {
+    const [, role, name] = roleMatch
+    for (const el of document.querySelectorAll(`[role="${role}"], ${role === 'button' ? 'button' : role === 'textbox' ? 'input,textarea' : role}`)) {
+      if (!name || el.textContent?.includes(name) || el.getAttribute('aria-label')?.includes(name)) return el
+    }
+    return null
+  }
+  // getByLabel("Email") — find input associated with label
+  const labelMatch = target.match(/^getByLabel\(["'](.+?)["']\)$/)
+  if (labelMatch) {
+    const txt = labelMatch[1]
+    for (const label of document.querySelectorAll('label')) {
+      if (label.textContent?.includes(txt)) {
+        if (label.htmlFor) return document.getElementById(label.htmlFor)
+        return label.querySelector('input,textarea,select')
+      }
+    }
+    // fallback: aria-label
+    return document.querySelector(`[aria-label="${txt}"]`)
+  }
+  // getByPlaceholder("Search") — find input with placeholder
+  const phMatch = target.match(/^getByPlaceholder\(["'](.+?)["']\)$/)
+  if (phMatch) return document.querySelector(`[placeholder="${phMatch[1]}"]`)
+  // getByTestId("add-btn") — find data-testid
+  const tidMatch = target.match(/^getByTestId\(["'](.+?)["']\)$/)
+  if (tidMatch) return document.querySelector(`[data-testid="${tidMatch[1]}"]`)
+  // Default: CSS selector
+  try { return document.querySelector(target) } catch { return null }
+}
+
+// Wait for element to appear (with retry)
+async function waitForElement(target, timeoutMs = 3000, intervalMs = 100) {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    const el = resolveSelector(target)
+    if (el) return el
+    await new Promise(r => setTimeout(r, intervalMs))
+  }
+  return null
+}
+
+// Check if element is visible
+function isVisible(el) {
+  if (!el) return false
+  if (el.offsetParent === null && el.style.position !== 'fixed') return false
+  const s = window.getComputedStyle(el)
+  return s.display !== 'none' && s.visibility !== 'hidden' && s.opacity !== '0'
+}
+
+// steps: [{action:'fill', target:'#id', value:'hello'}, {action:'click', target:'getByText("Submit")'}, ...]
+// Supports: CSS selectors, getByText, getByRole, getByLabel, getByPlaceholder, getByTestId
+// Options per step: timeout (wait ms), visible (check visibility), delay (post-step ms)
 export async function runE2E(steps) {
   ensureWrappers()
   if (!Array.isArray(steps)) return { ok: false, msg: 'steps must be array' }
@@ -116,9 +214,12 @@ export async function runE2E(steps) {
     try {
       const target = s.target || s.selector || ''
       const kind = s.kind || s.type || s.action || ''
+      const timeout = Number(s.timeout) || 3000
+
       if (kind === 'fill' || s.action === 'fill') {
-        const el = target ? document.querySelector(target) : null
+        const el = await waitForElement(target, timeout)
         if (!el) throw new Error('fill target not found: ' + target)
+        if (s.visible !== false && !isVisible(el)) throw new Error('fill target not visible: ' + target)
         el.focus && el.focus()
         if ('value' in el) el.value = s.value != null ? String(s.value) : ''
         else el.textContent = s.value != null ? String(s.value) : ''
@@ -126,9 +227,40 @@ export async function runE2E(steps) {
         el.dispatchEvent(new Event('change', { bubbles: true }))
         results.push({ idx, ok: true, target })
       } else if (kind === 'click' || s.action === 'click') {
-        const el = target ? document.querySelector(target) : null
+        const el = await waitForElement(target, timeout)
         if (!el) throw new Error('click target not found: ' + target)
+        if (s.visible !== false && !isVisible(el)) throw new Error('click target not visible: ' + target)
         el.click()
+        results.push({ idx, ok: true, target })
+      } else if (kind === 'hover' || s.action === 'hover') {
+        const el = await waitForElement(target, timeout)
+        if (!el) throw new Error('hover target not found: ' + target)
+        el.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }))
+        el.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }))
+        results.push({ idx, ok: true, target })
+      } else if (kind === 'type' || s.action === 'type') {
+        const el = await waitForElement(target, timeout)
+        if (!el) throw new Error('type target not found: ' + target)
+        el.focus && el.focus()
+        for (const ch of String(s.value || '')) {
+          el.dispatchEvent(new KeyboardEvent('keydown', { key: ch, bubbles: true }))
+          if ('value' in el) el.value += ch
+          el.dispatchEvent(new KeyboardEvent('keypress', { key: ch, bubbles: true }))
+          el.dispatchEvent(new KeyboardEvent('keyup', { key: ch, bubbles: true }))
+          el.dispatchEvent(new Event('input', { bubbles: true }))
+        }
+        results.push({ idx, ok: true, target })
+      } else if (kind === 'press' || s.action === 'press') {
+        const el = await waitForElement(target || ':focus', timeout)
+        const key = s.key || s.value || 'Enter'
+        if (el) el.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }))
+        document.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }))
+        results.push({ idx, ok: true, target: target || ':focus' })
+      } else if (kind === 'select' || s.action === 'select') {
+        const el = await waitForElement(target, timeout)
+        if (!el) throw new Error('select target not found: ' + target)
+        el.value = s.value || ''
+        el.dispatchEvent(new Event('change', { bubbles: true }))
         results.push({ idx, ok: true, target })
       } else if (kind === 'check' || s.check) {
         const ck = s.check || s.kind
@@ -139,18 +271,42 @@ export async function runE2E(steps) {
         else r = { ok: false, msg: 'unknown check kind: ' + ck }
         results.push({ idx, ok: r.ok, msg: r.msg, check: ck })
         report({ type: 'e2e_step', check: ck, ok: r.ok, msg: r.msg || '', step: idx, url: location.href, ts: Date.now() })
+      } else if (kind === 'assert_text' || s.action === 'assert_text') {
+        const el = await waitForElement(target, timeout)
+        if (!el) throw new Error('assert_text target not found: ' + target)
+        const actual = el.textContent?.trim() || ''
+        const expected = s.value || ''
+        const ok = s.exact ? actual === expected : actual.includes(expected)
+        if (!ok) throw new Error(`assert_text failed: expected "${expected}" in "${actual}"`)
+        results.push({ idx, ok: true, target })
+      } else if (kind === 'assert_visible' || s.action === 'assert_visible') {
+        const el = await waitForElement(target, timeout)
+        if (!el) throw new Error('assert_visible target not found: ' + target)
+        if (!isVisible(el)) throw new Error('assert_visible failed: element not visible: ' + target)
+        results.push({ idx, ok: true, target })
+      } else if (kind === 'wait' || s.action === 'wait') {
+        await new Promise(r => setTimeout(r, Number(s.value || s.ms || 500)))
+        results.push({ idx, ok: true })
       } else if (s.code != null) {
         const r = checkJS(s.code)
         results.push({ idx, ok: r.ok, msg: r.msg })
       } else {
-        results.push({ idx, ok: false, msg: 'unknown step' })
+        results.push({ idx, ok: false, msg: 'unknown step: ' + kind })
       }
       if (s.delay) await new Promise(r => setTimeout(r, Number(s.delay) || 0))
       else await new Promise(r => setTimeout(r, 50))
     } catch (e) {
       const msg = e && e.message ? e.message : String(e)
       results.push({ idx, ok: false, msg })
-      report({ type: 'e2e_error', ok: false, msg, step: idx, url: location.href, ts: Date.now() })
+      report({ type: 'e2e_error', ok: false, msg, step: idx, target: s.target, url: location.href, ts: Date.now() })
+      // Screenshot on error if snap available
+      try {
+        const { doSnap } = await import('./check.js').catch(() => ({}))
+        if (typeof doSnap === 'function') {
+          const snap = await doSnap('#whiteboard-body')
+          if (snap && snap.ok) report({ type: 'e2e_error_snap', ok: true, url: snap.url, step: idx, ts: Date.now() })
+        }
+      } catch {}
     }
   }
   const ok = results.every(r => r.ok !== false)

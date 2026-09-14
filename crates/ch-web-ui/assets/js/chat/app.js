@@ -1888,6 +1888,18 @@ __export(exports_check, {
   report: () => report,
   runE2E: () => runE2E
 });
+function extractFileFromError(e) {
+  if (e.filename)
+    return e.filename;
+  const stack = e.error?.stack || e.reason?.stack || "";
+  const m = stack.match(/at\s+(?:.*?\s+\()?(https?:\/\/[^\s)]+|\/[^\s)]+)/);
+  if (m)
+    return m[1];
+  const src = e.target?.src || e.target?.currentSrc || "";
+  if (src)
+    return src;
+  return "";
+}
 function ensureWrappers() {
   if (installed)
     return;
@@ -1895,18 +1907,30 @@ function ensureWrappers() {
   try {
     window.addEventListener("error", (e) => {
       try {
-        report({ type: "js_error", check: "js", ok: false, msg: e.message || String(e.error || "error"), url: location.href, ts: Date.now() });
+        const file = extractFileFromError(e);
+        report({ type: "js_error", check: "js", ok: false, msg: e.message || String(e.error || "error"), file, lineno: e.lineno, colno: e.colno, url: location.href, ts: Date.now() });
       } catch {}
     });
     window.addEventListener("unhandledrejection", (e) => {
       try {
-        report({ type: "unhandledrejection", check: "js", ok: false, msg: String(e.reason || e), url: location.href, ts: Date.now() });
+        const file = extractFileFromError(e);
+        report({ type: "unhandledrejection", check: "js", ok: false, msg: String(e.reason || e), file, url: location.href, ts: Date.now() });
       } catch {}
     });
     const orig = console.error;
     console.error = function(...args) {
       try {
-        report({ type: "console_error", check: "js", ok: false, msg: args.map(String).join(" "), url: location.href, ts: Date.now() });
+        let file = "";
+        for (const a of args) {
+          if (a instanceof Error && a.stack) {
+            const m = a.stack.match(/at\s+(?:.*?\s+\()?(https?:\/\/[^\s)]+|\/[^\s)]+)/);
+            if (m) {
+              file = m[1];
+              break;
+            }
+          }
+        }
+        report({ type: "console_error", check: "js", ok: false, msg: args.map(String).join(" "), file, url: location.href, ts: Date.now() });
       } catch {}
       return orig.apply(console, args);
     };
@@ -1981,6 +2005,73 @@ async function checkMermaid(code) {
   }
   return mm.parse(src).then(() => ({ ok: true })).catch((e) => ({ ok: false, msg: e && e.message ? e.message : String(e) }));
 }
+function resolveSelector(target2) {
+  if (!target2)
+    return null;
+  const textMatch = target2.match(/^getByText\(["'](.+?)["']\)$/);
+  if (textMatch) {
+    const txt = textMatch[1];
+    for (const el2 of document.querySelectorAll("*")) {
+      if (el2.textContent?.trim() === txt && el2.children.length === 0)
+        return el2;
+    }
+    for (const el2 of document.querySelectorAll("*")) {
+      if (el2.textContent?.includes(txt) && el2.offsetParent !== null)
+        return el2;
+    }
+    return null;
+  }
+  const roleMatch = target2.match(/^getByRole\(["'](\w+)["'](?:,\s*\{name:\s*["'](.+?)["']\})?\)$/);
+  if (roleMatch) {
+    const [, role, name] = roleMatch;
+    for (const el2 of document.querySelectorAll(`[role="${role}"], ${role === "button" ? "button" : role === "textbox" ? "input,textarea" : role}`)) {
+      if (!name || el2.textContent?.includes(name) || el2.getAttribute("aria-label")?.includes(name))
+        return el2;
+    }
+    return null;
+  }
+  const labelMatch = target2.match(/^getByLabel\(["'](.+?)["']\)$/);
+  if (labelMatch) {
+    const txt = labelMatch[1];
+    for (const label of document.querySelectorAll("label")) {
+      if (label.textContent?.includes(txt)) {
+        if (label.htmlFor)
+          return document.getElementById(label.htmlFor);
+        return label.querySelector("input,textarea,select");
+      }
+    }
+    return document.querySelector(`[aria-label="${txt}"]`);
+  }
+  const phMatch = target2.match(/^getByPlaceholder\(["'](.+?)["']\)$/);
+  if (phMatch)
+    return document.querySelector(`[placeholder="${phMatch[1]}"]`);
+  const tidMatch = target2.match(/^getByTestId\(["'](.+?)["']\)$/);
+  if (tidMatch)
+    return document.querySelector(`[data-testid="${tidMatch[1]}"]`);
+  try {
+    return document.querySelector(target2);
+  } catch {
+    return null;
+  }
+}
+async function waitForElement(target2, timeoutMs = 3000, intervalMs = 100) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const el2 = resolveSelector(target2);
+    if (el2)
+      return el2;
+    await new Promise((r) => setTimeout(r, intervalMs));
+  }
+  return null;
+}
+function isVisible(el2) {
+  if (!el2)
+    return false;
+  if (el2.offsetParent === null && el2.style.position !== "fixed")
+    return false;
+  const s = window.getComputedStyle(el2);
+  return s.display !== "none" && s.visibility !== "hidden" && s.opacity !== "0";
+}
 async function runE2E(steps) {
   ensureWrappers();
   if (!Array.isArray(steps))
@@ -1991,10 +2082,13 @@ async function runE2E(steps) {
     try {
       const target2 = s.target || s.selector || "";
       const kind = s.kind || s.type || s.action || "";
+      const timeout = Number(s.timeout) || 3000;
       if (kind === "fill" || s.action === "fill") {
-        const el2 = target2 ? document.querySelector(target2) : null;
+        const el2 = await waitForElement(target2, timeout);
         if (!el2)
           throw new Error("fill target not found: " + target2);
+        if (s.visible !== false && !isVisible(el2))
+          throw new Error("fill target not visible: " + target2);
         el2.focus && el2.focus();
         if ("value" in el2)
           el2.value = s.value != null ? String(s.value) : "";
@@ -2004,10 +2098,47 @@ async function runE2E(steps) {
         el2.dispatchEvent(new Event("change", { bubbles: true }));
         results.push({ idx, ok: true, target: target2 });
       } else if (kind === "click" || s.action === "click") {
-        const el2 = target2 ? document.querySelector(target2) : null;
+        const el2 = await waitForElement(target2, timeout);
         if (!el2)
           throw new Error("click target not found: " + target2);
+        if (s.visible !== false && !isVisible(el2))
+          throw new Error("click target not visible: " + target2);
         el2.click();
+        results.push({ idx, ok: true, target: target2 });
+      } else if (kind === "hover" || s.action === "hover") {
+        const el2 = await waitForElement(target2, timeout);
+        if (!el2)
+          throw new Error("hover target not found: " + target2);
+        el2.dispatchEvent(new MouseEvent("mouseenter", { bubbles: true }));
+        el2.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
+        results.push({ idx, ok: true, target: target2 });
+      } else if (kind === "type" || s.action === "type") {
+        const el2 = await waitForElement(target2, timeout);
+        if (!el2)
+          throw new Error("type target not found: " + target2);
+        el2.focus && el2.focus();
+        for (const ch of String(s.value || "")) {
+          el2.dispatchEvent(new KeyboardEvent("keydown", { key: ch, bubbles: true }));
+          if ("value" in el2)
+            el2.value += ch;
+          el2.dispatchEvent(new KeyboardEvent("keypress", { key: ch, bubbles: true }));
+          el2.dispatchEvent(new KeyboardEvent("keyup", { key: ch, bubbles: true }));
+          el2.dispatchEvent(new Event("input", { bubbles: true }));
+        }
+        results.push({ idx, ok: true, target: target2 });
+      } else if (kind === "press" || s.action === "press") {
+        const el2 = await waitForElement(target2 || ":focus", timeout);
+        const key = s.key || s.value || "Enter";
+        if (el2)
+          el2.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true }));
+        document.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true }));
+        results.push({ idx, ok: true, target: target2 || ":focus" });
+      } else if (kind === "select" || s.action === "select") {
+        const el2 = await waitForElement(target2, timeout);
+        if (!el2)
+          throw new Error("select target not found: " + target2);
+        el2.value = s.value || "";
+        el2.dispatchEvent(new Event("change", { bubbles: true }));
         results.push({ idx, ok: true, target: target2 });
       } else if (kind === "check" || s.check) {
         const ck = s.check || s.kind;
@@ -2022,11 +2153,31 @@ async function runE2E(steps) {
           r = { ok: false, msg: "unknown check kind: " + ck };
         results.push({ idx, ok: r.ok, msg: r.msg, check: ck });
         report({ type: "e2e_step", check: ck, ok: r.ok, msg: r.msg || "", step: idx, url: location.href, ts: Date.now() });
+      } else if (kind === "assert_text" || s.action === "assert_text") {
+        const el2 = await waitForElement(target2, timeout);
+        if (!el2)
+          throw new Error("assert_text target not found: " + target2);
+        const actual = el2.textContent?.trim() || "";
+        const expected = s.value || "";
+        const ok2 = s.exact ? actual === expected : actual.includes(expected);
+        if (!ok2)
+          throw new Error(`assert_text failed: expected "${expected}" in "${actual}"`);
+        results.push({ idx, ok: true, target: target2 });
+      } else if (kind === "assert_visible" || s.action === "assert_visible") {
+        const el2 = await waitForElement(target2, timeout);
+        if (!el2)
+          throw new Error("assert_visible target not found: " + target2);
+        if (!isVisible(el2))
+          throw new Error("assert_visible failed: element not visible: " + target2);
+        results.push({ idx, ok: true, target: target2 });
+      } else if (kind === "wait" || s.action === "wait") {
+        await new Promise((r) => setTimeout(r, Number(s.value || s.ms || 500)));
+        results.push({ idx, ok: true });
       } else if (s.code != null) {
         const r = checkJS(s.code);
         results.push({ idx, ok: r.ok, msg: r.msg });
       } else {
-        results.push({ idx, ok: false, msg: "unknown step" });
+        results.push({ idx, ok: false, msg: "unknown step: " + kind });
       }
       if (s.delay)
         await new Promise((r) => setTimeout(r, Number(s.delay) || 0));
@@ -2035,7 +2186,15 @@ async function runE2E(steps) {
     } catch (e) {
       const msg = e && e.message ? e.message : String(e);
       results.push({ idx, ok: false, msg });
-      report({ type: "e2e_error", ok: false, msg, step: idx, url: location.href, ts: Date.now() });
+      report({ type: "e2e_error", ok: false, msg, step: idx, target: s.target, url: location.href, ts: Date.now() });
+      try {
+        const { doSnap } = await Promise.resolve().then(() => (init_check(), exports_check)).catch(() => ({}));
+        if (typeof doSnap === "function") {
+          const snap = await doSnap("#whiteboard-body");
+          if (snap && snap.ok)
+            report({ type: "e2e_error_snap", ok: true, url: snap.url, step: idx, ts: Date.now() });
+        }
+      } catch {}
     }
   }
   const ok = results.every((r) => r.ok !== false);
