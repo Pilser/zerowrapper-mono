@@ -49,7 +49,7 @@ pub async fn render_snapshot(ctx: &AppContext, cx: &Cx, slug: &str, base_href: &
     // tenant/embed prefix alike.
     let css_url = format!("?asset={}", bundled_asset(cx, STYLESHEET).name());
     let wb_js_url = format!("?asset={}", bundled_asset(cx, PUBLIC_WB_JS).name());
-    let mermaid_url = format!("?asset={}", bundled_asset(cx, MERMAID_JS).name());
+    let mermaid_url = format!("/_topcoat/assets/{}", bundled_asset(cx, MERMAID_JS).name());
 
     let pins = serde_json::from_str::<serde_json::Value>(&snap.pins)
         .unwrap_or_else(|_| serde_json::json!([]));

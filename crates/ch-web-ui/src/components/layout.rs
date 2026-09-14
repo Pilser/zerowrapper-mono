@@ -19,7 +19,7 @@ pub async fn root_layout(cx: &Cx, slot: Result) -> Result {
     // instead of the host root (served by the RootDispatchLayer via ?asset=).
     let css_url = format!("?asset={}", bundled_asset(cx, STYLESHEET).name());
     let app_js_url = format!("?asset={}", bundled_asset(cx, asset!("assets/js/chat/app.js")).name());
-    let mermaid_url = format!("?asset={}", bundled_asset(cx, MERMAID_JS).name());
+    let mermaid_url = format!("/_topcoat/assets/{}", bundled_asset(cx, MERMAID_JS).name());
 
     // Base href = the directory of the request path, so relative URLs resolve
     // correctly whether the page is served at `/` or under a tenant prefix.
