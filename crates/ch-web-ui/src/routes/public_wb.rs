@@ -94,7 +94,7 @@ pub async fn render_snapshot(ctx: &AppContext, cx: &Cx, slug: &str, base_href: &
                         });
                     }
                 })();"#)) }</script>
-                <script type="importmap">{ (Unescaped::new_unchecked(format!(r#"{{"imports":{{"marked":"{}","highlight.js":"{}","katex":"{}","mermaid":"{}}}}}"#, marked_url, highlight_url, katex_url, mermaid_url))) }</script>
+                <script type="importmap">{ (Unescaped::new_unchecked(format!(r#"{{"imports":{{"marked":"{}","highlight.js":"{}","katex":"{}","mermaid":"{}"}}}}"#, marked_url, highlight_url, katex_url, mermaid_url))) }</script>
                 <script type="module">{ (Unescaped::new_unchecked(format!(r#"import m from "{}"; window.mermaid = m.default || m; if (window.mermaid.initialize) {{ try {{ window.mermaid.initialize({{startOnLoad:false}}) }} catch(e) {{}} }}"#, mermaid_url))) }</script>
             </head>
             <body class="flex flex-col min-h-screen" style="font-family: var(--font-sans); color: var(--color-text); background: var(--color-bg);">
