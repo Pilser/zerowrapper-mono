@@ -1970,7 +1970,14 @@ async function ensureMermaid() {
     return window.mermaid;
   }
   try {
-    const mod = await import("mermaid");
+    const importmap = JSON.parse(document.querySelector('script[type="importmap"]')?.textContent || "{}");
+    const mermaidPath = importmap?.imports?.mermaid;
+    let mod;
+    if (mermaidPath) {
+      mod = await import(mermaidPath);
+    } else {
+      mod = await import("mermaid");
+    }
     window.mermaid = mod.default || mod;
     if (typeof window.mermaid.initialize === "function") {
       try {

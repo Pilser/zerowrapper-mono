@@ -81,7 +81,9 @@ async function ensureMermaid() {
   if (window.mermaid && typeof window.mermaid.parse === 'function') {
     return window.mermaid
   }
-  // Dynamically import mermaid from local bundled asset
+  // Try multiple strategies to load mermaid
+  const errors = []
+  // Strategy 1: Use importmap specifier
   try {
     const mod = await import('mermaid')
     window.mermaid = mod.default || mod
@@ -89,9 +91,32 @@ async function ensureMermaid() {
       try { window.mermaid.initialize({ startOnLoad: false }) } catch {}
     }
     return window.mermaid
-  } catch (e) {
-    return null
+  } catch (e) { errors.push('importmap: ' + e.message) }
+  // Strategy 2: Use full path from importmap
+  try {
+    const importmap = JSON.parse(document.querySelector('script[type="importmap"]')?.textContent || '{}')
+    const mermaidPath = importmap?.imports?.mermaid
+    if (mermaidPath) {
+      const mod = await import(mermaidPath)
+      window.mermaid = mod.default || mod
+      if (typeof window.mermaid.initialize === 'function') {
+        try { window.mermaid.initialize({ startOnLoad: false }) } catch {}
+      }
+      return window.mermaid
+    }
+  } catch (e) { errors.push('fullpath: ' + e.message) }
+  // Strategy 3: Globally known paths
+  for (const path of ['/_topcoat/assets/mermaid.js', '/assets/mermaid.js']) {
+    try {
+      const mod = await import(path)
+      window.mermaid = mod.default || mod
+      if (typeof window.mermaid.initialize === 'function') {
+        try { window.mermaid.initialize({ startOnLoad: false }) } catch {}
+      }
+      return window.mermaid
+    } catch (e) { errors.push(path + ': ' + e.message) }
   }
+  return null
 }
 
 export async function checkMermaid(code) {
