@@ -17,6 +17,7 @@ members = [
     "zw-recipe",
     "crates/mcp-web-files-render",
     "crates/ch-web-ui",
+    "crates/zw-agent-embed",
 ]
 
 [dependencies]
