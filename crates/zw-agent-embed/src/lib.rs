@@ -84,13 +84,15 @@ pub async fn run_embedded(
     let (agent_tx, mut agent_rx) = mpsc::channel::<AgentEvent>(512);
     let done_seen = Arc::new(AtomicBool::new(false));
     let done_flag = done_seen.clone();
+    // Clone: the original stays with us for the synthesized closing event.
+    let tx_forward = event_tx.clone();
     let forward = tokio::spawn(async move {
         while let Some(ev) = agent_rx.recv().await {
             if matches!(ev, AgentEvent::Done { .. }) {
                 done_flag.store(true, Ordering::Relaxed);
             }
             if let Some(se) = map_event(ev) {
-                if event_tx.send(se).await.is_err() {
+                if tx_forward.send(se).await.is_err() {
                     break;
                 }
             }
