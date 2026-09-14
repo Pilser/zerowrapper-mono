@@ -4,9 +4,10 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-# Pull zerostack straight from GitHub – CI will `git clone` it automatically.
+# Pilser fork (adds src/lib.rs so the headless Engine is embeddable).
+# CI fetches it from this URL — no local path dependency.
 #   • `features = ["acp"]`  → keep the ACP protocol you asked for
 #   • `default-features = false` → drop the default TUI/CLI/loop extras
-zerostack = { git = "https://github.com/gi-dellav/zerostack.git",
+zerostack = { git = "https://github.com/Pilser/zerostack.git",
               features = ["acp"],
               default-features = false }

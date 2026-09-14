@@ -1,11 +1,8 @@
-/// Stub for the future `zerostack` ACP integration.
+/// In-process `zerostack` engine (Pilser fork, which adds a `lib` target).
 ///
-// NOTE: `zerostack` is a binary-only crate (no `src/lib.rs`), so it cannot be
-// `use`d as a library — cargo reports "ignoring invalid dependency ... missing
-// a lib target" and any `pub use ::zerostack::...` fails with E0433.
-// The git dependency in Cargo.toml is kept so CI still fetches and pins the
-// repo; actual integration will drive the `zerostack` binary via ACP over
-// stdio (subprocess), or via a fork that adds a `lib` target.
-pub fn backend() -> &'static str {
-    "zerostack-acp-subprocess"
+/// Entry point for direct prompt injection is
+/// [`engine::Engine::run_string`]: pass the user text, get a `RunOutput`
+/// back — no socket, no subprocess, no ACP hop needed for the embedded mode.
+pub mod engine {
+    pub use ::zerostack::engine::*;
 }
