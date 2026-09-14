@@ -66,6 +66,9 @@ node_modules/
 *.pdf
 *.zip
 
+# local reference clones (rig, zerostack) — never track
+agent-reference/
+
 # OS / editor
 .DS_Store
 *.swp
