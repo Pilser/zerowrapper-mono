@@ -14,7 +14,7 @@ var __export = (target, all) => {
 };
 var __esm = (fn, res) => () => (fn && (res = fn(fn = 0)), res);
 
-// crates/ch-web-ui/assets/js/chat/network.js
+// network.js
 var exports_network = {};
 __export(exports_network, {
   State: () => State,
@@ -134,7 +134,7 @@ var init_network = __esm(() => {
   });
 });
 
-// crates/ch-web-ui/assets/js/chat/dom.js
+// dom.js
 var exports_dom = {};
 __export(exports_dom, {
   els: () => els,
@@ -170,7 +170,7 @@ var init_dom = __esm(() => {
   els = {};
 });
 
-// crates/ch-web-ui/assets/js/chat/constants.js
+// constants.js
 function escapeHtml(str) {
   if (!str)
     return "";
@@ -178,7 +178,7 @@ function escapeHtml(str) {
 }
 var USER_AVATAR = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>', BOT_AVATAR = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
 
-// crates/ch-web-ui/assets/js/chat/mermaid-modal.js
+// mermaid-modal.js
 function clamp(v, lo, hi) {
   return Math.max(lo, Math.min(hi, v));
 }
@@ -308,7 +308,7 @@ var init_mermaid_modal = __esm(() => {
   pointers = new Map;
 });
 
-// crates/ch-web-ui/assets/js/chat/markdown.js
+// markdown.js
 import hljs from "highlight.js";
 import { marked } from "marked";
 import katex from "katex";
@@ -854,7 +854,7 @@ var init_markdown = __esm(() => {
   });
 });
 
-// crates/ch-web-ui/assets/js/chat/scroll.js
+// scroll.js
 function container() {
   return els.messages || document.getElementById("chat-messages");
 }
@@ -883,7 +883,7 @@ var init_scroll = __esm(() => {
   init_dom();
 });
 
-// crates/ch-web-ui/assets/js/chat/activity.js
+// activity.js
 function target() {
   return els.messages || document.getElementById("chat-messages");
 }
@@ -1083,7 +1083,7 @@ var init_activity = __esm(() => {
   pending = [];
 });
 
-// crates/ch-web-ui/assets/js/chat/streaming.js
+// streaming.js
 import { marked as marked2 } from "marked";
 function setOnFinalize(cb) {
   onFinalize = cb;
@@ -1221,7 +1221,7 @@ var init_streaming = __esm(() => {
   init_activity();
 });
 
-// crates/ch-web-ui/assets/js/chat/messages.js
+// messages.js
 var exports_messages = {};
 __export(exports_messages, {
   abortHistoryFetch: () => abortHistoryFetch,
@@ -1365,7 +1365,7 @@ var init_messages = __esm(() => {
   init_scroll();
 });
 
-// crates/ch-web-ui/assets/js/chat/whiteboard-render.js
+// whiteboard-render.js
 import { marked as marked4 } from "marked";
 function humanSize(bytes) {
   if (bytes === undefined || bytes === null)
@@ -1459,7 +1459,7 @@ var init_whiteboard_render = __esm(() => {
   init_markdown();
 });
 
-// crates/ch-web-ui/assets/js/chat/whiteboard.js
+// whiteboard.js
 var exports_whiteboard = {};
 __export(exports_whiteboard, {
   init: () => init2,
@@ -1790,7 +1790,7 @@ var init_whiteboard = __esm(() => {
   init_whiteboard_render();
 });
 
-// crates/ch-web-ui/assets/js/chat/html2canvas.js
+// html2canvas.js
 async function html2canvas(element, options = {}) {
   const scale2 = options.scale || 1;
   if (!element)
@@ -1857,7 +1857,7 @@ async function html2canvas(element, options = {}) {
 }
 var init_html2canvas = () => {};
 
-// crates/ch-web-ui/assets/js/chat/acorn.js
+// acorn.js
 var acorn;
 var init_acorn = __esm(() => {
   try {
@@ -1878,7 +1878,7 @@ var init_acorn = __esm(() => {
   acorn = typeof window !== "undefined" && window.acorn ? window.acorn : null;
 });
 
-// crates/ch-web-ui/assets/js/chat/check.js
+// check.js
 var exports_check = {};
 __export(exports_check, {
   checkHTML: () => checkHTML,
@@ -2130,7 +2130,7 @@ var init_check = __esm(() => {
   } catch {}
 });
 
-// crates/ch-web-ui/assets/js/chat/file-upload.js
+// file-upload.js
 var exports_file_upload = {};
 __export(exports_file_upload, {
   createAttachmentChip: () => createAttachmentChip,
@@ -2183,12 +2183,12 @@ var init_file_upload = __esm(() => {
   };
 });
 
-// crates/ch-web-ui/assets/js/chat/main.js
+// main.js
 init_network();
 init_dom();
 init_dom();
 
-// crates/ch-web-ui/assets/js/chat/auth.js
+// auth.js
 init_dom();
 var STORAGE_SESSION = "zerowrapper_session";
 var state2 = {
@@ -2279,13 +2279,13 @@ function showBadge() {
     els.userBadge.classList.add("hidden");
 }
 
-// crates/ch-web-ui/assets/js/chat/connection.js
+// connection.js
 init_network();
 init_dom();
 init_messages();
 init_streaming();
 
-// crates/ch-web-ui/assets/js/chat/tool-calls.js
+// tool-calls.js
 init_activity();
 function handleToolCall(id, name, args, container2) {
   pushToolCall(id, name, args);
@@ -2297,7 +2297,7 @@ function clearPending() {
   resetTurn();
 }
 
-// crates/ch-web-ui/assets/js/chat/connection.js
+// connection.js
 init_whiteboard();
 var onStateChange = null;
 function setHint(state3) {
@@ -2456,6 +2456,97 @@ function handleMessage(e) {
         } catch {}
         break;
       }
+      case "whiteboard_open": {
+        try {
+          const targetPage = data.page || 1;
+          const label = document.getElementById("wb-page-label");
+          let currentPage2 = 1;
+          if (label) {
+            const m = label.textContent?.match(/Page\s+(\d+)/);
+            if (m)
+              currentPage2 = parseInt(m[1], 10) || 1;
+          }
+          const diff = targetPage - currentPage2;
+          const nextBtn = document.getElementById("wb-next");
+          const prevBtn = document.getElementById("wb-prev");
+          for (let i = 0;i < Math.abs(diff); i++) {
+            if (diff > 0 && nextBtn)
+              nextBtn.click();
+            else if (diff < 0 && prevBtn)
+              prevBtn.click();
+          }
+        } catch {}
+        break;
+      }
+      case "whiteboard_next": {
+        try {
+          const btn = document.getElementById("wb-next");
+          if (btn)
+            btn.click();
+        } catch {}
+        break;
+      }
+      case "whiteboard_prev": {
+        try {
+          const btn = document.getElementById("wb-prev");
+          if (btn)
+            btn.click();
+        } catch {}
+        break;
+      }
+      case "whiteboard_expand": {
+        try {
+          const panel2 = document.getElementById("whiteboard-panel");
+          if (panel2) {
+            panel2.classList.remove("wb-closed");
+            panel2.classList.add("wb-open");
+          }
+        } catch {}
+        break;
+      }
+      case "whiteboard_close_panel": {
+        try {
+          const panel2 = document.getElementById("whiteboard-panel");
+          if (panel2) {
+            panel2.classList.remove("wb-open");
+            panel2.classList.add("wb-closed");
+          }
+        } catch {}
+        break;
+      }
+      case "whiteboard_check": {
+        try {
+          Promise.resolve().then(() => (init_check(), exports_check)).then(async (m) => {
+            const body2 = document.getElementById("whiteboard-body");
+            if (!body2) {
+              m.report({ type: "check", check: "e2e", ok: false, msg: "whiteboard-body not found" });
+              return;
+            }
+            const mermaidBlocks = body2.querySelectorAll('pre code.language-mermaid, pre code[data-language="mermaid"], .mermaid');
+            let mermaidIdx = 0;
+            for (const block of mermaidBlocks) {
+              const code = block.textContent || block.innerText || "";
+              if (code.trim()) {
+                const r = await m.checkMermaid(code);
+                m.report({ type: "check", check: "mermaid", ok: r.ok, msg: r.msg || "", idx: mermaidIdx, url: location.href });
+                mermaidIdx++;
+              }
+            }
+            const scripts = body2.querySelectorAll("script");
+            let jsIdx = 0;
+            for (const script of scripts) {
+              const code = script.textContent || "";
+              if (code.trim()) {
+                const r = m.checkJS(code);
+                m.report({ type: "check", check: "js", ok: r.ok, msg: r.msg || "", idx: jsIdx, url: location.href });
+                jsIdx++;
+              }
+            }
+            m.report({ type: "check", check: "e2e", ok: true, msg: `checked ${mermaidIdx} mermaid, ${jsIdx} js blocks`, url: location.href });
+          }).catch(() => {});
+        } catch {}
+        break;
+      }
       case "webscreenshot_result":
       case "check_result":
         break;
@@ -2517,11 +2608,11 @@ function sendCancel2() {
   sendCancel(state2.sessionId);
 }
 
-// crates/ch-web-ui/assets/js/chat/main.js
+// main.js
 init_streaming();
 init_messages();
 
-// crates/ch-web-ui/assets/js/chat/lightbox.js
+// lightbox.js
 var lightbox = null;
 var loadingEl = null;
 var images = [];
@@ -2642,7 +2733,7 @@ function init3(messagesEl) {
   });
 }
 
-// crates/ch-web-ui/assets/js/chat/main.js
+// main.js
 init_file_upload();
 function logPendingResources() {
   const entries = performance.getEntriesByType("resource");
@@ -2804,11 +2895,11 @@ function autoGrow() {
   els.input.style.height = Math.min(els.input.scrollHeight, 300) + "px";
 }
 
-// crates/ch-web-ui/assets/js/chat/app-entry.js
+// app-entry.js
 init_whiteboard();
 init_check();
 
-// crates/ch-web-ui/assets/js/chat/snap.js
+// snap.js
 init_check();
 init_network();
 var SNAP_ID = "snap";
@@ -3018,7 +3109,7 @@ function initSnap() {
   } catch {}
 }
 
-// crates/ch-web-ui/assets/js/chat/app-entry.js
+// app-entry.js
 init4();
 init2();
 initSnap();

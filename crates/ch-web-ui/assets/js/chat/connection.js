@@ -148,11 +148,20 @@ function handleMessage(e) {
       case 'whiteboard_open': {
         // Open whiteboard to a page: {type:'whiteboard_open', page:3}
         try {
-          const page = data.page || 1
-          import('./whiteboard.js').then(wb => {
-            if (wb.openPage) wb.openPage(page)
-            else if (wb.open) wb.open(page)
-          }).catch(()=>{})
+          const targetPage = data.page || 1
+          const label = document.getElementById('wb-page-label')
+          let currentPage = 1
+          if (label) {
+            const m = label.textContent?.match(/Page\s+(\d+)/)
+            if (m) currentPage = parseInt(m[1], 10) || 1
+          }
+          const diff = targetPage - currentPage
+          const nextBtn = document.getElementById('wb-next')
+          const prevBtn = document.getElementById('wb-prev')
+          for (let i = 0; i < Math.abs(diff); i++) {
+            if (diff > 0 && nextBtn) nextBtn.click()
+            else if (diff < 0 && prevBtn) prevBtn.click()
+          }
         } catch {}
         break
       }
