@@ -14,6 +14,48 @@ use std::sync::LazyLock;
 static MEM_BUFFER: LazyLock<tokio::sync::Mutex<HashMap<String, Vec<serde_json::Value>>>> =
     LazyLock::new(|| tokio::sync::Mutex::new(HashMap::new()));
 
+// Embedded engines, one per chat session. The lock is only held to take or
+// return an engine — never across a turn — so sessions never block each other.
+// The daemon path is untouched; `ZEROWRAPPER_ENGINE=embedded` selects this.
+static ENGINES: LazyLock<
+    tokio::sync::Mutex<HashMap<String, zw_agent_embed::engine::Engine>>,
+> = LazyLock::new(|| tokio::sync::Mutex::new(HashMap::new()));
+
+/// Drive one prompt through the in-process zerostack engine, emitting the
+/// same typed `StreamEvent`s as the daemon path (buffer/resume unchanged).
+async fn run_embedded_turn(
+    session_id: String,
+    prompt: String,
+    event_tx: mpsc::Sender<StreamEvent>,
+) {
+    let engine = {
+        let mut engines = ENGINES.lock().await;
+        if let Some(e) = engines.remove(&session_id) {
+            Some(e)
+        } else {
+            match zw_agent_embed::new_engine(&format!("zw-{session_id}")) {
+                Ok(e) => Some(e),
+                Err(err) => {
+                    let _ = event_tx
+                        .send(StreamEvent::Error {
+                            message: format!("embedded engine init failed: {err:#}"),
+                        })
+                        .await;
+                    None
+                }
+            }
+        }
+    };
+    let Some(mut engine) = engine else { return };
+    if zw_agent_embed::run_embedded(&mut engine, &prompt, event_tx.clone())
+        .await
+        .is_err()
+    {
+        // `run_embedded` already sent the closing `Error`; nothing to add.
+    }
+    ENGINES.lock().await.insert(session_id, engine);
+}
+
 async fn mem_append(session_id: &str, event: serde_json::Value, seq: i64) {
     let mut buf = MEM_BUFFER.lock().await;
     let v = buf.entry(session_id.to_string()).or_default();
@@ -375,9 +417,17 @@ pub async fn handle_ws_connection(
             }
         });
 
-        tokio::spawn(async move {
-            let _ = registry.route_incoming_stream(msg, event_tx).await;
-        });
+        if std::env::var("ZEROWRAPPER_ENGINE").as_deref() == Ok("embedded") {
+            let prompt = msg.content.clone();
+            let sid = msg.session_id.clone();
+            tokio::spawn(async move {
+                run_embedded_turn(sid, prompt, event_tx).await;
+            });
+        } else {
+            tokio::spawn(async move {
+                let _ = registry.route_incoming_stream(msg, event_tx).await;
+            });
+        }
     }
 
     let mut sender = ws_sender.lock().await;

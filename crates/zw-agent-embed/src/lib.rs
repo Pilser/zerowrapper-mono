@@ -1,8 +1,169 @@
-/// In-process `zerostack` engine (Pilser fork, which adds a `lib` target).
-///
-/// Entry point for direct prompt injection is
-/// [`engine::Engine::run_string`]: pass the user text, get a `RunOutput`
-/// back — no socket, no subprocess, no ACP hop needed for the embedded mode.
+//! In-process zerostack engine for zerowrapper ("embedded" backend).
+//!
+//! Structured stream, end to end: every [`AgentEvent`] maps 1:1 to a typed
+//! [`StreamEvent`] — no text scraping, no regex. Call pairing is by typed
+//! `call_id`, never by "most recent call". The existing ws buffer task
+//! (`buffer_event` + `stream_buffer` resume) consumes these unchanged.
+
 pub mod engine {
     pub use ::zerostack::engine::*;
+}
+
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+};
+
+use tokio::sync::mpsc;
+use zerostack::engine::{Engine, RunOutput};
+use zerostack::event::AgentEvent;
+use zw_core::StreamEvent;
+
+/// Map one engine event to the wire event.
+///
+/// `CompletionCall` carries only usage accounting (already folded into
+/// `RunOutput::usage`) → `None`.
+pub fn map_event(ev: AgentEvent) -> Option<StreamEvent> {
+    match ev {
+        AgentEvent::Token(t) => Some(StreamEvent::Chunk {
+            content: t.to_string(),
+        }),
+        AgentEvent::Reasoning(t) => Some(StreamEvent::Thinking {
+            content: t.to_string(),
+        }),
+        AgentEvent::ToolCall {
+            call_id,
+            name,
+            args,
+        } => Some(StreamEvent::ToolCall {
+            tool_call_id: call_id.to_string(),
+            name: name.to_string(),
+            args,
+        }),
+        AgentEvent::ToolResult {
+            call_id,
+            name,
+            output,
+        } => Some(StreamEvent::ToolResult {
+            tool_call_id: call_id.to_string(),
+            name: name.to_string(),
+            output: output.to_string(),
+        }),
+        // Present because we build with `acp`; nested under no parent on the
+        // wire — the name carries the origin.
+        AgentEvent::SubagentToolCall { name, args } => Some(StreamEvent::ToolCall {
+            tool_call_id: format!("subagent:{}", name),
+            name: name.to_string(),
+            args,
+        }),
+        // Engine cleared its response buffer (e.g. retrying) → same for us.
+        AgentEvent::Retrying { .. } => Some(StreamEvent::ChunkReset),
+        AgentEvent::CompletionCall { .. } => None,
+        AgentEvent::Done { response, .. } => Some(StreamEvent::Done {
+            content: response.to_string(),
+        }),
+        AgentEvent::Error(e) => Some(StreamEvent::Error {
+            message: e.to_string(),
+        }),
+    }
+}
+
+/// Run one prompt on `engine`, forwarding the live structured stream into the
+/// same `event_tx` the ws buffer task already drains (resume/seq unchanged).
+///
+/// Terminal-event guarantee: exactly one closing event per turn. The tap
+/// forwards `Done` on the happy path; if the engine caught the failure
+/// internally (`Error` forwarded, transcript returned as `Ok`) or
+/// `run_streaming` itself failed, a closing `Done`/`Error` is synthesized
+/// here so the frontend always finalizes.
+pub async fn run_embedded(
+    engine: &mut Engine,
+    prompt: &str,
+    event_tx: mpsc::Sender<StreamEvent>,
+) -> anyhow::Result<RunOutput> {
+    let (agent_tx, mut agent_rx) = mpsc::channel::<AgentEvent>(512);
+    let done_seen = Arc::new(AtomicBool::new(false));
+    let done_flag = done_seen.clone();
+    let forward = tokio::spawn(async move {
+        while let Some(ev) = agent_rx.recv().await {
+            if matches!(ev, AgentEvent::Done { .. }) {
+                done_flag.store(true, Ordering::Relaxed);
+            }
+            if let Some(se) = map_event(ev) {
+                if event_tx.send(se).await.is_err() {
+                    break;
+                }
+            }
+        }
+    });
+
+    let out = engine.run_streaming(prompt, agent_tx).await;
+    // `agent_tx` moved into `run_streaming` and drops on return → the
+    // forward task drains the remainder and ends.
+    let _ = forward.await;
+
+    match &out {
+        Ok(o) => {
+            if let Some(u) = &o.usage {
+                tracing::info!(
+                    kind = ?o.kind,
+                    input_tokens = u.input_tokens,
+                    output_tokens = u.output_tokens,
+                    "embedded turn complete"
+                );
+            }
+            if !done_seen.load(Ordering::Relaxed) {
+                // Engine-resolved turn (slash command, rolled-back error
+                // transcript, …): close it explicitly so the UI finalizes.
+                let _ = event_tx
+                    .send(StreamEvent::Done {
+                        content: o.text.clone(),
+                    })
+                    .await;
+            }
+        }
+        Err(e) => {
+            let _ = event_tx
+                .send(StreamEvent::Error {
+                    message: format!("{e:#}"),
+                })
+                .await;
+        }
+    }
+    out
+}
+
+/// Headless engine with server-safe defaults: no TUI, no disk writes
+/// (`no_session` disables both chat-history and session-file writes), no CWD
+/// context scan, provider/model from `Cli::resolve_*` (flags → config →
+/// built-in default), API key resolved from env by the provider auth layer.
+pub fn new_engine(session_name: &str) -> anyhow::Result<Engine> {
+    use zerostack::{cli::Cli, config, context, provider, sandbox, session::Session};
+
+    let cli = Cli {
+        no_session: true,
+        ..Default::default()
+    };
+    let (cfg, _) = config::load();
+    let provider_name = cli.resolve_provider(&cfg).to_string();
+    let model = cli.resolve_model(&cfg).to_string();
+    let quick_models = config::quick_models_map(&cfg);
+    let context_window = cfg.resolve_context_window(&provider_name, &model, &quick_models);
+    let session = Session::new(&provider_name, &model, context_window, session_name);
+    let context = context::load_with_prompts_dirs(true, &[]);
+    let client = provider::create_client(
+        &provider_name,
+        cli.api_key.as_deref(),
+        &cfg.custom_providers_map(),
+        cfg.api_keys.as_ref(),
+    )?;
+    Ok(Engine::new(
+        cli,
+        cfg,
+        session,
+        context,
+        client,
+        None,
+        sandbox::Sandbox::new(false, "bwrap"),
+    ))
 }

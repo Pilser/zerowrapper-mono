@@ -23,6 +23,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Free disk space
+        # Release builds + sccache + git checkouts exhaust the 14 GB runner
+        # disk (rustc-LLVM "No space left on device"). Reclaim ~20 GB first.
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL || true
+          sudo docker system prune -af || true
+          sudo apt-get clean || true
+          df -h /
+
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@master
         with:
