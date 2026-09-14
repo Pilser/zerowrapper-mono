@@ -5,7 +5,7 @@ use topcoat::context::{Cx, app_context};
 use topcoat::asset::bundled_asset;
 
 use crate::context::AppContext;
-use crate::assets::{STYLESHEET, PUBLIC_WB_JS, MERMAID_JS};
+use crate::assets::{STYLESHEET, PUBLIC_WB_JS, MERMAID_JS, MARKED_JS, HIGHLIGHT_JS, KATEX_JS, KATEX_CSS};
 
 #[path_param]
 struct WbSlug(str);
@@ -50,6 +50,10 @@ pub async fn render_snapshot(ctx: &AppContext, cx: &Cx, slug: &str, base_href: &
     let css_url = format!("?asset={}", bundled_asset(cx, STYLESHEET).name());
     let wb_js_url = format!("?asset={}", bundled_asset(cx, PUBLIC_WB_JS).name());
     let mermaid_url = format!("/_topcoat/assets/{}", bundled_asset(cx, MERMAID_JS).name());
+    let marked_url = format!("/_topcoat/assets/{}", bundled_asset(cx, MARKED_JS).name());
+    let highlight_url = format!("/_topcoat/assets/{}", bundled_asset(cx, HIGHLIGHT_JS).name());
+    let katex_url = format!("/_topcoat/assets/{}", bundled_asset(cx, KATEX_JS).name());
+    let katex_css_url = format!("?asset={}", bundled_asset(cx, KATEX_CSS).name());
 
     let pins = serde_json::from_str::<serde_json::Value>(&snap.pins)
         .unwrap_or_else(|_| serde_json::json!([]));
@@ -77,7 +81,7 @@ pub async fn render_snapshot(ctx: &AppContext, cx: &Cx, slug: &str, base_href: &
                 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
                 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
                 <link rel="stylesheet" href=(css_url)>
-                <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+                <link rel="stylesheet" href=(katex_css_url)>
                 <script>{ (Unescaped::new_unchecked(r#"(function(){
                     var saved = localStorage.getItem('theme');
                     var mq = window.matchMedia('(prefers-color-scheme: dark)');
@@ -90,7 +94,7 @@ pub async fn render_snapshot(ctx: &AppContext, cx: &Cx, slug: &str, base_href: &
                         });
                     }
                 })();"#)) }</script>
-                <script type="importmap">{ (Unescaped::new_unchecked(format!(r#"{{"imports":{{"marked":"https://cdn.jsdelivr.net/npm/marked@18.0.5/lib/marked.esm.js","highlight.js":"https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.11.1/build/es/highlight.min.js","katex":"https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.mjs","mermaid":"{}"}}}}"#, mermaid_url))) }</script>
+                <script type="importmap">{ (Unescaped::new_unchecked(format!(r#"{{"imports":{{"marked":"{}","highlight.js":"{}","katex":"{}","mermaid":"{}}}}}"#, marked_url, highlight_url, katex_url, mermaid_url))) }</script>
                 <script type="module">{ (Unescaped::new_unchecked(format!(r#"import m from "{}"; window.mermaid = m.default || m; if (window.mermaid.initialize) {{ try {{ window.mermaid.initialize({{startOnLoad:false}}) }} catch(e) {{}} }}"#, mermaid_url))) }</script>
             </head>
             <body class="flex flex-col min-h-screen" style="font-family: var(--font-sans); color: var(--color-text); background: var(--color-bg);">

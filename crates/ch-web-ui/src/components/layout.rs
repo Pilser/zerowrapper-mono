@@ -8,6 +8,10 @@ use crate::context::AppContext;
 use crate::components::whiteboard_panel::whiteboard_panel;
 use crate::assets::STYLESHEET;
 use crate::assets::MERMAID_JS;
+use crate::assets::MARKED_JS;
+use crate::assets::HIGHLIGHT_JS;
+use crate::assets::KATEX_JS;
+use crate::assets::KATEX_CSS;
 
 #[layout("/")]
 pub async fn root_layout(cx: &Cx, slot: Result) -> Result {
@@ -20,6 +24,10 @@ pub async fn root_layout(cx: &Cx, slot: Result) -> Result {
     let css_url = format!("?asset={}", bundled_asset(cx, STYLESHEET).name());
     let app_js_url = format!("?asset={}", bundled_asset(cx, asset!("assets/js/chat/app.js")).name());
     let mermaid_url = format!("/_topcoat/assets/{}", bundled_asset(cx, MERMAID_JS).name());
+    let marked_url = format!("/_topcoat/assets/{}", bundled_asset(cx, MARKED_JS).name());
+    let highlight_url = format!("/_topcoat/assets/{}", bundled_asset(cx, HIGHLIGHT_JS).name());
+    let katex_url = format!("/_topcoat/assets/{}", bundled_asset(cx, KATEX_JS).name());
+    let katex_css_url = format!("?asset={}", bundled_asset(cx, KATEX_CSS).name());
 
     // Base href = the directory of the request path, so relative URLs resolve
     // correctly whether the page is served at `/` or under a tenant prefix.
@@ -46,7 +54,7 @@ pub async fn root_layout(cx: &Cx, slot: Result) -> Result {
                 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
                 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
                 <link rel="stylesheet" href=(css_url)>
-                <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+                <link rel="stylesheet" href=(katex_css_url)>
                 <script>{ (Unescaped::new_unchecked(r#"(function(){
                     var saved = localStorage.getItem('theme');
                     var mq = window.matchMedia('(prefers-color-scheme: dark)');
@@ -68,7 +76,7 @@ pub async fn root_layout(cx: &Cx, slot: Result) -> Result {
                 </main>
                 whiteboard_panel()
                 <script>{ (Unescaped::new_unchecked(format!("window.ZW_AGENT = \"{}\";", ctx.agent))) }</script>
-                <script type="importmap">{ (Unescaped::new_unchecked(format!(r#"{{"imports":{{"marked":"https://cdn.jsdelivr.net/npm/marked@18.0.5/lib/marked.esm.js","highlight.js":"https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.11.1/build/es/highlight.min.js","katex":"https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.mjs","mermaid":"{}"}}}}"#, mermaid_url))) }</script>
+                <script type="importmap">{ (Unescaped::new_unchecked(format!(r#"{{"imports":{{"marked":"{}","highlight.js":"{}","katex":"{}","mermaid":"{}}}}}"#, marked_url, highlight_url, katex_url, mermaid_url))) }</script>
                 <script type="module">{ (Unescaped::new_unchecked(format!(r#"import m from "{}"; window.mermaid = m.default || m; if (window.mermaid.initialize) {{ try {{ window.mermaid.initialize({{startOnLoad:false}}) }} catch(e) {{}} }}"#, mermaid_url))) }</script>
                 <script type="module" src=(app_js_url)></script>
             </body>
