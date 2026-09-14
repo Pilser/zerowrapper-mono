@@ -225,7 +225,9 @@ impl McpToolProvider for ManageMaterialsProvider {
     }
 
     fn description(&self) -> &str {
-        "CLI tool for public, versioned, reusable template materials (mat ...). Run CLI commands here (never the shell tool). Use --session <sid> where noted. Start with 'mat about' or 'mat --help'."
+        "CLI for public, versioned, reusable template materials (mat ...). All boards are shared.\n\
+         Start with 'mat about' or 'mat --help' for the command list.\n\
+         Key verbs: mat list, mat show, mat create, mat clone, mat publish, mat srv records."
     }
 
     fn input_schema(&self) -> Value {

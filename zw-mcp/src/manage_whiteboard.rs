@@ -368,7 +368,13 @@ impl McpToolProvider for ManageWhiteboardProvider {
     }
 
     fn description(&self) -> &str {
-        "CLI tool for the session whiteboard and the serverless apps embedded in it. Run CLI commands here (never the shell tool), e.g. wb --session <sid> <action> [--help]. Required: --session <session_id>. Start with 'wb --session <sid> about' or '--help' for the command list."
+        "CLI for whiteboard and serverless apps. All boards are shared (no --session needed). Verbs:\n\
+         wb about — capabilities summary\n\
+         wb list — list all pages\n\
+         wb open|close|add|delete|move|set-public|show — page management\n\
+         wb srv apps|records|files|hooks|submit|upload|aggregate|audit|search — serverless CRUD\n\
+         wb check — inspect-reports summary (deprecated, use inspect check)\n\
+         Start with 'wb about' or 'wb --help'."
     }
 
     fn input_schema(&self) -> Value {

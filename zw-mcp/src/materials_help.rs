@@ -4,8 +4,8 @@ pub const ACTIONS: &[&str] = &[
 ];
 
 pub const GLOBAL_USAGE: &str =
-    "mat --session <sid> <action> [args]\n\
-     --session <sid> is required on publish, embed, clone, commit, update\n\
+    "mat <action> [args]\n\
+     All boards are shared (no --session needed).\n\
      actions:\n\
      about              what template materials are + the full lifecycle\n\
      list               list all public templates (with head version + record/file counts)\n\
@@ -28,21 +28,22 @@ pub const GLOBAL_USAGE: &str =
 
 pub fn action_help(action: &str) -> &'static str {
     match action {
-        "about" => "mat --session <sid> about\n\nprints the full capability summary: templates as reusable public serverless apps (embed = shared live data, clone = snapshot, commit = next version with changelog). Run it first.\n",
+        "about" => "mat about\n\nprints the full capability summary: templates as reusable public serverless apps (embed = shared live data, clone = snapshot, commit = next version with changelog). Run it first.\n",
         "list" => "mat list\n\nlists all public templates with their head version, record and file counts.\n",
         "show" => "mat show <template_id> [--version N]\n\nprints a template version: manifest, schema, public_reads, unique_key, rate, ttl, hooks, record count, files, changelog and diff (default version = head).\n",
         "versions" => "mat versions <template_id>\n\nlists every published version of a template.\n",
         "create" => "mat create <template_id> [--name \"<n>\"] [--kind app|card|theme|component|full-app] [--desc \"<d>\"]\n\ncreates an empty template v1 (no data/files) that later versions can be committed against.\n",
-        "publish" => "mat --session <sid> publish --board <board_id> --tpl <template_id> [--name \"<n>\"] [--kind K] [--desc \"<d>\"] [--note \"<why>\"]\npromotes a serverless board inside your session to a new public template v1 (copies config, records, hooks and files). The template must not exist yet — use commit to add later versions.\n",
-        "embed" => "mat --session <sid> embed --tpl <template_id> [--version N]\n\nembeds a reference to a template version with SHARED live data (no copy, no session board created). Reading/writing goes to the version's own DB.\n",
-        "clone" => "mat --session <sid> clone --tpl <template_id> --version N\n\ncopies a template version into your session: files into sessions/<sid>/materials/<tpl>@<ver>/files and a snapshot of config + data into a board mat:<tpl>@<ver>. The clone owns its data and can be committed back.\n",
-        "commit" => "mat --session <sid> commit --tpl <template_id> [--note \"<why>\"]\n\npublishes your cloned board as the next version (vN+1): files + config + data snapshot, plus a changelog.md and diff.json against the previous version.\n",
-        "update" => "mat --session <sid> update --tpl <template_id> --version N\n\nre-points your clone to a newer version: replaces files and re-snapshots config + data from that version.\n",
+        "publish" => "mat publish --board <board_id> --tpl <template_id> [--name \"<n>\"] [--kind K] [--desc \"<d>\"] [--note \"<why>\"]\npromotes a serverless board to a new public template v1 (copies config, records, hooks and files). The template must not exist yet — use commit to add later versions.\n",
+        "embed" => "mat embed --tpl <template_id> [--version N]\n\nembeds a reference to a template version with SHARED live data (no copy, no session board created). Reading/writing goes to the version's own DB.\n",
+        "clone" => "mat clone --tpl <template_id> --version N\ncopies a template version into your session: files into sessions/<sid>/materials/<tpl>@<ver>/files and a snapshot of config + data into a board mat:<tpl>@<ver>. The clone owns its data and can be committed back.\n",
+        "commit" => "mat commit --tpl <template_id> [--note \"<why>\"]\n\npublishes your cloned board as the next version (vN+1): files + config + data snapshot, plus a changelog.md and diff.json against the previous version.\n",
+        "update" => "mat update --tpl <template_id> --version N\n\nre-points your clone to a newer version: replaces files and re-snapshots config + data from that version.\n",
         "remove" => "mat remove <template_id>\n\npermanently deletes a template: manifest, all versions, version DBs and its system row.\n",
         "query" => "mat query <template_id> [--version N] [--what info|schema|records|count|files|hooks|rate|ttl] [--limit N] [--offset N]\n\nreads data from an exact template version. Default what=info, version=head.\n",
         "srv" => "mat srv <group> <verb> <tpl>[@ver] [args]\n\nfull serverless CLI against the exact version (build the template's app in place, exactly like 'wb ... srv' but scoped to {tpl}@{ver}).\napps: show|schema|update|rate|ttl|hooks|keys|audit|link (create/delete locked: the version owns one app).\nrecords: submit|list|get|update|patch|query|search|count|aggregate|delete|audit|call — submit validates against the schema, search is full-text BM25, query supports filters/order/pagination, aggregate supports sum/avg/min/max/count + group_by, call is the outbound HTTP client with SSRF guard.\nfiles: list|get.\nAny <verb> --help gives the full detail, e.g. mat srv records --help or mat srv apps hooks --help.\n",
         _ => GLOBAL_USAGE,
     }
+}
 }
 
 pub const ABOUT_TEXT: &str =

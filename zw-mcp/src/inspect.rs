@@ -5,24 +5,42 @@ use zw_db::SessionStore;
 
 const GLOBAL_USAGE: &str =
     "inspect <verb> [args]\n\
-     verbs:\n\
-       check js <code|/path>          # syntax via new Function/acorn (line:col, no CDN)\n\
-       check mermaid <code|/path>     # mermaid.parse (stub — use frontend via whiteboard-check)\n\
-       check html <code|/path>        # DOMParser\n\
-       check                        # summary of inspect-reports + stream_buffer\n\
-       frontend-automation <steps.json> # fill/click/check via WS to frontend\n\
-       e2e <steps.json>                # alias for frontend-automation\n\
-       webscreenshot [target]          # html2canvas(target,{scale:2}) -> /files/<hash>\n\
-       snap [target]                   # alias for webscreenshot\n\
-       whiteboard-open <page>          # open whiteboard to page (WS to frontend)\n\
-       whiteboard-next                 # next page (WS)\n\
-       whiteboard-prev                 # previous page (WS)\n\
-       whiteboard-expand               # expand whiteboard panel (WS)\n\
-       whiteboard-close                # close whiteboard panel (WS)\n\
-       whiteboard-check                # check all mermaid+js in current page (WS)\n\
-       open <page>                     # alias for whiteboard-open\n\
-       next                            # alias for whiteboard-next\n\
-       prev                            # alias for whiteboard-prev\n";
+     \n\
+     === CHECK (server-side, no browser needed) ===\n\
+     check js <code|/path>          syntax check via new Function/acorn (line:col)\n\
+     check mermaid <code|/path>     mermaid.parse (stub — use frontend whiteboard-check)\n\
+     check html <code|/path>        DOMParser validation\n\
+     check                          summary of inspect-reports board + stream_buffer\n\
+     \n\
+     === FRONTEND AUTOMATION (requires browser tab connected via WS) ===\n\
+     frontend-automation <steps.json>  run fill/click/check steps in browser tab\n\
+     e2e <steps.json>                  alias for frontend-automation\n\
+     \n\
+     Step JSON schema: [{action, target, value, timeout, visible, delay, ...}]\n\
+     Actions: fill, click, hover, type, press, select, check, wait,\n\
+              assert_text, assert_visible\n\
+     Selectors: CSS (#id, .class, [attr]), getByText(\"text\"),\n\
+                getByRole(\"button\", {name:\"Add\"}), getByLabel(\"Email\"),\n\
+                getByPlaceholder(\"Search\"), getByTestId(\"id\")\n\
+     Options: timeout (ms, default 3000), visible (bool, default true),\n\
+              delay (ms after step), check (js|mermaid|html), code (for check)\n\
+     Example: [{\"action\":\"fill\",\"target\":\"getByPlaceholder(\\\"title\\\")\",\"value\":\"Hi\"},\n\
+              {\"action\":\"click\",\"target\":\"#submit\"},\n\
+              {\"action\":\"assert_text\",\"target\":\"getByText(\\\"Hi\\\")\",\"value\":\"Hi\"}]\n\
+     \n\
+     === SCREENSHOT ===\n\
+     webscreenshot [target]    capture element via html2canvas -> /files/<hash>\n\
+     snap [target]             alias for webscreenshot\n\
+     \n\
+     === WHITEBOARD NAVIGATION (requires browser tab connected via WS) ===\n\
+     whiteboard-open <page>    navigate to page number\n\
+     whiteboard-next           go to next page\n\
+     whiteboard-prev           go to previous page\n\
+     whiteboard-expand         expand whiteboard panel\n\
+     whiteboard-close          close whiteboard panel\n\
+     whiteboard-check          check all mermaid+js blocks in current page\n\
+     \n\
+     Aliases: open=whiteboard-open, next=whiteboard-next, prev=whiteboard-prev\n";
 
 fn err_json(error: &str, command: &str, usage: &str, hint: &str) -> Value {
     json!({
@@ -480,7 +498,14 @@ fn strip_program_name(mut tokens: Vec<String>) -> Vec<String> {
 impl McpToolProvider for InspectProvider {
     fn name(&self) -> &str { "inspect" }
     fn description(&self) -> &str {
-        "CLI inspect — in-tab checks without heavy Chromium or extension. Verbs: inspect check js|mermaid|html <code|/path>, frontend-automation <steps.json>, webscreenshot [target]. Uses shared inspect-reports board (whiteboard/serverless.db) + stream_buffer."
+        "CLI inspect — frontend automation and error checking via WebSocket. Verbs:\n\
+         check js|mermaid|html <code> — server-side syntax validation\n\
+         check — summary of inspect-reports board\n\
+         frontend-automation <steps.json> — run fill/click/assert in browser tab via WS\n\
+         whiteboard-open|next|prev|expand|close|check — navigate and check whiteboard\n\
+         webscreenshot [target] — capture element screenshot\n\
+         Supports selectors: CSS, getByText, getByRole, getByLabel, getByPlaceholder, getByTestId\n\
+         Uses shared inspect-reports board (whiteboard/serverless.db) + stream_buffer."
     }
     fn input_schema(&self) -> Value {
         json!({
