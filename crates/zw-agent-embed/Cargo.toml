@@ -1,0 +1,12 @@
+[package]
+name = "zw-agent-embed"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# Pull zerostack straight from GitHub – CI will `git clone` it automatically.
+#   • `features = ["acp"]`  → keep the ACP protocol you asked for
+#   • `default-features = false` → drop the default TUI/CLI/loop extras
+zerostack = { git = "https://github.com/gi-dellav/zerostack.git",
+              features = ["acp"],
+              default-features = false }
