@@ -77,11 +77,28 @@ export function checkHTML(code) {
   }
 }
 
-export function checkMermaid(code) {
+async function ensureMermaid() {
+  if (window.mermaid && typeof window.mermaid.parse === 'function') {
+    return window.mermaid
+  }
+  // Dynamically import mermaid from local bundled asset
+  try {
+    const mod = await import('mermaid')
+    window.mermaid = mod.default || mod
+    if (typeof window.mermaid.initialize === 'function') {
+      try { window.mermaid.initialize({ startOnLoad: false }) } catch {}
+    }
+    return window.mermaid
+  } catch (e) {
+    return null
+  }
+}
+
+export async function checkMermaid(code) {
   ensureWrappers()
   const src = String(code || '')
   if (!src.trim()) return { ok: false, msg: 'empty mermaid' }
-  const mm = window.mermaid
+  const mm = await ensureMermaid()
   if (!mm || typeof mm.parse !== 'function') {
     return { ok: false, msg: 'mermaid not loaded' }
   }

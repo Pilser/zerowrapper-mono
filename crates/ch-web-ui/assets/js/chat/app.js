@@ -13,6 +13,13 @@ var __export = (target, all) => {
     });
 };
 var __esm = (fn, res) => () => (fn && (res = fn(fn = 0)), res);
+var __require = /* @__PURE__ */ ((x) => typeof require !== "undefined" ? require : typeof Proxy !== "undefined" ? new Proxy(x, {
+  get: (a, b) => (typeof require !== "undefined" ? require : a)[b]
+}) : x)(function(x) {
+  if (typeof require !== "undefined")
+    return require.apply(this, arguments);
+  throw Error('Dynamic require of "' + x + '" is not supported');
+});
 
 // network.js
 var exports_network = {};
@@ -1958,12 +1965,29 @@ function checkHTML(code) {
     return { ok: false, msg: e.message || String(e) };
   }
 }
-function checkMermaid(code) {
+async function ensureMermaid() {
+  if (window.mermaid && typeof window.mermaid.parse === "function") {
+    return window.mermaid;
+  }
+  try {
+    const mod = await import("mermaid");
+    window.mermaid = mod.default || mod;
+    if (typeof window.mermaid.initialize === "function") {
+      try {
+        window.mermaid.initialize({ startOnLoad: false });
+      } catch {}
+    }
+    return window.mermaid;
+  } catch (e) {
+    return null;
+  }
+}
+async function checkMermaid(code) {
   ensureWrappers();
   const src = String(code || "");
   if (!src.trim())
     return { ok: false, msg: "empty mermaid" };
-  const mm = window.mermaid;
+  const mm = await ensureMermaid();
   if (!mm || typeof mm.parse !== "function") {
     return { ok: false, msg: "mermaid not loaded" };
   }
