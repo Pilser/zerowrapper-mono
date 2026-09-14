@@ -14,6 +14,7 @@
 !*.yml
 !*.css
 !*.js
+!*.mjs
 !*.ts
 !*.html
 !*.sh
