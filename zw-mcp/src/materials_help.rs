@@ -44,7 +44,6 @@ pub fn action_help(action: &str) -> &'static str {
         _ => GLOBAL_USAGE,
     }
 }
-}
 
 pub const ABOUT_TEXT: &str =
     "Template materials are PUBLIC, VERSIONED, reusable serverless apps.\n\
