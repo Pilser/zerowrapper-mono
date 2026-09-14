@@ -96,13 +96,27 @@ function handleMessage(e) {
           else els.daemonBanner.classList.remove('hidden')
         }
         break
-      case 'snap': {
-        // Agent-triggered snap via WS: {type:'snap', target:'#whiteboard-body'} — real automation, no file creation
+      case 'snap':
+      case 'webscreenshot': {
+        // Agent-triggered webscreenshot via WS: {type:'webscreenshot', target:'#whiteboard-body'} — agent (isTrusted false) path writes to temp
         try {
           const sel = data.target || data.selector || '#whiteboard-body'
           const btn = document.getElementById('snap')
           if (btn) btn.dataset.target = sel
-          import('./check.js').then(m => m.doSnap(sel)).catch(() => {})
+          import('./check.js').then(async m => {
+            const res = await m.doSnap(sel)
+            if (res && res.ok && res.blob) {
+              try {
+                const r2 = await fetch('/api/inspect/snap', { method: 'POST', headers: { 'X-Filename': 'snap.png', 'X-Target': sel }, body: res.blob })
+                const data2 = await r2.json().catch(()=>({}))
+                const payload = { type: 'webscreenshot_result', ok: true, url: data2.url || res.url, path: data2.path || res.path || '', hash: data2.hash || res.hash || '', target: sel }
+                try { m.report({ type:'snap', check:'snap', ok:true, url: payload.url, path: payload.path, hash: payload.hash, target: sel, agent: true }) } catch {}
+                try { network.send(JSON.stringify(payload)) } catch {}
+              } catch {
+                try { network.send(JSON.stringify({ type:'webscreenshot_result', ok:true, url: res.url, path: res.path||'', hash: res.hash||'', target: sel })) } catch {}
+              }
+            }
+          }).catch(() => {})
         } catch {}
         break
       }
@@ -122,13 +136,97 @@ function handleMessage(e) {
         } catch {}
         break
       }
-      case 'runE2E': {
-        // Agent real automation: {type:'runE2E', steps:[{action:'fill', target:'#title3', value:'Hi'}, {action:'click', target:'#submit3'}]}
+      case 'runE2E':
+      case 'frontend-automation': {
+        // Agent real automation: {type:'frontend-automation', steps:[{action:'fill', target:'#title3', value:'Hi'}, {action:'click', target:'#submit3'}]}
         try {
-          import('./check.js').then(m => m.runE2E(data.steps||[]).catch(()=>{})).catch(()=>{})
+          const steps = data.steps || data.payload || []
+          import('./check.js').then(m => m.runE2E(steps).catch(()=>{})).catch(()=>{})
         } catch {}
         break
       }
+      case 'whiteboard_open': {
+        // Open whiteboard to a page: {type:'whiteboard_open', page:3}
+        try {
+          const page = data.page || 1
+          import('./whiteboard.js').then(wb => {
+            if (wb.openPage) wb.openPage(page)
+            else if (wb.open) wb.open(page)
+          }).catch(()=>{})
+        } catch {}
+        break
+      }
+      case 'whiteboard_next': {
+        try {
+          const btn = document.getElementById('wb-next')
+          if (btn) btn.click()
+        } catch {}
+        break
+      }
+      case 'whiteboard_prev': {
+        try {
+          const btn = document.getElementById('wb-prev')
+          if (btn) btn.click()
+        } catch {}
+        break
+      }
+      case 'whiteboard_expand': {
+        try {
+          const panel = document.getElementById('whiteboard-panel')
+          if (panel) {
+            panel.classList.remove('wb-closed')
+            panel.classList.add('wb-open')
+          }
+        } catch {}
+        break
+      }
+      case 'whiteboard_close_panel': {
+        try {
+          const panel = document.getElementById('whiteboard-panel')
+          if (panel) {
+            panel.classList.remove('wb-open')
+            panel.classList.add('wb-closed')
+          }
+        } catch {}
+        break
+      }
+      case 'whiteboard_check': {
+        // Run all checks on current page: mermaid + js + e2e
+        try {
+          import('./check.js').then(async m => {
+            const body = document.getElementById('whiteboard-body')
+            if (!body) {
+              m.report({type:'check', check:'e2e', ok:false, msg:'whiteboard-body not found'})
+              return
+            }
+            // Check all mermaid code blocks in the whiteboard
+            const mermaidBlocks = body.querySelectorAll('pre code.language-mermaid, pre code[data-language="mermaid"], .mermaid')
+            let mermaidIdx = 0
+            for (const block of mermaidBlocks) {
+              const code = block.textContent || block.innerText || ''
+              if (code.trim()) {
+                const r = await m.checkMermaid(code)
+                m.report({type:'check', check:'mermaid', ok:r.ok, msg:r.msg||'', idx:mermaidIdx, url:location.href})
+                mermaidIdx++
+              }
+            }
+            // Also check any script tags for JS errors
+            const scripts = body.querySelectorAll('script')
+            let jsIdx = 0
+            for (const script of scripts) {
+              const code = script.textContent || ''
+              if (code.trim()) {
+                const r = m.checkJS(code)
+                m.report({type:'check', check:'js', ok:r.ok, msg:r.msg||'', idx:jsIdx, url:location.href})
+                jsIdx++
+              }
+            }
+            m.report({type:'check', check:'e2e', ok:true, msg:`checked ${mermaidIdx} mermaid, ${jsIdx} js blocks`, url:location.href})
+          }).catch(()=>{})
+        } catch {}
+        break
+      }
+      case 'webscreenshot_result':
       case 'check_result':
         // Server ack, no-op
         break

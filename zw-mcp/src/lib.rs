@@ -6,6 +6,7 @@ pub mod materials_help;
 pub mod srv;
 pub mod srv_help;
 pub mod inspect;
+pub mod inspect_cmd;
 
 use crate::dispatch::McpProviders;
 

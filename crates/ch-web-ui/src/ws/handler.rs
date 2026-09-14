@@ -4,6 +4,7 @@ use futures_util::{SinkExt, StreamExt};
 use tokio::sync::mpsc;
 use topcoat::router::content::websocket::{Message, WebSocket};
 use zw_core::{Attachment, ChannelMessage, ChannelRegistryHandle, ZeroClawHandle, StreamEvent};
+use zw_mcp::inspect_cmd;
 
 // Ephemeral replay buffer: hybrid memory + DB. Memory for fast reconnect
 // within the same process, DB for cross-restart resumption. This is NOT
@@ -155,6 +156,25 @@ pub async fn handle_ws_connection(
 
     let mut current_session_id = String::new();
     let mut whiteboard_forwarding_for: Option<String> = None;
+
+    // Forward inspect commands from MCP tool to browser tab.
+    let ws_inspect = ws_sender.clone();
+    let mut inspect_rx = inspect_cmd::subscribe_inspect();
+    tokio::spawn(async move {
+        loop {
+            match inspect_rx.recv().await {
+                Ok(cmd) => {
+                    let msg = serde_json::json!(cmd);
+                    let mut sender = ws_inspect.lock().await;
+                    if sender.send(Message::Text(msg.to_string().into())).await.is_err() {
+                        break;
+                    }
+                }
+                Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
+                Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+            }
+        }
+    });
 
     while let Some(msg) = ws_receiver.next().await {
         let text = match msg {

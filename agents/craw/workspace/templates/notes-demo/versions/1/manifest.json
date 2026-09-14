@@ -1,0 +1,27 @@
+{
+  "template_id": "notes-demo",
+  "name": "Notes",
+  "kind": "app",
+  "description": "Demo",
+  "version": 1,
+  "capabilities": {
+    "files": 0,
+    "hooks": 0,
+    "public_reads": true,
+    "rate": {
+      "per_day": 100000,
+      "read": 600,
+      "search": 240,
+      "submit": 120,
+      "upload": 20
+    },
+    "records": 1,
+    "schema": true,
+    "ttl": {
+      "field": null,
+      "seconds": null
+    },
+    "unique_key": ""
+  },
+  "created_at": "2026-09-13T18:36:45.498933386+00:00"
+}

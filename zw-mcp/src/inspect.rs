@@ -7,13 +7,22 @@ const GLOBAL_USAGE: &str =
     "inspect <verb> [args]\n\
      verbs:\n\
        check js <code|/path>          # syntax via new Function/acorn (line:col, no CDN)\n\
-       check mermaid <code|/path>     # mermaid.parse\n\
+       check mermaid <code|/path>     # mermaid.parse (stub — use frontend via whiteboard-check)\n\
        check html <code|/path>        # DOMParser\n\
        check                        # summary of inspect-reports + stream_buffer\n\
-       frontend-automation <steps.json> # was e2e — fill/click/check with exact ids\n\
+       frontend-automation <steps.json> # fill/click/check via WS to frontend\n\
        e2e <steps.json>                # alias for frontend-automation\n\
-       webscreenshot [target]          # was snap — html2canvas(target,{scale:2}) -> /files/<hash>\n\
-       snap [target]                   # alias for webscreenshot\n";
+       webscreenshot [target]          # html2canvas(target,{scale:2}) -> /files/<hash>\n\
+       snap [target]                   # alias for webscreenshot\n\
+       whiteboard-open <page>          # open whiteboard to page (WS to frontend)\n\
+       whiteboard-next                 # next page (WS)\n\
+       whiteboard-prev                 # previous page (WS)\n\
+       whiteboard-expand               # expand whiteboard panel (WS)\n\
+       whiteboard-close                # close whiteboard panel (WS)\n\
+       whiteboard-check                # check all mermaid+js in current page (WS)\n\
+       open <page>                     # alias for whiteboard-open\n\
+       next                            # alias for whiteboard-next\n\
+       prev                            # alias for whiteboard-prev\n";
 
 fn err_json(error: &str, command: &str, usage: &str, hint: &str) -> Value {
     json!({
@@ -307,6 +316,11 @@ impl InspectProvider {
                         stripped
                     }
                 };
+                // For mermaid, frontend check is authoritative — send WS to verify in browser
+                if kind == "mermaid" {
+                    let cmd = json!({"type":"check", "kind": kind, "code": raw_code});
+                    let _ = crate::inspect_cmd::send_inspect(cmd);
+                }
                 let res = match kind {
                     "js" => check_js(&raw_code),
                     "mermaid" => check_mermaid(&raw_code),
@@ -324,13 +338,14 @@ impl InspectProvider {
                 let k = kind.to_string();
                 let m = msg.clone();
                 let ts = now_ms();
+                let raw_code_clone = raw_code.clone();
                 tokio::spawn(async move {
                     if let Ok(pool) = store.session("shared").await {
                         if pool.srv_app_by_id("inspect-reports").await.unwrap_or(None).is_none() {
                             let _ = pool.srv_app_create_with_id("inspect-reports", "shared", "inspect-reports", None, true, None).await;
                             let _ = store.register_board("shared", "inspect-reports", "shared").await;
                         }
-                        let payload = json!({"type":"check","check":k,"ok":is_ok,"msg":m,"ts": ts});
+                        let payload = json!({"type":"check","check":k,"ok":is_ok,"msg":m,"ts": ts, "code_preview": raw_code_clone.chars().take(80).collect::<String>()});
                         let _ = pool.srv_record_insert("inspect-reports", &payload, None, false).await;
                     }
                 });
@@ -357,6 +372,9 @@ impl InspectProvider {
                 };
                 let steps: Value = serde_json::from_str(&steps_str).unwrap_or(json!([]));
                 let count = steps.as_array().map(|a| a.len()).unwrap_or(0);
+                // Send WS command to frontend to execute automation
+                let cmd = json!({"type":"frontend-automation", "steps": steps});
+                let _ = crate::inspect_cmd::send_inspect(cmd);
                 // record to board
                 let store = self.store.clone();
                 let steps_clone = steps.clone();
@@ -371,13 +389,14 @@ impl InspectProvider {
                         let _ = pool.srv_record_insert("inspect-reports", &payload, None, false).await;
                     }
                 });
-                Ok(json!({"status":"ok","frontend_automation": true, "steps": count, "payload": steps}))
+                Ok(json!({"status":"ok","frontend_automation": true, "steps": count, "payload": steps, "ws_sent": true}))
             }
             "webscreenshot" | "snap" => {
                 let target = rest.first().cloned().unwrap_or_else(|| "#whiteboard-body".to_string());
                 let target = strip_quotes(&target);
-                // For MCP, we cannot html2canvas server-side; we instruct browser via board
-                // But return placeholder URL; browser will fill inspect-reports when it runs.
+                // Send WS command to frontend to capture screenshot
+                let cmd = json!({"type":"webscreenshot", "target": target});
+                let _ = crate::inspect_cmd::send_inspect(cmd);
                 // Also try to find most recent snap url from board as preview
                 let snap_url = {
                     if let Ok(pool) = self.store.session("shared").await {
@@ -390,8 +409,59 @@ impl InspectProvider {
                     "status":"ok",
                     "target": target,
                     "url": snap_url.unwrap_or_else(|| format!("/files/pending-{}", target.replace('#', ""))),
+                    "ws_sent": true,
                     "note": "browser will capture via html2canvas(target,{scale:2}) and POST to /api/inspect/snap; inspect reports board holds result"
                 }))
+            }
+            "whiteboard-open" => {
+                // Open whiteboard to a specific page
+                let page = rest.first().and_then(|s| s.parse::<i64>().ok()).unwrap_or(1);
+                let cmd = json!({"type":"whiteboard_open", "page": page});
+                let _ = crate::inspect_cmd::send_inspect(cmd);
+                Ok(json!({"status":"ok", "ws_sent": true, "action": "whiteboard_open", "page": page}))
+            }
+            "whiteboard-next" => {
+                let cmd = json!({"type":"whiteboard_next"});
+                let _ = crate::inspect_cmd::send_inspect(cmd);
+                Ok(json!({"status":"ok", "ws_sent": true, "action": "whiteboard_next"}))
+            }
+            "whiteboard-prev" => {
+                let cmd = json!({"type":"whiteboard_prev"});
+                let _ = crate::inspect_cmd::send_inspect(cmd);
+                Ok(json!({"status":"ok", "ws_sent": true, "action": "whiteboard_prev"}))
+            }
+            "whiteboard-expand" => {
+                let cmd = json!({"type":"whiteboard_expand"});
+                let _ = crate::inspect_cmd::send_inspect(cmd);
+                Ok(json!({"status":"ok", "ws_sent": true, "action": "whiteboard_expand"}))
+            }
+            "whiteboard-close" => {
+                let cmd = json!({"type":"whiteboard_close_panel"});
+                let _ = crate::inspect_cmd::send_inspect(cmd);
+                Ok(json!({"status":"ok", "ws_sent": true, "action": "whiteboard_close_panel"}))
+            }
+            "whiteboard-check" => {
+                // Run all checks on current whiteboard page (mermaid + js)
+                let cmd = json!({"type":"whiteboard_check"});
+                let _ = crate::inspect_cmd::send_inspect(cmd);
+                Ok(json!({"status":"ok", "ws_sent": true, "action": "whiteboard_check", "note": "checks mermaid and js blocks in whiteboard-body, reports to inspect-reports"}))
+            }
+            "open" => {
+                // Alias for whiteboard-open
+                let page = rest.first().and_then(|s| s.parse::<i64>().ok()).unwrap_or(1);
+                let cmd = json!({"type":"whiteboard_open", "page": page});
+                let _ = crate::inspect_cmd::send_inspect(cmd);
+                Ok(json!({"status":"ok", "ws_sent": true, "action": "open", "page": page}))
+            }
+            "next" => {
+                let cmd = json!({"type":"whiteboard_next"});
+                let _ = crate::inspect_cmd::send_inspect(cmd);
+                Ok(json!({"status":"ok", "ws_sent": true, "action": "next"}))
+            }
+            "prev" => {
+                let cmd = json!({"type":"whiteboard_prev"});
+                let _ = crate::inspect_cmd::send_inspect(cmd);
+                Ok(json!({"status":"ok", "ws_sent": true, "action": "prev"}))
             }
             _ => Err(err_json(&format!("unknown verb '{}'", verb), raw, GLOBAL_USAGE, "inspect --help")),
         }
