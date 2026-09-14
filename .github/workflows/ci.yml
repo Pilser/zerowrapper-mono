@@ -23,19 +23,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Spill cargo target to /mnt
-        # / is ~91% full (6-7 GB free) and a release build of this tree needs
-        # far more. /mnt (resource disk) normally has tens of GB free — put
-        # target/ there via symlink so cargo AND rust-cache transparently use
-        # it. Seconds, no cache deleted.
+      - name: Reclaim runner disk
+        # Measured bloat on these runners: android SDK 11G + dotnet 5.6G
+        # (+ docker overlay). Our pipeline is Rust+bun only — none of it is
+        # used. hostedtoolcache is deliberately kept (node/python for actions).
         run: |
-          df -h / /mnt
-          sudo du -sh /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache 2>/dev/null || true
-          sudo mkdir -p /mnt/zw-target
-          sudo chown "$(whoami):$(whoami)" /mnt/zw-target
-          rm -rf target
-          ln -s /mnt/zw-target target
-          df -h / /mnt
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet || true
+          sudo docker system prune -af || true
+          df -h /
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@master
