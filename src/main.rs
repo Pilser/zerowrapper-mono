@@ -96,6 +96,11 @@ async fn main() -> anyhow::Result<()> {
 
     let store = zw_db::SessionStore::new(whiteboard_dir.clone(), db.clone());
     let whiteboard = zw_whiteboard::WhiteboardHandle::new(whiteboard_dir.clone(), cache.clone(), std::time::Duration::from_millis(500)).with_db(store.clone());
+    // Boot: create workspace/whiteboard/whiteboard.wb (first empty page)
+    // immediately so the agent and the UI always have a file to work with.
+    if let Err(e) = whiteboard.ensure("shared").await {
+        tracing::warn!("whiteboard boot ensure failed: {}", e);
+    }
     let _wb_task = whiteboard.spawn();
 
     let mcp = zw_mcp::McpRegistry::new();
