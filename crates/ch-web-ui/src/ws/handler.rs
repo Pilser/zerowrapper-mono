@@ -14,11 +14,19 @@ use std::sync::LazyLock;
 static MEM_BUFFER: LazyLock<tokio::sync::Mutex<HashMap<String, Vec<serde_json::Value>>>> =
     LazyLock::new(|| tokio::sync::Mutex::new(HashMap::new()));
 
-// Embedded engines, one per chat session. The lock is only held to take or
+// Native engines, one per chat session. The lock is only held to take or
 // return an engine — never across a turn — so sessions never block each other.
-// The daemon path is untouched; `ZEROWRAPPER_ENGINE=embedded` selects this.
+// There is no daemon path anymore: every prompt runs here, in-process.
 static ENGINES: LazyLock<
     tokio::sync::Mutex<HashMap<String, zw_agent_embed::engine::Engine>>,
+> = LazyLock::new(|| tokio::sync::Mutex::new(HashMap::new()));
+
+// In-flight native turns, one JoinHandle per session. Cancel = abort the
+// handle (the engine goes down with it; next message builds a fresh one,
+// history display intact). Refresh/reconnect never cancels: the turn keeps
+// running and the stream resumes from the buffer.
+static TASKS: LazyLock<
+    tokio::sync::Mutex<HashMap<String, tokio::task::JoinHandle<()>>>,
 > = LazyLock::new(|| tokio::sync::Mutex::new(HashMap::new()));
 
 /// Drive one prompt through the in-process zerostack engine, emitting the
@@ -53,7 +61,17 @@ async fn run_embedded_turn(
     {
         // `run_embedded` already sent the closing `Error`; nothing to add.
     }
-    ENGINES.lock().await.insert(session_id, engine);
+    ENGINES.lock().await.insert(session_id.clone(), engine);
+    // Drop our task record — but only if it is still ours and finished: a
+    // newer turn's running handle must survive (abort-then-resend race).
+    let mut tasks = TASKS.lock().await;
+    if tasks
+        .get(&session_id)
+        .map(|h| h.is_finished())
+        .unwrap_or(false)
+    {
+        tasks.remove(&session_id);
+    }
 }
 
 async fn mem_append(session_id: &str, event: serde_json::Value, seq: i64) {
@@ -166,34 +184,22 @@ pub async fn handle_ws_connection(
     let (ws_sender, mut ws_receiver) = socket.split();
     let ws_sender = Arc::new(tokio::sync::Mutex::new(ws_sender));
 
-    // Proactive daemon-status push: watchdog transitions become visible in
-    // the browser without waiting for a chat send to fail. Plus an immediate
-    // frame with the latest known reading: broadcast has no replay, so a
-    // fresh socket would otherwise wait for the next transition (and the UI
-    // banner would sit on "reconnecting" despite a healthy link).
-    if let Some(online) = zeroclaw.current_status() {
-        let frame = serde_json::json!({"type": "daemon_status", "online": online}).to_string();
+    // Proactive agent-status push: the embedded provider check runs on every
+    // fresh socket, so a misconfigured key shows in the banner immediately
+    // instead of failing on the first chat send. (The daemon watchdog this
+    // replaces is gone — no daemon dependency on this path.)
+    {
+        let health = zw_agent_embed::provider_health();
+        let frame = serde_json::json!({
+            "type": "agent_status",
+            "online": health.get("online").and_then(|v| v.as_bool()).unwrap_or(false),
+            "provider": health.get("provider"),
+            "model": health.get("model"),
+            "reason": health.get("reason"),
+        })
+        .to_string();
         let mut sender = ws_sender.lock().await;
         let _ = sender.send(Message::Text(frame.into())).await;
-    }
-    {
-        let ws = ws_sender.clone();
-        let mut status_rx = zeroclaw.subscribe_status();
-        tokio::spawn(async move {
-            loop {
-                match status_rx.recv().await {
-                    Ok(online) => {
-                        let frame = serde_json::json!({"type": "daemon_status", "online": online}).to_string();
-                        let mut sender = ws.lock().await;
-                        if sender.send(Message::Text(frame.into())).await.is_err() {
-                            break;
-                        }
-                    }
-                    Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
-                    Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
-                }
-            }
-        });
     }
 
     let mut current_session_id = String::new();
@@ -252,7 +258,12 @@ pub async fn handle_ws_connection(
                     if current_session_id.is_empty() { None } else { Some(current_session_id.as_str()) }
                 });
             if let Some(sid) = sid {
-                let _ = zeroclaw.cancel_session(sid.to_string()).await;
+                // Native cancel: abort the in-flight turn. The engine is
+                // dropped with it; the next message starts a fresh engine
+                // (agent context restarts, chat history display is intact).
+                if let Some(h) = TASKS.lock().await.remove(sid) {
+                    h.abort();
+                }
             }
             continue;
         }
@@ -417,17 +428,16 @@ pub async fn handle_ws_connection(
             }
         });
 
-        if std::env::var("ZEROWRAPPER_ENGINE").as_deref() == Ok("embedded") {
-            let prompt = msg.content.clone();
-            let sid = msg.session_id.clone();
-            tokio::spawn(async move {
-                run_embedded_turn(sid, prompt, event_tx).await;
-            });
-        } else {
-            tokio::spawn(async move {
-                let _ = registry.route_incoming_stream(msg, event_tx).await;
-            });
-        }
+        // Native path (no daemon, no switch): every prompt runs in-process.
+        // Refresh/reconnect never cancels — the turn continues and the
+        // stream resumes from the hybrid buffer.
+        let prompt = msg.content.clone();
+        let sid = msg.session_id.clone();
+        let sid_tracked = sid.clone();
+        let turn = tokio::spawn(async move {
+            run_embedded_turn(sid_tracked, prompt, event_tx).await;
+        });
+        TASKS.lock().await.insert(sid, turn);
     }
 
     let mut sender = ws_sender.lock().await;

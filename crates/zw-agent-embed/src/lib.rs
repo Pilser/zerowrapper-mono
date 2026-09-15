@@ -135,6 +135,54 @@ pub async fn run_embedded(
     out
 }
 
+/// Provider health for the status banner / `/health`, without burning API
+/// calls: config loads, provider+model resolve, and the fork's own auth
+/// resolver finds a key (env/config/CLI). No network involved.
+pub fn provider_health() -> serde_json::Value {
+    use zerostack::{auth::ProviderKind, cli::Cli, config, provider};
+
+    let cli = Cli {
+        no_session: true,
+        ..Default::default()
+    };
+    let (cfg, _) = config::load();
+    let provider_name = cli.resolve_provider(&cfg).to_string();
+    let model = cli.resolve_model(&cfg).to_string();
+    let custom = cfg.custom_providers_map();
+    let pcfg = match provider::resolve_provider_config(&provider_name, &custom) {
+        Ok(p) => p,
+        Err(e) => {
+            return serde_json::json!({
+                "online": false, "provider": provider_name, "model": model,
+                "reason": format!("unknown provider: {e:#}"),
+            })
+        }
+    };
+    // Local backends need no key.
+    if matches!(pcfg.kind, ProviderKind::Ollama) {
+        return serde_json::json!({
+            "online": true, "provider": provider_name, "model": model,
+            "reason": "local provider",
+        });
+    }
+    let key = zerostack::auth::AuthResolver::new(pcfg.kind)
+        .with_cli_key(cli.api_key.as_deref())
+        .with_env_override(pcfg.api_key_env.as_deref())
+        .with_config_keys(cfg.api_keys.as_ref())
+        .with_custom_provider_name(Some(provider_name.clone()))
+        .resolve();
+    match key {
+        Ok(_) => serde_json::json!({
+            "online": true, "provider": provider_name, "model": model,
+            "reason": "api key present",
+        }),
+        Err(e) => serde_json::json!({
+            "online": false, "provider": provider_name, "model": model,
+            "reason": format!("no api key: {e:#}"),
+        }),
+    }
+}
+
 /// Headless engine with server-safe defaults: no TUI, no disk writes
 /// (`no_session` disables both chat-history and session-file writes), no CWD
 /// context scan, provider/model from `Cli::resolve_*` (flags → config →

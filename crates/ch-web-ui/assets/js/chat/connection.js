@@ -90,10 +90,10 @@ function handleMessage(e) {
         addMessage('error', data.message || data.error || 'Unknown error')
         if (onStateChange) onStateChange('error')
         break
-      case 'daemon_status':
-        if (els.daemonBanner) {
-          if (data.online) els.daemonBanner.classList.add('hidden')
-          else els.daemonBanner.classList.remove('hidden')
+      case 'agent_status':
+        if (els.agentBanner) {
+          if (data.online) els.agentBanner.classList.add('hidden')
+          else els.agentBanner.classList.remove('hidden')
         }
         break
       case 'snap':

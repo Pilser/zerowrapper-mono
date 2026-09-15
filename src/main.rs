@@ -20,7 +20,16 @@ async fn main() -> anyhow::Result<()> {
 
         let db_path = std::env::var("ZEROWRAPPER__DB_PATH").ok();
 
-        let agents_dir = std::env::var("AGENTS_DIR").unwrap_or_else(|_| "agents".into());
+        // Workspace root: explicit AGENTS_DIR wins, else ZW_WORKDIR (the
+        // process cwd the native engine uses as agent session dir), else the
+        // actual cwd, else legacy "agents". Set only ZW_WORKDIR.
+        let agents_dir = std::env::var("AGENTS_DIR")
+            .or_else(|_| std::env::var("ZW_WORKDIR"))
+            .unwrap_or_else(|_| {
+                std::env::current_dir()
+                    .map(|p| p.to_string_lossy().to_string())
+                    .unwrap_or_else(|_| "agents".into())
+            });
         let agent = std::env::var("ZEROWRAPPER_CH_WEB__AGENT").unwrap_or_else(|_| "agent".into());
         let whiteboard_dir = std::path::PathBuf::from(&agents_dir).join(&agent).join("workspace");
 
@@ -73,7 +82,13 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("Database migrated");
 
     let whiteboard_dir = config.ch_web.whiteboard_dir.clone().unwrap_or_else(|| {
-        let agents_dir = std::env::var("AGENTS_DIR").unwrap_or_else(|_| "agents".into());
+        let agents_dir = std::env::var("AGENTS_DIR")
+            .or_else(|_| std::env::var("ZW_WORKDIR"))
+            .unwrap_or_else(|_| {
+                std::env::current_dir()
+                    .map(|p| p.to_string_lossy().to_string())
+                    .unwrap_or_else(|_| "agents".into())
+            });
         std::path::PathBuf::from(agents_dir).join(&config.ch_web.agent).join("workspace")
     });
     tracing::info!("whiteboard dir: {}", whiteboard_dir.display());

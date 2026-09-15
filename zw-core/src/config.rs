@@ -131,7 +131,8 @@ impl WrapperConfig {
 
         let missing: Vec<&str> = {
             let mut m = Vec::new();
-            if config.zeroclaw_socket.is_empty() { m.push("ZEROWRAPPER__ZEROCLAW_SOCKET"); }
+            // Daemon socket is optional now: the native engine needs no
+            // daemon. An empty socket just means the legacy bridge idles.
             if config.db_path.is_empty() { m.push("ZEROWRAPPER__DB_PATH"); }
             if config.cache_dir.as_os_str().is_empty() { m.push("ZEROWRAPPER__CACHE_DIR"); }
             if config.ch_web.agent.is_empty() { m.push("ZEROWRAPPER_CH_WEB__AGENT"); }

@@ -156,7 +156,7 @@ function init() {
   els.emailInput = document.getElementById("email-input");
   els.authError = document.getElementById("auth-error");
   els.logoutBtn = document.getElementById("logout-btn");
-  els.daemonBanner = document.getElementById("daemon-banner");
+  els.agentBanner = document.getElementById("agent-banner");
   els.sessionSelect = document.getElementById("session-select");
   els.sessionNewBtn = document.getElementById("session-new-btn");
   els.sendBtn = document.getElementById("send-btn");
@@ -2557,12 +2557,12 @@ function handleMessage(e) {
         if (onStateChange)
           onStateChange("error");
         break;
-      case "daemon_status":
-        if (els.daemonBanner) {
+      case "agent_status":
+        if (els.agentBanner) {
           if (data.online)
-            els.daemonBanner.classList.add("hidden");
+            els.agentBanner.classList.add("hidden");
           else
-            els.daemonBanner.classList.remove("hidden");
+            els.agentBanner.classList.remove("hidden");
         }
         break;
       case "snap":
