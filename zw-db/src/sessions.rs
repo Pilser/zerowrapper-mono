@@ -3,13 +3,19 @@ use turso::params::Params;
 use turso::Value;
 
 #[derive(Debug, Clone, serde::Serialize)]
+pub struct ChatRow {
+    pub id: i64,
+    pub role: String,
+    pub content: String,
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct SessionRow {
     pub id: String,
     pub user_id: String,
     pub title: String,
     pub agent_alias: String,
-    pub account: Option<String>,
-    pub chat_id: Option<String>,
     pub channel: String,
     pub created_at: String,
     pub last_active: String,
@@ -80,7 +86,7 @@ impl DbPool {
     pub async fn list_sessions(&self, limit: i64) -> anyhow::Result<Vec<SessionRow>> {
         let conn = self.conn().await;
         let mut rows = conn.query(
-            "SELECT id, user_id, title, agent_alias, account, chat_id, channel, created_at, last_active FROM sessions ORDER BY last_active DESC LIMIT ?1",
+            "SELECT id, user_id, title, agent_alias, channel, created_at, last_active FROM sessions ORDER BY last_active DESC LIMIT ?1",
             Params::Positional(vec![Value::Integer(limit.clamp(1, 200))]),
         ).await?;
         let mut out = Vec::new();
@@ -90,13 +96,67 @@ impl DbPool {
                 user_id: match row.get_value(1)? { Value::Text(s) => s, _ => String::from("single") },
                 title: match row.get_value(2)? { Value::Text(s) => s, _ => String::new() },
                 agent_alias: match row.get_value(3)? { Value::Text(s) => s, _ => String::new() },
-                account: match row.get_value(4)? { Value::Text(s) => Some(s), _ => None },
-                chat_id: match row.get_value(5)? { Value::Text(s) => Some(s), _ => None },
-                channel: match row.get_value(6)? { Value::Text(s) => s, _ => String::from("web") },
-                created_at: match row.get_value(7)? { Value::Text(s) => s, _ => String::new() },
-                last_active: match row.get_value(8)? { Value::Text(s) => s, _ => String::new() },
+                channel: match row.get_value(4)? { Value::Text(s) => s, _ => String::from("web") },
+                created_at: match row.get_value(5)? { Value::Text(s) => s, _ => String::new() },
+                last_active: match row.get_value(6)? { Value::Text(s) => s, _ => String::new() },
             });
         }
+        Ok(out)
+    }
+
+    pub async fn get_session_title(&self, id: &str) -> anyhow::Result<Option<String>> {
+        let conn = self.conn().await;
+        let mut rows = conn.query(
+            "SELECT title FROM sessions WHERE id = ?1",
+            Params::Positional(vec![Value::from(id)]),
+        ).await?;
+        if let Some(row) = rows.next().await? {
+            match row.get_value(0)? {
+                Value::Text(s) if !s.is_empty() => return Ok(Some(s)),
+                _ => {}
+            }
+        }
+        Ok(None)
+    }
+
+    pub async fn rename_session(&self, id: &str, title: &str) -> anyhow::Result<()> {
+        let conn = self.conn().await;
+        conn.execute(
+            "UPDATE sessions SET title = ?1, last_active = datetime('now') WHERE id = ?2",
+            Params::Positional(vec![Value::from(title), Value::from(id)]),
+        ).await?;
+        Ok(())
+    }
+
+    /// Persistent chat transcript for the native engine (replaces daemon history).
+    pub async fn insert_chat_message(&self, session_id: &str, role: &str, content: &str) -> anyhow::Result<()> {
+        let conn = self.conn().await;
+        conn.execute(
+            "INSERT INTO chat_messages (session_id, role, content) VALUES (?1, ?2, ?3)",
+            Params::Positional(vec![
+                Value::from(session_id),
+                Value::from(role),
+                Value::from(content),
+            ]),
+        ).await?;
+        Ok(())
+    }
+
+    pub async fn get_chat_messages(&self, session_id: &str, limit: i64) -> anyhow::Result<Vec<ChatRow>> {
+        let conn = self.conn().await;
+        let mut rows = conn.query(
+            "SELECT id, role, content, created_at FROM chat_messages WHERE session_id = ?1 ORDER BY id DESC LIMIT ?2",
+            Params::Positional(vec![Value::from(session_id), Value::Integer(limit.clamp(1, 500))]),
+        ).await?;
+        let mut out = Vec::new();
+        while let Some(row) = rows.next().await? {
+            let id = match row.get_value(0)? { Value::Integer(i) => i, _ => continue };
+            let role = match row.get_value(1)? { Value::Text(s) => s, _ => continue };
+            let content = match row.get_value(2)? { Value::Text(s) => s, _ => String::new() };
+            let created_at = match row.get_value(3)? { Value::Text(s) => s, _ => String::new() };
+            out.push(ChatRow { id, role, content, created_at });
+        }
+        out.reverse();
         Ok(out)
     }
 

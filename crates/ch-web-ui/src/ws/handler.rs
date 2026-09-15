@@ -3,7 +3,7 @@ use std::sync::Arc;
 use futures_util::{SinkExt, StreamExt};
 use tokio::sync::mpsc;
 use topcoat::router::content::websocket::{Message, WebSocket};
-use zw_core::{Attachment, ChannelMessage, ChannelRegistryHandle, ZeroClawHandle, StreamEvent};
+use zw_core::StreamEvent;
 use zw_mcp::inspect_cmd;
 
 // Ephemeral replay buffer: hybrid memory + DB. Memory for fast reconnect
@@ -29,20 +29,77 @@ static TASKS: LazyLock<
     tokio::sync::Mutex<HashMap<String, tokio::task::JoinHandle<()>>>,
 > = LazyLock::new(|| tokio::sync::Mutex::new(HashMap::new()));
 
-/// Drive one prompt through the in-process zerostack engine, emitting the
-/// same typed `StreamEvent`s as the daemon path (buffer/resume unchanged).
+/// Live native sessions for the picker: id, display name, model/provider,
+/// message count, token totals and cost — straight from the engines.
+/// Sorted newest-first by engine `updated_at`.
+pub async fn agent_session_list() -> Vec<serde_json::Value> {
+    let engines = ENGINES.lock().await;
+    let mut out: Vec<serde_json::Value> = engines
+        .iter()
+        .map(|(sid, e)| {
+            let s = e.session();
+            serde_json::json!({
+                "id": sid,
+                "name": s.name.to_string(),
+                "model": s.model.to_string(),
+                "provider": s.provider.to_string(),
+                "messages": s.messages.len(),
+                "input_tokens": s.total_input_tokens,
+                "output_tokens": s.total_output_tokens,
+                "cost": s.total_cost,
+                "updated_at": s.updated_at.to_string(),
+            })
+        })
+        .collect();
+    out.sort_by(|a, b| b.get("updated_at").cmp(&a.get("updated_at")));
+    out
+}
+
+/// Drive one prompt through the native engine, emitting typed `StreamEvent`s
+/// (buffer/resume unchanged).
 async fn run_embedded_turn(
     session_id: String,
     prompt: String,
     event_tx: mpsc::Sender<StreamEvent>,
+    db: zw_db::DbPool,
 ) {
+    let _ = db.touch_session(&session_id).await;
+    // Our title, unless it is still the raw id (auto-created rows): then the
+    // first prompt names the session, human-readable in the picker.
+    let stored_title = db
+        .get_session_title(&session_id)
+        .await
+        .unwrap_or(None)
+        .filter(|t| t != &session_id);
+    let auto_title: Option<String> = if stored_title.is_none() {
+        let excerpt: String = prompt.chars().take(48).collect();
+        let excerpt = excerpt.replace('\n', " ").trim().to_string();
+        if excerpt.is_empty() {
+            None
+        } else {
+            Some(excerpt)
+        }
+    } else {
+        None
+    };
+    // Engine identity == UI identity: same id, same display name.
+    let display_title = stored_title
+        .clone()
+        .or_else(|| auto_title.clone())
+        .unwrap_or_else(|| session_id.clone());
+
     let engine = {
         let mut engines = ENGINES.lock().await;
-        if let Some(e) = engines.remove(&session_id) {
+        if let Some(mut e) = engines.remove(&session_id) {
+            e.session_mut().name = display_title.clone().into();
             Some(e)
         } else {
-            match zw_agent_embed::new_engine(&format!("zw-{session_id}")) {
-                Ok(e) => Some(e),
+            match zw_agent_embed::new_engine(&display_title) {
+                Ok(mut e) => {
+                    e.session_mut().id = session_id.clone().into();
+                    e.session_mut().name = display_title.clone().into();
+                    Some(e)
+                }
                 Err(err) => {
                     let _ = event_tx
                         .send(StreamEvent::Error {
@@ -55,12 +112,20 @@ async fn run_embedded_turn(
         }
     };
     let Some(mut engine) = engine else { return };
-    if zw_agent_embed::run_embedded(&mut engine, &prompt, event_tx.clone())
-        .await
-        .is_err()
-    {
-        // `run_embedded` already sent the closing `Error`; nothing to add.
+    let result = zw_agent_embed::run_embedded(&mut engine, &prompt, event_tx.clone()).await;
+    // Native transcript (replaces daemon history): user prompt + final text.
+    if let Ok(out) = &result {
+        if out.kind != zw_agent_embed::engine::RunKind::Ignored && !out.text.trim().is_empty() {
+            let _ = db.insert_chat_message(&session_id, "user", &prompt).await;
+            let _ = db
+                .insert_chat_message(&session_id, "assistant", out.text.trim())
+                .await;
+            if let Some(t) = auto_title {
+                let _ = db.rename_session(&session_id, &t).await;
+            }
+        }
     }
+    // `run_embedded` already sent the closing event on error; nothing to add.
     ENGINES.lock().await.insert(session_id.clone(), engine);
     // Drop our task record — but only if it is still ours and finished: a
     // newer turn's running handle must survive (abort-then-resend race).
@@ -175,9 +240,6 @@ fn spawn_whiteboard_forwarding(
 
 pub async fn handle_ws_connection(
     socket: WebSocket,
-    registry: ChannelRegistryHandle,
-    zeroclaw: Arc<ZeroClawHandle>,
-    agent: Arc<String>,
     whiteboard: Option<zw_whiteboard::WhiteboardHandle>,
     buffer_db: zw_db::DbPool,
 ) {
@@ -354,51 +416,20 @@ pub async fn handle_ws_connection(
             continue;
         }
 
+        // Native chat input: session + text only. Daemon-era routing fields
+        // (user/channel/role/agent-alias/attachments) are gone — one engine
+        // per session, chosen by session_id alone.
         let session_id = parsed.get("session_id")
             .and_then(|v| v.as_str())
             .unwrap_or("unknown")
             .to_string();
-        let user_id = parsed.get("user_id")
-            .and_then(|v| v.as_str())
-            .unwrap_or("anonymous");
         let content = parsed.get("content")
             .and_then(|v| v.as_str())
-            .unwrap_or("");
-        let role = parsed.get("roles")
-            .and_then(|v| v.as_array())
-            .map(|arr| arr.iter().filter_map(|r| r.as_str()).collect::<Vec<_>>().join(","))
-            .or_else(|| parsed.get("role").and_then(|v| v.as_str()).map(str::to_string))
-            .unwrap_or_else(|| "public".to_string());
-
-        let attachments = parsed.get("attachments")
-            .and_then(|v| v.as_array())
-            .map(|arr| {
-                arr.iter()
-                    .filter_map(|a| {
-                        let filename = a.get("filename").and_then(|v| v.as_str()).unwrap_or("").to_string();
-                        if filename.is_empty() && a.get("path").and_then(|v| v.as_str()).unwrap_or("").is_empty() {
-                            return None;
-                        }
-                        Some(Attachment {
-                            filename,
-                            mime_type: a.get("mime_type").and_then(|v| v.as_str()).unwrap_or("").to_string(),
-                            data: Vec::new(),
-                            path: a.get("path").and_then(|v| v.as_str()).unwrap_or("").to_string(),
-                        })
-                    })
-                    .collect::<Vec<Attachment>>()
-            })
-            .unwrap_or_default();
-
-        let msg = ChannelMessage {
-            channel: "web".to_string(),
-            session_id: session_id.clone(),
-            user_id: user_id.to_string(),
-            content: content.to_string(),
-            agent_alias: agent.to_string(),
-            role: role.to_string(),
-            attachments,
-        };
+            .unwrap_or("")
+            .to_string();
+        if content.trim().is_empty() {
+            continue;
+        }
 
         current_session_id = session_id.clone();
         if let Some(handle) = whiteboard.clone() {
@@ -406,7 +437,6 @@ pub async fn handle_ws_connection(
         }
         let (event_tx, mut event_rx) = mpsc::channel::<StreamEvent>(256);
         let ws = ws_sender.clone();
-        let registry = registry.clone();
         let db_for_buffer = buffer_db.clone();
         let sid_for_buffer = session_id.clone();
 
@@ -431,11 +461,12 @@ pub async fn handle_ws_connection(
         // Native path (no daemon, no switch): every prompt runs in-process.
         // Refresh/reconnect never cancels — the turn continues and the
         // stream resumes from the hybrid buffer.
-        let prompt = msg.content.clone();
-        let sid = msg.session_id.clone();
+        let prompt = content.clone();
+        let sid = session_id.clone();
         let sid_tracked = sid.clone();
+        let db_for_turn = buffer_db.clone();
         let turn = tokio::spawn(async move {
-            run_embedded_turn(sid_tracked, prompt, event_tx).await;
+            run_embedded_turn(sid_tracked, prompt, event_tx, db_for_turn).await;
         });
         TASKS.lock().await.insert(sid, turn);
     }

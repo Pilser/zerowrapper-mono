@@ -1,4 +1,3 @@
-use std::sync::Arc;
 use topcoat::Result;
 use topcoat::router::{Response, route};
 use topcoat::router::content::websocket::WebSocketUpgrade;
@@ -10,13 +9,10 @@ use crate::ws::handler::handle_ws_connection;
 #[route(GET "/ws")]
 pub async fn ws(cx: &Cx, upgrade: WebSocketUpgrade) -> Result<Response> {
     let ctx: &AppContext = app_context(cx);
-    let registry = ctx.registry.clone();
-    let zeroclaw = ctx.zeroclaw.clone();
-    let agent = Arc::new(ctx.agent.clone());
     let whiteboard = ctx.whiteboard().cloned();
     let buffer_db = ctx.db.system().clone();
 
     upgrade.on_upgrade(move |socket| async move {
-        handle_ws_connection(socket, registry, zeroclaw, agent, whiteboard, buffer_db).await;
+        handle_ws_connection(socket, whiteboard, buffer_db).await;
     })
 }

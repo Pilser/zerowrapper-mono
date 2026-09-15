@@ -115,8 +115,8 @@ async fn main() -> anyhow::Result<()> {
         zw_mcp::inspect::InspectProvider::new(store.clone())
     )).await;
 
-    tracing::info!("Config loaded: zeroclaw_socket={}, db={}, web_channel={{{}}}",
-        config.zeroclaw_socket, config.db_path, config.ch_web.bind);
+    tracing::info!("Config loaded: native engine, db={}, web_channel={{{}}}",
+        config.db_path, config.ch_web.bind);
 
     if !config.ch_web.accounts.is_empty() {
         let seeds: std::collections::HashMap<String, zw_db::AccountSeed> = config.ch_web.accounts.iter().map(|(k, v)| {
@@ -125,14 +125,9 @@ async fn main() -> anyhow::Result<()> {
         db.seed_accounts(&seeds).await?;
     }
 
-    let mut zeroclaw = zw_channels::ZeroClawBridge::new(&config.zeroclaw_socket, db.clone());
-    zeroclaw.set_whiteboard(whiteboard.clone());
-    let channels = zw_channels::ChannelRegistry::new(zeroclaw.clone());
-
+    // Native engine: no daemon bridge, no channel registry, no watchdog.
+    // Chat runs in-process (ws/handler ENGINES); history lives in our DB.
     let primary_bind = config.ch_web.bind.clone();
-
-    let registry_handle = channels.registry_handle();
-    let zeroclaw_handle = Arc::new(channels.zeroclaw_handle());
 
     // Bare page: no landing/sitesettings YAML is ever loaded — no checkers,
     // no fallback logs. config_dir stays for favicon/robots static files.
@@ -141,8 +136,6 @@ async fn main() -> anyhow::Result<()> {
         .unwrap_or_else(|_| std::path::PathBuf::from("config"));
 
     let ui_ctx = ch_web_ui::context::AppContext::new(
-        registry_handle,
-        zeroclaw_handle,
         store.clone(),
         cache.clone(),
         &config.ch_web.agent,
@@ -161,27 +154,9 @@ async fn main() -> anyhow::Result<()> {
         }
     });
 
-    // Daemon watchdog: probes the socket every 5s, logs transitions and
-    // pushes daemon_status to browsers. Independent of the run() loop.
-    let _watchdog = zeroclaw.spawn_watchdog(std::time::Duration::from_secs(5));
-
-    let zc_handle = tokio::spawn(async move {
-        if let Err(e) = zeroclaw.run().await {
-            tracing::error!("ZeroClaw bridge exited: {}", e);
-        }
-    });
-
-    let ch_handle = tokio::spawn(async move {
-        if let Err(e) = channels.run().await {
-            tracing::error!("Channel registry exited: {}", e);
-        }
-    });
-
     tracing::info!("Starting MCP stdio loop");
     mcp.run_stdio().await?;
 
-    let _ = zc_handle.await;
-    let _ = ch_handle.await;
     let _ = ui_handle.await;
 
     Ok(())

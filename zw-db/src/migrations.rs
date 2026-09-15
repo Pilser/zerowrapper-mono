@@ -11,12 +11,19 @@ CREATE TABLE IF NOT EXISTS sessions (
     user_id     TEXT REFERENCES users(id),
     title       TEXT NOT NULL DEFAULT '',
     agent_alias TEXT NOT NULL DEFAULT '',
-    account     TEXT,
-    chat_id     TEXT,
     channel     TEXT NOT NULL DEFAULT 'web',
     created_at  TEXT NOT NULL DEFAULT (datetime('now')),
     last_active TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+CREATE TABLE IF NOT EXISTS chat_messages (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id TEXT NOT NULL,
+    role       TEXT NOT NULL,
+    content    TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_chat_messages_session ON chat_messages(session_id, id);
 
 CREATE TABLE IF NOT EXISTS wb_keys (
     bucket      TEXT PRIMARY KEY,
@@ -240,6 +247,8 @@ pub const SYSTEM_MIGRATIONS: &[&str] = &[
     "ALTER TABLE users ADD COLUMN password_hash TEXT NOT NULL DEFAULT '';",
     "ALTER TABLE wb_keys ADD COLUMN scope TEXT;",
     "ALTER TABLE sessions ADD COLUMN title TEXT NOT NULL DEFAULT '';",
+    "ALTER TABLE sessions DROP COLUMN account;",
+    "ALTER TABLE sessions DROP COLUMN chat_id;",
 ];
 
 pub const SESSION_MIGRATIONS: &[&str] = &[

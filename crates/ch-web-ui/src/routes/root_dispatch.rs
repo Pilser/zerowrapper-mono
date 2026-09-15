@@ -1,4 +1,4 @@
-use std::sync::Arc;
+
 
 use topcoat::Result;
 use topcoat::context::{Cx, CxBuilder, app_context};
@@ -8,7 +8,7 @@ use topcoat::router::{
 use topcoat::router::content::websocket::{WebSocket, WebSocketUpgrade};
 
 use crate::context::AppContext;
-use crate::ws::handler::handle_ws_connection;
+use crate::ws::handler::{agent_session_list, handle_ws_connection};
 
 /// Root-only dispatch layer: lets an embedded frontend that may only fetch `/`
 /// reach the API, WebSocket, file/media and asset endpoints via query params
@@ -101,15 +101,12 @@ impl Layer for RootDispatchLayer {
 
 async fn root_ws(cx: &Cx, body: Body) -> Result<Response> {
     let app: &AppContext = app_context(cx);
-    let registry = app.registry.clone();
-    let zeroclaw = app.zeroclaw.clone();
-    let agent = Arc::new(app.agent.clone());
     let whiteboard = app.whiteboard().cloned();
     let buffer_db = app.db.system().clone();
 
     let upgrade = WebSocketUpgrade::from_request(cx, body).await?;
     upgrade.on_upgrade(move |socket: WebSocket| async move {
-        handle_ws_connection(socket, registry, zeroclaw, agent, whiteboard, buffer_db).await;
+        handle_ws_connection(socket, whiteboard, buffer_db).await;
     })
 }
 
@@ -117,6 +114,13 @@ async fn dispatch_api(cx: &Cx, api: &str, body: Body) -> Result<Response> {
     match api {
         "history" => api_history(cx).await,
         "sessions" => api_sessions_list(cx).await,
+        "agent_sessions" => Ok(Response::builder()
+            .status(StatusCode::OK)
+            .header("Content-Type", "application/json")
+            .body(Body::from(
+                serde_json::json!({"ok": true, "sessions": agent_session_list().await}).to_string(),
+            ))
+            .unwrap()),
         "sessions_create" => api_sessions_create(cx, body).await,
         "upload" => api_upload(cx, body).await,
         "inspect_snap" => crate::api::inspect_snap::handle_inspect_snap(cx, body).await,
@@ -147,14 +151,23 @@ async fn api_history(cx: &Cx) -> Result<Response> {
         format!("web.{}.{}", app.agent, sanitize_key(&user_id))
     };
 
-    match app.zeroclaw.get_session_messages(session_id.clone(), Some(100)).await {
-        Ok(result) => Ok(Response::builder()
+    // Native transcript (chat_messages), written by every completed turn.
+    match app.db.system().get_chat_messages(&session_id, 100).await {
+        Ok(rows) => Ok(Response::builder()
             .status(StatusCode::OK)
             .header("Content-Type", "application/json")
-            .body(Body::from(serde_json::to_string(&result).unwrap_or_default()))
+            .body(Body::from(
+                serde_json::json!({
+                    "session_id": session_id,
+                    "messages": rows,
+                    "total": rows.len(),
+                    "start": 0
+                })
+                .to_string(),
+            ))
             .unwrap()),
         Err(e) => {
-            tracing::warn!("history: zeroclaw error: {}", e);
+            tracing::warn!("history: db error: {}", e);
             Ok(Response::builder()
                 .status(StatusCode::OK)
                 .header("Content-Type", "application/json")

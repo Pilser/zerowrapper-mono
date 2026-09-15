@@ -54,16 +54,25 @@ pub async fn history(cx: &Cx) -> Result<Response> {
         format!("web.{}.{}", ctx.agent, sanitize_key(&user_id))
     };
 
-    match ctx.zeroclaw.get_session_messages(session_id.clone(), Some(100)).await {
-        Ok(result) => {
+    // Native transcript (chat_messages), written by every completed turn.
+    match ctx.db.system().get_chat_messages(&session_id, 100).await {
+        Ok(rows) => {
             Ok(Response::builder()
                 .status(StatusCode::OK)
                 .header("Content-Type", "application/json")
-                .body(Body::from(serde_json::to_string(&result).unwrap_or_default()))
+                .body(Body::from(
+                    serde_json::json!({
+                        "session_id": session_id,
+                        "messages": rows,
+                        "total": rows.len(),
+                        "start": 0
+                    })
+                    .to_string(),
+                ))
                 .unwrap())
         }
         Err(e) => {
-            tracing::warn!("history: zeroclaw error: {}", e);
+            tracing::warn!("history: db error: {}", e);
             Ok(Response::builder()
                 .status(StatusCode::OK)
                 .header("Content-Type", "application/json")

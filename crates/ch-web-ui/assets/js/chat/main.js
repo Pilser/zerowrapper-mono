@@ -86,6 +86,16 @@ function handleCancel() {
 
 async function refreshSessionList() {
   const list = await auth.fetchSessions()
+  // Live engine info (model/cost) for sessions with a running engine.
+  // Best-effort: the base list works without it.
+  let live = {}
+  try {
+    const r = await fetch('/api/agent_sessions')
+    if (r.ok) {
+      const j = await r.json()
+      for (const s of (j.sessions || [])) live[s.id] = s
+    }
+  } catch (e) {}
   if (!els.sessionSelect) return
   els.sessionSelect.innerHTML = ''
   const seen = new Set()
@@ -95,7 +105,11 @@ async function refreshSessionList() {
     seen.add(id)
     const opt = document.createElement('option')
     opt.value = id
-    opt.textContent = (s.title && s.title !== id ? s.title + ' · ' : '') + id
+    const lv = live[id]
+    const liveSuffix = lv && lv.model
+      ? ' · ' + lv.model + (lv.cost ? ' · $' + Number(lv.cost).toFixed(4) : '')
+      : ''
+    opt.textContent = (s.title && s.title !== id ? s.title + ' · ' : '') + id + liveSuffix
     if (id === auth.state.sessionId) opt.selected = true
     els.sessionSelect.appendChild(opt)
   }
