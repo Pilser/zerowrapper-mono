@@ -1,25 +1,14 @@
 import { els } from './dom.js'
 
-const STORAGE_EMAIL = 'zerowrapper_email'
 const STORAGE_SESSION = 'zerowrapper_session'
-const STORAGE_NAME = 'zerowrapper_name'
-const STORAGE_ROLE = 'zerowrapper_role'
-const STORAGE_ROLES = 'zerowrapper_roles'
 
+// Single-user: no login, no roles, no identity. The only state is the
+// current chat thread id.
 export const state = {
-  email: '',
   sessionId: '',
-  name: '',
-  role: '',
-  roles: [],
 }
 
-export const agent = (window.ZW_AGENT || '').toString()
 
-export function buildSessionId(email) {
-  const sanitized = String(email || '').replace(/[^a-zA-Z0-9_.@-]/g, '_')
-  return 'web.' + agent + '.' + sanitized
-}
 
 // Single-user simple thread id: sess_xxx (no user/role/channel composite).
 export function genSimpleSid() {
@@ -59,30 +48,17 @@ export async function createSession(title) {
 }
 
 export function loadFromStorage() {
-  // Single-user: no email login. Session is a simple sess_xxx thread id.
   state.sessionId = localStorage.getItem(STORAGE_SESSION) || ''
-  state.email = 'single'
-  state.name = 'single user'
-  state.role = ''
-  state.roles = []
 }
 
 export function loadFromQuery() {
-  // New: ?session_id=sess_xxx resumes a thread. Legacy ?email= kept for compat.
+  // ?session_id=sess_xxx resumes a thread. Nothing else is honored.
   const qs = new URLSearchParams(location.search)
   const sid = (qs.get('session_id') || '').trim()
   if (sid) {
     state.sessionId = sid.replace(/[^a-zA-Z0-9_.-]/g, '_')
-    state.email = 'single'
     saveToStorage()
-    return
   }
-  const email = (qs.get('email') || '').trim()
-  if (!email) return
-  if (localStorage.getItem(STORAGE_SESSION)) return
-  state.email = 'single'
-  state.sessionId = buildSessionId(email)
-  saveToStorage()
 }
 
 export function ensureSession() {
@@ -98,32 +74,11 @@ export function saveToStorage() {
 }
 
 export function clearFromStorage() {
-  localStorage.removeItem(STORAGE_EMAIL)
   localStorage.removeItem(STORAGE_SESSION)
-  localStorage.removeItem(STORAGE_NAME)
-  localStorage.removeItem(STORAGE_ROLE)
-  localStorage.removeItem(STORAGE_ROLES)
-}
-
-export function showForm() {
-  // No users, no login, no badge — single process. Hide shells if present.
-  if (els.authSection) els.authSection.classList.add('hidden')
-  if (els.userBadge) els.userBadge.classList.add('hidden')
 }
 
 export function showBadge() {
   // No-op kept for callers: no user identity is displayed anywhere.
   if (els.authSection) els.authSection.classList.add('hidden')
   if (els.userBadge) els.userBadge.classList.add('hidden')
-}
-
-export function scrollToAuth() {}
-
-export function showAuthError(msg) {
-  els.authError.textContent = msg
-  els.authError.classList.remove('hidden')
-}
-
-export function hideAuthError() {
-  els.authError.classList.add('hidden')
 }

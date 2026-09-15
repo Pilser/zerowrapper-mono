@@ -144,7 +144,7 @@ impl WrapperConfig {
             // daemon. An empty socket just means the legacy bridge idles.
             if config.db_path.is_empty() { m.push("ZEROWRAPPER__DB_PATH"); }
             if config.cache_dir.as_os_str().is_empty() { m.push("ZEROWRAPPER__CACHE_DIR"); }
-            if config.ch_web.agent.is_empty() { m.push("ZEROWRAPPER_CH_WEB__AGENT"); }
+
             if config.ch_web.bind.is_empty() { m.push("ZEROWRAPPER_CH_WEB__BIND"); }
             m
         };

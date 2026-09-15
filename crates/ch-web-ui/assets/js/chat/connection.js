@@ -332,7 +332,6 @@ export function send(text, role, attachments, turn) {
   }
   const payload = {
     session_id: authState.sessionId || localStorage.getItem('zerowrapper_session') || '',
-    user_id: 'single',
     content: text,
   }
   if (attachments && attachments.length > 0) payload.attachments = attachments

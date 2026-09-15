@@ -32,13 +32,6 @@ pub async fn chat_section(cx: &Cx) -> Result {
                     <select id="session-select" class="text-xs flex-1 px-2 py-1 rounded" style="background: var(--color-bg); color: var(--color-text-strong); border: 1px solid var(--color-border-weak);"></select>
                     <button id="session-new-btn" class="text-xs px-2 py-0.5 rounded cursor-pointer transition" style="color: var(--color-text-inverted); border: none; background: var(--color-bg-interactive);">"+ New"</button>
                 </div>
-                <div id="auth-section" class="hidden">
-                    <div id="auth-form" class="hidden">
-                        <input id="email-input" type="hidden"/>
-                        <button id="register-btn" type="button" class="hidden">"Start"</button>
-                        <p id="auth-error" class="text-xs hidden" style="color: #ff3b30; text-align: center;"></p>
-                    </div>
-                </div>
                 <div style="padding: 8px 16px 4px;">
                     <div id="attachments" class="flex flex-wrap gap-1 mb-1"></div>
                 </div>
@@ -106,8 +99,6 @@ pub async fn chat_section(cx: &Cx) -> Result {
             <div id="drawer-usage"></div>
         </aside>
         <style>{ (Unescaped::new_unchecked(r#"@keyframes chat-typing-bounce { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1); } }
-#email-input:focus { border-color: var(--color-bg-interactive) !important; box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-bg-interactive) 25%, transparent) !important; }
-#email-input::placeholder { color: var(--color-text-weak); opacity: 0.7; }
-#register-btn:hover { opacity: 0.85; }"#)) }</style>
+"#)) }</style>
     }
 }

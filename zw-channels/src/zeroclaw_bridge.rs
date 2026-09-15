@@ -359,7 +359,7 @@ impl ZeroClawBridge {
                         tracing::warn!("whiteboard ensure failed: {}", e);
                     }
                 }
-                if let Err(e) = db.upsert_session(&actual_session_id, &user, &agent_alias, None, None, "web").await {
+                if let Err(e) = db.upsert_session(&actual_session_id).await {
                     tracing::warn!("Failed to save session to DB: {}", e);
                 }
                 let _ = db.touch_session(&actual_session_id).await;
@@ -454,7 +454,7 @@ impl ZeroClawBridge {
                 tracing::warn!("whiteboard ensure failed: {}", e);
             }
         }
-        if let Err(e) = db.upsert_session(&actual_session_id, user, agent_alias, None, None, "web").await {
+        if let Err(e) = db.upsert_session(&actual_session_id).await {
             tracing::warn!("Failed to save session to DB: {}", e);
         }
         let _ = db.touch_session(&actual_session_id).await;

@@ -35,7 +35,7 @@ pub async fn create(cx: &Cx, body: Body) -> Result<Response> {
     let title = req.get("title").and_then(|t| t.as_str()).unwrap_or("").to_string();
     let id = zw_db::sessions::new_simple_id();
     let title = if title.is_empty() { id.clone() } else { title };
-    if let Err(e) = ctx.db.system().create_simple_session(&id, &title, &ctx.agent, "web").await {
+    if let Err(e) = ctx.db.system().create_simple_session(&id, &title).await {
         tracing::warn!("sessions create: {e}");
         return Ok(json(StatusCode::INTERNAL_SERVER_ERROR, serde_json::json!({"error": "create failed"})));
     }

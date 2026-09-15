@@ -8,10 +8,7 @@ CREATE TABLE IF NOT EXISTS users (
 
 CREATE TABLE IF NOT EXISTS sessions (
     id          TEXT PRIMARY KEY,
-    user_id     TEXT REFERENCES users(id),
     title       TEXT NOT NULL DEFAULT '',
-    agent_alias TEXT NOT NULL DEFAULT '',
-    channel     TEXT NOT NULL DEFAULT 'web',
     created_at  TEXT NOT NULL DEFAULT (datetime('now')),
     last_active TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -260,6 +257,9 @@ pub const SYSTEM_MIGRATIONS: &[&str] = &[
     "ALTER TABLE sessions ADD COLUMN title TEXT NOT NULL DEFAULT '';",
     "ALTER TABLE sessions DROP COLUMN account;",
     "ALTER TABLE sessions DROP COLUMN chat_id;",
+    "ALTER TABLE sessions DROP COLUMN user_id;",
+    "ALTER TABLE sessions DROP COLUMN agent_alias;",
+    "ALTER TABLE sessions DROP COLUMN channel;",
     "ALTER TABLE chat_messages ADD COLUMN turn_id TEXT NOT NULL DEFAULT '';",
     "ALTER TABLE whiteboard_meta DROP COLUMN locked;",
 ];

@@ -75,7 +75,7 @@ pub async fn root_layout(cx: &Cx, slot: Result) -> Result {
                     (slot?)
                 </main>
                 whiteboard_panel()
-                <script>{ (Unescaped::new_unchecked(format!("window.ZW_AGENT = \"{}\";", ctx.agent))) }</script>
+
                 { (Unescaped::new_unchecked({
                     let imports = serde_json::json!({
                         "marked": marked_url,

@@ -34,24 +34,18 @@ pub async fn history(cx: &Cx) -> Result<Response> {
         })
         .collect();
 
-    // Single-user: prefer ?session_id=sess_xxx, fallback to legacy ?user_id=.
+    // Single-user, no identity: ?session_id=sess_xxx is required.
     let direct_sid = params.get("session_id").map(|v| url_decode(v)).unwrap_or_default();
-    let user_id = params.get("user_id").map(|v| url_decode(v)).unwrap_or_default();
-    let _role = params.get("role").map(|v| url_decode(v)).unwrap_or_else(|| "public".to_string());
-
     let session_id = if !direct_sid.is_empty() {
         sanitize_key(&direct_sid)
     } else {
-        if user_id.is_empty() {
-            return Ok(Response::builder()
-                .status(StatusCode::BAD_REQUEST)
-                .header("Content-Type", "application/json")
-                .body(Body::from(
-                    serde_json::json!({"error": "Missing session_id"}).to_string(),
-                ))
-                .unwrap());
-        }
-        format!("web.{}.{}", ctx.agent, sanitize_key(&user_id))
+        return Ok(Response::builder()
+            .status(StatusCode::BAD_REQUEST)
+            .header("Content-Type", "application/json")
+            .body(Body::from(
+                serde_json::json!({"error": "Missing session_id"}).to_string(),
+            ))
+            .unwrap());
     };
 
     // Agent-owned transcript: live engine first, its session file second.

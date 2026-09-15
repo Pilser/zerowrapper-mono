@@ -8,10 +8,8 @@
 //! guessing from PIDs.
 
 use topcoat::Result;
-use topcoat::context::{Cx, app_context};
+use topcoat::context::Cx;
 use topcoat::router::{Body, Response, StatusCode, route};
-
-use crate::context::AppContext;
 
 fn json(status: StatusCode, v: serde_json::Value) -> Response {
     Response::builder()
@@ -23,8 +21,7 @@ fn json(status: StatusCode, v: serde_json::Value) -> Response {
 }
 
 #[route(GET "/health")]
-pub async fn health(cx: &Cx) -> Result<Response> {
-    let ctx: &AppContext = app_context(cx);
+pub async fn health(_cx: &Cx) -> Result<Response> {
     let provider = zw_agent_embed::provider_health();
     let provider_ok = provider
         .get("online")
@@ -41,7 +38,6 @@ pub async fn health(cx: &Cx) -> Result<Response> {
         status,
         serde_json::json!({
             "status": word,
-            "agent": ctx.agent,
             "provider": provider,
             "db": {"path": db_path, "present": db_ok},
         }),

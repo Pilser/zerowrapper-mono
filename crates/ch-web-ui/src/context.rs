@@ -8,7 +8,6 @@ pub struct AppContext {
     pub db: SessionStore,
     pub cache: Arc<CacheManager>,
     pub rates: Arc<RateLimiter>,
-    pub agent: String,
     pub upload_dir: std::path::PathBuf,
     pub config_dir: std::path::PathBuf,
     pub whiteboard: Option<zw_whiteboard::WhiteboardHandle>,
@@ -21,7 +20,6 @@ impl AppContext {
     pub fn new(
         db: SessionStore,
         cache: Arc<CacheManager>,
-        agent: &str,
         upload_dir: std::path::PathBuf,
         config_dir: std::path::PathBuf,
     ) -> Self {
@@ -29,7 +27,6 @@ impl AppContext {
             db,
             cache,
             rates: Arc::new(RateLimiter::default()),
-            agent: agent.to_string(),
             upload_dir,
             config_dir,
             whiteboard: None,

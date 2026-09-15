@@ -127,13 +127,6 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("Config loaded: native engine, db={}, web_channel={{{}}}",
         config.db_path, config.ch_web.bind);
 
-    if !config.ch_web.accounts.is_empty() {
-        let seeds: std::collections::HashMap<String, zw_db::AccountSeed> = config.ch_web.accounts.iter().map(|(k, v)| {
-            (k.clone(), zw_db::AccountSeed { role: v.role.clone(), password: v.password.clone() })
-        }).collect();
-        db.seed_accounts(&seeds).await?;
-    }
-
     // Native engine: no daemon bridge, no channel registry, no watchdog.
     // Chat runs in-process (ws/handler ENGINES); history lives in our DB.
     let primary_bind = config.ch_web.bind.clone();
@@ -147,7 +140,6 @@ async fn main() -> anyhow::Result<()> {
     let ui_ctx = ch_web_ui::context::AppContext::new(
         store.clone(),
         cache.clone(),
-        &config.ch_web.agent,
         config.ch_web.upload_dir.clone(),
         config_dir,
     )

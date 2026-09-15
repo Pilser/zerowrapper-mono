@@ -16,7 +16,7 @@ use crate::ws::handler::{agent_session_list, handle_ws_connection};
 /// route; requests that are not root-dispatched pass through to the normal
 /// page pipeline (which renders the chat app).
 ///
-///   GET  /?api=history&user_id=...        -> history
+///   GET  /?api=history&session_id=...   -> history
 ///   POST /?api=upload                     -> upload
 ///   GET  /?ws=1                           -> WebSocket upgrade
 ///   GET  /?file={hash}                    -> cached file/media
@@ -135,22 +135,18 @@ async fn dispatch_api(cx: &Cx, api: &str, body: Body) -> Result<Response> {
 }
 
 /// Mirrors `api/history.rs` but keyed from the root query params.
-/// Single-user: prefers ?session_id=sess_xxx, falls back to legacy ?user_id=.
+/// Single-user, no identity: ?session_id=sess_xxx is required.
 async fn api_history(cx: &Cx) -> Result<Response> {
     let app: &AppContext = app_context(cx);
     let direct = query_value(cx, "session_id").map(|v| url_decode(&v)).unwrap_or_default();
     let session_id = if !direct.is_empty() {
         sanitize_key(&direct)
     } else {
-        let user_id = query_value(cx, "user_id").map(|v| url_decode(&v)).unwrap_or_default();
-        if user_id.is_empty() {
-            return Ok(Response::builder()
-                .status(StatusCode::BAD_REQUEST)
-                .header("Content-Type", "application/json")
-                .body(Body::from(serde_json::json!({"error": "Missing session_id"}).to_string()))
-                .unwrap());
-        }
-        format!("web.{}.{}", app.agent, sanitize_key(&user_id))
+        return Ok(Response::builder()
+            .status(StatusCode::BAD_REQUEST)
+            .header("Content-Type", "application/json")
+            .body(Body::from(serde_json::json!({"error": "Missing session_id"}).to_string()))
+            .unwrap());
     };
 
     // Agent-owned transcript: live engine first, its session file second.
@@ -192,7 +188,7 @@ async fn api_sessions_create(cx: &Cx, body: Body) -> Result<Response> {
     let id = zw_db::sessions::new_simple_id();
     let _ = to_bytes(body, 100_000).await;
     let _ = cx;
-    if let Err(e) = app.db.system().create_simple_session(&id, &id, &app.agent, "web").await {
+    if let Err(e) = app.db.system().create_simple_session(&id, &id).await {
         tracing::warn!("sessions create: {e}");
         return Ok(Response::builder()
             .status(StatusCode::INTERNAL_SERVER_ERROR)
