@@ -169,7 +169,7 @@ pub fn provider_health() -> serde_json::Value {
         .with_cli_key(cli.api_key.as_deref())
         .with_env_override(pcfg.api_key_env.as_deref())
         .with_config_keys(cfg.api_keys.as_ref())
-        .with_custom_provider_name(Some(provider_name.clone()))
+        .with_custom_provider_name(Some(provider_name.as_str()))
         .resolve();
     match key {
         Ok(_) => serde_json::json!({
