@@ -30,8 +30,9 @@ async fn main() -> anyhow::Result<()> {
                     .map(|p| p.to_string_lossy().to_string())
                     .unwrap_or_else(|_| "agents".into())
             });
-        let agent = std::env::var("ZEROWRAPPER_CH_WEB__AGENT").unwrap_or_else(|_| "agent".into());
-        let whiteboard_dir = std::path::PathBuf::from(&agents_dir).join(&agent).join("workspace");
+        // Single native workspace: the set dir IS the root. (The old
+        // `<agent>/workspace` nesting was multi-daemon baggage.)
+        let whiteboard_dir = std::path::PathBuf::from(&agents_dir);
 
         let mcp = zw_mcp::McpRegistry::new();
         if let Some(db_path) = db_path {
@@ -89,7 +90,7 @@ async fn main() -> anyhow::Result<()> {
                     .map(|p| p.to_string_lossy().to_string())
                     .unwrap_or_else(|_| "agents".into())
             });
-        std::path::PathBuf::from(agents_dir).join(&config.ch_web.agent).join("workspace")
+        std::path::PathBuf::from(agents_dir)
     });
     tracing::info!("whiteboard dir: {}", whiteboard_dir.display());
 
