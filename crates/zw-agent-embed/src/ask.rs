@@ -241,6 +241,11 @@ impl McpToolProvider for AskUserProvider {
         let (text, status_note) = match answers {
             Some(ans) => {
                 let _ = self.db.ask_answer(&ask_id, &ans.to_string()).await;
+                tracing::info!(
+                    ask_id = %ask_id,
+                    session = %self.session_id,
+                    "ask_user answered"
+                );
                 (format_answers(&questions, &ans), None)
             }
             None => {
@@ -268,21 +273,27 @@ impl McpToolProvider for AskUserProvider {
 /// questions (`custom-N`) and edits come through the same shape.
 fn format_answers(questions: &[serde_json::Value], answers: &serde_json::Value) -> String {
     // Entries are {id, answer} plus the (possibly user-edited) `question`
-    // text, so the model sees what was actually answered.
-    let by_id: std::collections::HashMap<String, (String, String)> = answers
+    // text, so the model sees what was actually answered. Accepts both the
+    // `{answers: [...]}` wrapper and the bare array the REST endpoint stores.
+    let arr: &[serde_json::Value] = answers
         .get("answers")
         .and_then(|v| v.as_array())
-        .map(|a| {
-            a.iter()
-                .filter_map(|e| {
-                    let id = e.get("id")?.as_str()?.to_string();
-                    let ans = e.get("answer")?.as_str().unwrap_or("").to_string();
-                    let q = e.get("question").and_then(|v| v.as_str()).unwrap_or("").to_string();
-                    Some((id, (q, ans)))
-                })
-                .collect()
+        .or_else(|| answers.as_array())
+        .map(Vec::as_slice)
+        .unwrap_or(&[]);
+    let by_id: std::collections::HashMap<String, (String, String)> = arr
+        .iter()
+        .filter_map(|e| {
+            let id = e.get("id")?.as_str()?.to_string();
+            let ans = e.get("answer")?.as_str().unwrap_or("").to_string();
+            let q = e
+                .get("question")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            Some((id, (q, ans)))
         })
-        .unwrap_or_default();
+        .collect();
     // Bare `{ id: answer }` map shape is also accepted from REST clients.
     let flat: std::collections::HashMap<String, String> = answers
         .as_object()
