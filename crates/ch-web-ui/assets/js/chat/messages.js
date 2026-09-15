@@ -55,9 +55,11 @@ function renderTextWithAttachments(text) {
   return div
 }
 
-function buildMessageRow(role, text) {
+function buildMessageRow(role, text, turn) {
   const row = document.createElement('div')
   row.className = 'message-row ' + role
+  row.dataset.role = role
+  if (turn) row.dataset.turn = turn
 
   if (role === 'error') {
     const content = document.createElement('div')
@@ -115,7 +117,7 @@ export function fetchHistory() {
       .then(r => (r.ok ? r.json() : tryFetch(i + 1)))
       .catch(() => tryFetch(i + 1))
   };
-  tryFetch(0)
+  return tryFetch(0)
     .then(data => {
       if (!data) return
       if (data.session_id) {
@@ -125,7 +127,14 @@ export function fetchHistory() {
       const frag = document.createDocumentFragment()
       data.messages.forEach(msg => {
         if (msg.role === 'user' || msg.role === 'assistant') {
-          const row = buildMessageRow(msg.role, msg.content)
+          // Turn-keyed dedup: a row for this turn already on screen (live or
+          // an earlier fetch) wins — never render it twice.
+          if (msg.turn_id) {
+            try {
+              if (els.messages.querySelector('[data-turn="' + CSS.escape(msg.turn_id) + '"]')) return
+            } catch {}
+          }
+          const row = buildMessageRow(msg.role, msg.content, msg.turn_id || '')
           if (row) frag.appendChild(row)
         }
       })
@@ -140,4 +149,25 @@ export function abortHistoryFetch() {
     abortController.abort()
     abortController = null
   }
+}
+
+// Replace a history-rendered assistant row for a finished turn (replay +
+// history convergence): returns true when a row was updated, false when the
+// caller should finalize a fresh row instead.
+export function upsertAssistantTurn(turnId, content) {
+  if (!turnId) return false
+  let row = null
+  try {
+    row = els.messages.querySelector('[data-turn="' + CSS.escape(turnId) + '"][data-role="assistant"]')
+  } catch { return false }
+  if (!row) return false
+  const target = row.querySelector('.msg-content.chat-markdown') || row.querySelector('.msg-content')
+  if (!target) return false
+  try {
+    renderMarkdown(target, marked.parse(content || ''))
+  } catch {
+    target.textContent = content || ''
+  }
+  try { autoScroll() } catch {}
+  return true
 }

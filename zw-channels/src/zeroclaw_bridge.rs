@@ -449,7 +449,6 @@ impl ZeroClawBridge {
         // Intercept events to know whether anything reached the client yet.
         let (inner_tx, mut inner_rx) = mpsc::channel::<StreamEvent>(256);
         let actual_session_id = conn.new_session(session_id, agent_alias).await.map_err(|e| (e, false))?;
-        let _ = event_tx.send(StreamEvent::SessionCreated { session_id: actual_session_id.clone() }).await;
         if let Some(wb) = whiteboard {
             if let Err(e) = wb.ensure(&actual_session_id).await {
                 tracing::warn!("whiteboard ensure failed: {}", e);
@@ -636,7 +635,7 @@ impl ZeroClawConnection {
                         if let Some(content) = result.get("content").and_then(|c| c.as_str()) {
                             if !content.is_empty() {
                                 full_text = content.to_string();
-                                let _ = event_tx.send(StreamEvent::Done { content: content.to_string() }).await;
+                                let _ = event_tx.send(StreamEvent::Done { content: content.to_string(), turn_id: String::new() }).await;
                             }
                         }
                     }
@@ -679,7 +678,7 @@ impl ZeroClawConnection {
                                     full_text = content.to_string();
                                 }
                                 let _ = event_tx.send(StreamEvent::ChunkReset).await;
-                                let _ = event_tx.send(StreamEvent::Done { content: full_text.clone() }).await;
+                                let _ = event_tx.send(StreamEvent::Done { content: full_text.clone(), turn_id: String::new() }).await;
                                 return Ok((full_text, streamed));
                             }
                             _ => {}

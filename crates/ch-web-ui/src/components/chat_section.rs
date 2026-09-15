@@ -27,7 +27,7 @@ pub async fn chat_section(cx: &Cx) -> Result {
             </div>
             <div id="chat-bottom-bar" style="flex-shrink: 0; z-index: 10; background: var(--color-bg); padding-top: 12px; margin-top: 8px;">
                 <div id="agent-banner" class="hidden text-xs px-3 py-1.5 rounded-lg" style="border: 1px solid var(--color-status-error); background: color-mix(in srgb, var(--color-status-error) 12%, transparent); color: var(--color-text-strong); text-align: center;">"Agent offline — check provider key, then reconnect."</div>
-                <div id="session-bar" class="flex items-center gap-2 mt-4 px-3 py-1.5 rounded-lg" style="border: 1px solid var(--color-border-weak); background: var(--color-bg-weak);">
+                <div id="session-bar" class="hidden items-center gap-2 mt-4 px-3 py-1.5 rounded-lg" style="display: none; border: 1px solid var(--color-border-weak); background: var(--color-bg-weak);">
                     <span class="text-xs" style="color: var(--color-text-weak);">"Session"</span>
                     <select id="session-select" class="text-xs flex-1 px-2 py-1 rounded" style="background: var(--color-bg); color: var(--color-text-strong); border: 1px solid var(--color-border-weak);"></select>
                     <button id="session-new-btn" class="text-xs px-2 py-0.5 rounded cursor-pointer transition" style="color: var(--color-text-inverted); border: none; background: var(--color-bg-interactive);">"+ New"</button>
@@ -44,9 +44,14 @@ pub async fn chat_section(cx: &Cx) -> Result {
                 </div>
                 <form id="chat-form" style="padding-top: 8px;">
                     <div class="flex gap-2 items-end">
-                        <button type="button" id="upload-btn" class="flex items-center justify-center cursor-pointer transition rounded-lg flex-shrink-0" style="width: 36px; height: 36px; border: 1.5px solid var(--color-border); background: var(--color-bg-weak); color: var(--color-text-weak); margin-bottom: 2px;" title="Upload file">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                        </button>
+                        <div class="flex flex-col gap-2 flex-shrink-0" style="margin-bottom: 2px;">
+                            <button type="button" id="menu-btn" class="flex items-center justify-center cursor-pointer transition rounded-lg" style="width: 36px; height: 36px; border: 1.5px solid var(--color-border); background: var(--color-bg-weak); color: var(--color-text-weak);" title="Chats & tools">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+                            </button>
+                            <button type="button" id="upload-btn" class="flex items-center justify-center cursor-pointer transition rounded-lg flex-shrink-0" style="width: 36px; height: 36px; border: 1.5px solid var(--color-border); background: var(--color-bg-weak); color: var(--color-text-weak);" title="Upload file">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                            </button>
+                        </div>
                         <input type="file" id="file-input" class="hidden" multiple="true" />
                         <div class="flex-1 relative">
                             <textarea id="chat-input" placeholder="Type your message here..." rows="2" class="w-full px-5 py-3.5 pr-12 text-sm rounded-xl resize-none outline-none transition leading-relaxed" style="min-height: 52px; max-height: 160px; border: 1.5px solid var(--color-border); background: var(--color-bg-weak); color: var(--color-text-strong); font-family: var(--font-mono);"></textarea>
@@ -61,6 +66,25 @@ pub async fn chat_section(cx: &Cx) -> Result {
                 </form>
             </div>
         </section>
+        <div id="drawer-overlay" class="hidden"></div>
+        <aside id="side-drawer" aria-label="Chats and tools" aria-hidden="true">
+            <div id="drawer-header">
+                <span id="drawer-title">"Chats & tools"</span>
+                <button type="button" id="drawer-close-btn" title="Close">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+            </div>
+            <div id="drawer-actions">
+                <button type="button" id="drawer-new-btn">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    <span>"New chat"</span>
+                </button>
+            </div>
+            <div id="drawer-extras"></div>
+            <div id="drawer-sessions-label">"Sessions"</div>
+            <div id="drawer-list"></div>
+            <div id="drawer-usage"></div>
+        </aside>
         <style>{ (Unescaped::new_unchecked(r#"@keyframes chat-typing-bounce { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1); } }
 #email-input:focus { border-color: var(--color-bg-interactive) !important; box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-bg-interactive) 25%, transparent) !important; }
 #email-input::placeholder { color: var(--color-text-weak); opacity: 0.7; }

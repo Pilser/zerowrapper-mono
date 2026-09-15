@@ -7,6 +7,7 @@ pub struct ChatRow {
     pub id: i64,
     pub role: String,
     pub content: String,
+    pub turn_id: String,
     pub created_at: String,
 }
 
@@ -129,14 +130,16 @@ impl DbPool {
     }
 
     /// Persistent chat transcript for the native engine (replaces daemon history).
-    pub async fn insert_chat_message(&self, session_id: &str, role: &str, content: &str) -> anyhow::Result<()> {
+    /// Rows share the turn key, so live rows and history rows upsert by turn.
+    pub async fn insert_chat_message(&self, session_id: &str, role: &str, content: &str, turn_id: &str) -> anyhow::Result<()> {
         let conn = self.conn().await;
         conn.execute(
-            "INSERT INTO chat_messages (session_id, role, content) VALUES (?1, ?2, ?3)",
+            "INSERT INTO chat_messages (session_id, role, content, turn_id) VALUES (?1, ?2, ?3, ?4)",
             Params::Positional(vec![
                 Value::from(session_id),
                 Value::from(role),
                 Value::from(content),
+                Value::from(turn_id),
             ]),
         ).await?;
         Ok(())
@@ -145,16 +148,18 @@ impl DbPool {
     pub async fn get_chat_messages(&self, session_id: &str, limit: i64) -> anyhow::Result<Vec<ChatRow>> {
         let conn = self.conn().await;
         let mut rows = conn.query(
-            "SELECT id, role, content, created_at FROM chat_messages WHERE session_id = ?1 ORDER BY id DESC LIMIT ?2",
+            "SELECT id, role, content, turn_id, created_at FROM chat_messages WHERE session_id = ?1 ORDER BY id DESC LIMIT ?2",
             Params::Positional(vec![Value::from(session_id), Value::Integer(limit.clamp(1, 500))]),
         ).await?;
         let mut out = Vec::new();
         while let Some(row) = rows.next().await? {
             let id = match row.get_value(0)? { Value::Integer(i) => i, _ => continue };
             let role = match row.get_value(1)? { Value::Text(s) => s, _ => continue };
-            let content = match row.get_value(2)? { Value::Text(s) => s, _ => String::new() };
-            let created_at = match row.get_value(3)? { Value::Text(s) => s, _ => String::new() };
-            out.push(ChatRow { id, role, content, created_at });
+            const EMPTY: &str = "";
+            let content = match row.get_value(2)? { Value::Text(s) => s, _ => String::from(EMPTY) };
+            let turn_id = match row.get_value(3)? { Value::Text(s) => s, _ => String::from(EMPTY) };
+            let created_at = match row.get_value(4)? { Value::Text(s) => s, _ => String::from(EMPTY) };
+            out.push(ChatRow { id, role, content, turn_id, created_at });
         }
         out.reverse();
         Ok(out)

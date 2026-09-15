@@ -23,7 +23,7 @@ use zw_core::StreamEvent;
 ///
 /// `CompletionCall` carries only usage accounting (already folded into
 /// `RunOutput::usage`) → `None`.
-pub fn map_event(ev: AgentEvent) -> Option<StreamEvent> {
+pub fn map_event(ev: AgentEvent, turn_id: &str) -> Option<StreamEvent> {
     match ev {
         AgentEvent::Token(t) => Some(StreamEvent::Chunk {
             content: t.to_string(),
@@ -61,6 +61,7 @@ pub fn map_event(ev: AgentEvent) -> Option<StreamEvent> {
         AgentEvent::CompletionCall { .. } => None,
         AgentEvent::Done { response, .. } => Some(StreamEvent::Done {
             content: response.to_string(),
+            turn_id: turn_id.to_string(),
         }),
         AgentEvent::Error(e) => Some(StreamEvent::Error {
             message: e.to_string(),
@@ -80,18 +81,20 @@ pub async fn run_embedded(
     engine: &mut Engine,
     prompt: &str,
     event_tx: mpsc::Sender<StreamEvent>,
+    turn_id: &str,
 ) -> anyhow::Result<RunOutput> {
     let (agent_tx, mut agent_rx) = mpsc::channel::<AgentEvent>(512);
     let done_seen = Arc::new(AtomicBool::new(false));
     let done_flag = done_seen.clone();
     // Clone: the original stays with us for the synthesized closing event.
     let tx_forward = event_tx.clone();
+    let turn_owned = turn_id.to_string();
     let forward = tokio::spawn(async move {
         while let Some(ev) = agent_rx.recv().await {
             if matches!(ev, AgentEvent::Done { .. }) {
                 done_flag.store(true, Ordering::Relaxed);
             }
-            if let Some(se) = map_event(ev) {
+            if let Some(se) = map_event(ev, &turn_owned) {
                 if tx_forward.send(se).await.is_err() {
                     break;
                 }
@@ -99,7 +102,9 @@ pub async fn run_embedded(
         }
     });
 
-    let out = engine.run_streaming(prompt, agent_tx).await;
+    let out = engine
+        .run_streaming(prompt, agent_tx, Some(turn_id.to_string()))
+        .await;
     // `agent_tx` moved into `run_streaming` and drops on return → the
     // forward task drains the remainder and ends.
     let _ = forward.await;
@@ -120,6 +125,7 @@ pub async fn run_embedded(
                 let _ = event_tx
                     .send(StreamEvent::Done {
                         content: o.text.clone(),
+                        turn_id: turn_id.to_string(),
                     })
                     .await;
             }
@@ -247,15 +253,68 @@ pub fn register_agent_tools(providers: Vec<std::sync::Arc<dyn zw_core::McpToolPr
     zerostack::agent::builder::set_extra_tool_factories(factories);
 }
 
-/// Headless engine with server-safe defaults: no TUI, no disk writes
-/// (`no_session` disables both chat-history and session-file writes), no CWD
-/// context scan, provider/model from `Cli::resolve_*` (flags → config →
-/// built-in default), API key resolved from env by the provider auth layer.
-pub fn new_engine(session_name: &str) -> anyhow::Result<Engine> {
+/// One history row in display shape (mirrors the old transcript endpoint).
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct HistoryMsg {
+    pub role: String,
+    pub content: String,
+    pub turn_id: String,
+}
+
+fn history_msg(
+    role: &zerostack::session::MessageRole,
+    content: &str,
+    turn: &Option<impl ToString>,
+) -> Option<HistoryMsg> {
+    use zerostack::session::MessageRole;
+    let role = match role {
+        MessageRole::User => "user",
+        MessageRole::Assistant => "assistant",
+        // Tool traffic rendered live; history shows text turns only.
+        _ => return None,
+    }
+    .to_string();
+    Some(HistoryMsg {
+        role,
+        content: content.to_string(),
+        turn_id: turn.as_ref().map(|t| t.to_string()).unwrap_or_default(),
+    })
+}
+
+/// History straight from a live engine (its session is the source of truth).
+pub fn session_history(engine: &Engine) -> Vec<HistoryMsg> {
+    engine
+        .session()
+        .messages
+        .iter()
+        .filter_map(|m| history_msg(&m.role, m.content.as_str(), &m.turn))
+        .collect()
+}
+
+/// History from the agent's session file (post-restart, pre-first-message).
+/// Returns `None` when this session was never persisted.
+pub fn load_session_history(session_id: &str) -> Option<Vec<HistoryMsg>> {
+    let s = zerostack::session::storage::load_session(session_id).ok()??;
+    Some(
+        s.messages
+            .iter()
+            .filter_map(|m| history_msg(&m.role, m.content.as_str(), &m.turn))
+            .collect(),
+    )
+}
+
+/// Headless engine with server-safe defaults: no TUI, no CWD context scan,
+/// provider/model from `Cli::resolve_*` (flags → config → built-in default),
+/// API key resolved from env by the provider auth layer.
+///
+/// Sessions are agent-owned: an existing session file is resumed (keeping its
+/// id, adopting the current display name); otherwise a fresh session is built
+/// with our id. Disk persistence stays ON (this is the durable transcript).
+pub fn new_engine(session_id: &str, display_name: &str) -> anyhow::Result<Engine> {
     use zerostack::{cli::Cli, config, context, provider, sandbox, session::Session};
 
     let cli = Cli {
-        no_session: true,
+        no_session: false,
         ..Default::default()
     };
     let (cfg, _) = config::load();
@@ -263,7 +322,17 @@ pub fn new_engine(session_name: &str) -> anyhow::Result<Engine> {
     let model = cli.resolve_model(&cfg).to_string();
     let quick_models = config::quick_models_map(&cfg);
     let context_window = cfg.resolve_context_window(&provider_name, &model, &quick_models);
-    let session = Session::new(&provider_name, &model, context_window, session_name);
+    let session = match zerostack::session::storage::load_session(session_id).ok().flatten() {
+        Some(mut s) => {
+            s.name = display_name.into();
+            s
+        }
+        None => {
+            let mut s = Session::new(&provider_name, &model, context_window, display_name);
+            s.id = session_id.into();
+            s
+        }
+    };
     let context = context::load_with_prompts_dirs(true, &[]);
     let client = provider::create_client(
         &provider_name,

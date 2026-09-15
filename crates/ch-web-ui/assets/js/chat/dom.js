@@ -24,4 +24,11 @@ export function init() {
   els.uploadBtn = document.getElementById('upload-btn')
   els.fileInput = document.getElementById('file-input')
   els.attachments = document.getElementById('attachments')
+  els.menuBtn = document.getElementById('menu-btn')
+  els.drawer = document.getElementById('side-drawer')
+  els.drawerOverlay = document.getElementById('drawer-overlay')
+  els.drawerCloseBtn = document.getElementById('drawer-close-btn')
+  els.drawerNewBtn = document.getElementById('drawer-new-btn')
+  els.drawerList = document.getElementById('drawer-list')
+  els.drawerUsage = document.getElementById('drawer-usage')
 }

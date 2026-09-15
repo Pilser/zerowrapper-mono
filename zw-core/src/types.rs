@@ -36,14 +36,8 @@ pub enum StreamEvent {
     ChunkReset,
     ToolCall { tool_call_id: String, name: String, args: serde_json::Value },
     ToolResult { tool_call_id: String, name: String, output: String },
-    Done { content: String },
+    Done { content: String, turn_id: String },
     Error { message: String },
-    /// Sent when a new session is created with the zeroclaw daemon.
-    /// Frontend should store this session_id in localStorage.
-    SessionCreated { session_id: String },
-    /// Emitted by the daemon watchdog when socket reachability changes.
-    /// Frontend should show/hide a "daemon reconnecting" banner.
-    DaemonStatus { online: bool },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

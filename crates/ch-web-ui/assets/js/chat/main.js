@@ -7,6 +7,7 @@ import * as streaming from './streaming.js'
 import { addMessage } from './messages.js'
 import * as lightbox from './lightbox.js'
 import { uploadFile, createAttachmentChip, uploadState } from './file-upload.js'
+import * as drawer from './drawer.js'
 
 function logPendingResources() {
   const entries = performance.getEntriesByType('resource')
@@ -41,6 +42,7 @@ export function init() {
   auth.showBadge()
   connection.connect()
   refreshSessionList()
+  drawer.init()
 
   if (els.sessionNewBtn) els.sessionNewBtn.addEventListener('click', handleNewSession)
   if (els.sessionSelect) els.sessionSelect.addEventListener('change', handleSwitchSession)
@@ -132,6 +134,7 @@ async function handleNewSession() {
   connection.disconnect()
   connection.connect()
   refreshSessionList()
+  drawer.renderList()
 }
 
 async function handleSwitchSession() {
@@ -148,6 +151,7 @@ async function handleSwitchSession() {
   whiteboard.setSession(id)
   auth.showBadge()
   refreshSessionList()
+  drawer.renderList()
 }
 
 function handleSubmit(e) {
@@ -159,13 +163,22 @@ function handleSubmit(e) {
   if (!text && attachments.length === 0) { addMessage('error', 'Cannot send an empty message.'); return }
   if (network.getState() !== network.State.CONNECTED) { addMessage('error', 'Not connected to backend.'); return }
   showStopIcon()
+  // Displayed row: plain text + chips (renderTextWithAttachments splits it).
+  const wireAttachments = attachments.map(a => ({ filename: a.filename, mime_type: a.mime_type, path: a.path, url: a.url || '' }))
   const combined = text && attachments.length > 0
-    ? JSON.stringify({ message: text, attachments: attachments.map(a => ({ filename: a.filename, mime_type: a.mime_type, path: a.path })) })
+    ? JSON.stringify({ message: text, attachments: wireAttachments })
     : (attachments.length > 0
-      ? JSON.stringify({ attachments: attachments.map(a => ({ filename: a.filename, mime_type: a.mime_type, path: a.path })) })
+      ? JSON.stringify({ attachments: wireAttachments })
       : text)
+  // Client turn key: tags the optimistic row so history rows and the
+  // final Done upsert against it instead of doubling.
+  const turnKey = 't' + Date.now().toString(36) + Math.floor(Math.random() * 46656).toString(36)
   addMessage('user', combined)
-  connection.send(text, undefined, attachments.map(a => ({ filename: a.filename, mime_type: a.mime_type, path: a.path })))
+  try {
+    const lr = els.messages.lastElementChild
+    if (lr) { lr.dataset.turn = turnKey; lr.dataset.role = 'user' }
+  } catch {}
+  connection.send(text, undefined, wireAttachments, turnKey)
   streaming.showTyping()
   els.input.value = ''
   els.input.style.height = 'auto'

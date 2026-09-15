@@ -61,6 +61,19 @@ pub async fn agent_session_list() -> Vec<serde_json::Value> {
     out
 }
 
+/// Transcript straight from the agent: live engine first, its session file
+/// on disk second. This is what history displays — the wrapper keeps no
+/// parallel transcript (its old `chat_messages` rows, if any, are ignored).
+pub async fn engine_history(session_id: &str) -> Vec<zw_agent_embed::HistoryMsg> {
+    {
+        let engines = ENGINES.lock().await;
+        if let Some(e) = engines.get(session_id) {
+            return zw_agent_embed::session_history(e);
+        }
+    }
+    zw_agent_embed::load_session_history(session_id).unwrap_or_default()
+}
+
 /// Drive one prompt through the native engine, emitting typed `StreamEvent`s
 /// (buffer/resume unchanged).
 async fn run_embedded_turn(
@@ -68,6 +81,8 @@ async fn run_embedded_turn(
     prompt: String,
     event_tx: mpsc::Sender<StreamEvent>,
     db: zw_db::DbPool,
+    turn_id: String,
+    raw: String,
 ) {
     let _ = db.touch_session(&session_id).await;
     // Our title, unless it is still the raw id (auto-created rows): then the
@@ -78,7 +93,8 @@ async fn run_embedded_turn(
         .unwrap_or(None)
         .filter(|t| t != &session_id);
     let auto_title: Option<String> = if stored_title.is_none() {
-        let excerpt: String = prompt.chars().take(48).collect();
+        // Title from the human text, never the executed form (no file refs).
+        let excerpt: String = raw.chars().take(48).collect();
         let excerpt = excerpt.replace('\n', " ").trim().to_string();
         if excerpt.is_empty() {
             None
@@ -100,7 +116,9 @@ async fn run_embedded_turn(
             e.session_mut().name = display_title.clone().into();
             Some(e)
         } else {
-            match zw_agent_embed::new_engine(&display_title) {
+            // Agent-owned session: resumes its file when present, else fresh
+            // with our id — either way the engine holds the transcript.
+            match zw_agent_embed::new_engine(&session_id, &display_title) {
                 Ok(mut e) => {
                     e.session_mut().id = session_id.clone().into();
                     e.session_mut().name = display_title.clone().into();
@@ -118,14 +136,12 @@ async fn run_embedded_turn(
         }
     };
     let Some(mut engine) = engine else { return };
-    let result = zw_agent_embed::run_embedded(&mut engine, &prompt, event_tx.clone()).await;
-    // Native transcript (replaces daemon history): user prompt + final text.
+    let result =
+        zw_agent_embed::run_embedded(&mut engine, &prompt, event_tx.clone(), &turn_id).await;
+    // Transcript lives in the agent (it saves its session file itself).
+    // Here we only keep our thread row fresh: title on first turn.
     if let Ok(out) = &result {
         if out.kind != zw_agent_embed::engine::RunKind::Ignored && !out.text.trim().is_empty() {
-            let _ = db.insert_chat_message(&session_id, "user", &prompt).await;
-            let _ = db
-                .insert_chat_message(&session_id, "assistant", out.text.trim())
-                .await;
             if let Some(t) = auto_title {
                 let _ = db.rename_session(&session_id, &t).await;
             }
@@ -436,6 +452,42 @@ pub async fn handle_ws_connection(
         if content.trim().is_empty() {
             continue;
         }
+        // Attached picker files reach the agent as text references (the
+        // engine takes a prompt string). The transcript lives in the agent,
+        // so history renders from there (chips are rebuilt from stored
+        // paths, never from a wrapper-side copy).
+        let mut prompt = content.clone();
+
+        if let Some(arr) = parsed.get("attachments").and_then(|v| v.as_array()) {
+            let mut refs = Vec::new();
+            for a in arr {
+                let name = a.get("filename").and_then(|v| v.as_str()).unwrap_or("");
+                if name.is_empty() {
+                    continue;
+                }
+                let loc = a
+                    .get("url")
+                    .and_then(|v| v.as_str())
+                    .filter(|s| !s.is_empty())
+                    .map(str::to_string)
+                    .or_else(|| {
+                        a.get("path")
+                            .and_then(|v| v.as_str())
+                            .filter(|s| !s.is_empty())
+                            .map(str::to_string)
+                    })
+                    .unwrap_or_default();
+                refs.push(if loc.is_empty() {
+                    format!("- {name}")
+                } else {
+                    format!("- {name} ({loc})")
+                });
+            }
+            if !refs.is_empty() {
+                prompt.push_str("\n\nAttached files:\n");
+                prompt.push_str(&refs.join("\n"));
+            }
+        }
 
         current_session_id = session_id.clone();
         if let Some(handle) = whiteboard.clone() {
@@ -467,12 +519,24 @@ pub async fn handle_ws_connection(
         // Native path (no daemon, no switch): every prompt runs in-process.
         // Refresh/reconnect never cancels — the turn continues and the
         // stream resumes from the hybrid buffer.
-        let prompt = content.clone();
         let sid = session_id.clone();
         let sid_tracked = sid.clone();
         let db_for_turn = buffer_db.clone();
+        // Client turn key (dedup across history + replay); server fallback.
+        let turn_id = parsed
+            .get("turn")
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.is_empty())
+            .map(str::to_string)
+            .unwrap_or_else(|| {
+                let nanos = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|d| d.as_nanos())
+                    .unwrap_or(0);
+                format!("srv-{nanos:x}")
+            });
         let turn = tokio::spawn(async move {
-            run_embedded_turn(sid_tracked, prompt, event_tx, db_for_turn).await;
+            run_embedded_turn(sid_tracked, prompt, event_tx, db_for_turn, turn_id, content).await;
         });
         TASKS.lock().await.insert(sid, turn);
     }

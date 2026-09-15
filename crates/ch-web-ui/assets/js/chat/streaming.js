@@ -107,11 +107,30 @@ export function finalizeIfActive() {
   if (content) flush()
 }
 
-export function handleDone(text) {
+export function handleDone(text, turnId) {
   finalizeThought()
   hideTyping()
   if (text) content = text
+  if (turnId && el && el.parentElement) {
+    try {
+      el.parentElement.dataset.turn = turnId
+      el.parentElement.dataset.role = 'assistant'
+    } catch {}
+  }
   finalize()
+}
+
+// Drop the in-flight partial row without finalizing (used when a Done
+// upserts into an already-rendered history row instead).
+export function dropPartial() {
+  if (el) {
+    const parent = el.parentElement
+    if (parent) parent.remove()
+    el = null
+  }
+  content = ''
+  streamId++
+  if (onFinalize) onFinalize()
 }
 
 export function isActive() {

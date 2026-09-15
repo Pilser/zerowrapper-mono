@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS chat_messages (
     session_id TEXT NOT NULL,
     role       TEXT NOT NULL,
     content    TEXT NOT NULL DEFAULT '',
+    turn_id    TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_chat_messages_session ON chat_messages(session_id, id);
@@ -249,6 +250,7 @@ pub const SYSTEM_MIGRATIONS: &[&str] = &[
     "ALTER TABLE sessions ADD COLUMN title TEXT NOT NULL DEFAULT '';",
     "ALTER TABLE sessions DROP COLUMN account;",
     "ALTER TABLE sessions DROP COLUMN chat_id;",
+    "ALTER TABLE chat_messages ADD COLUMN turn_id TEXT NOT NULL DEFAULT '';",
 ];
 
 pub const SESSION_MIGRATIONS: &[&str] = &[

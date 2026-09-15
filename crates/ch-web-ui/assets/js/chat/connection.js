@@ -1,7 +1,7 @@
 import * as network from './network.js'
 import { els } from './dom.js'
 import { state as authState, saveToStorage } from './auth.js'
-import { fetchHistory, addMessage, abortHistoryFetch } from './messages.js'
+import { fetchHistory, addMessage, abortHistoryFetch, upsertAssistantTurn } from './messages.js'
 import * as streaming from './streaming.js'
 import * as toolCalls from './tool-calls.js'
 import * as whiteboard from './whiteboard.js'
@@ -52,13 +52,7 @@ function handleMessage(e) {
     const data = JSON.parse(e.data)
     if (data && typeof data.seq === 'number') bumpSeqFrom(data)
     switch (data.type) {
-      case 'session_created':
-        if (data.session_id && data.session_id !== authState.sessionId) {
-          authState.sessionId = data.session_id
-          saveToStorage()
-        }
-        whiteboard.setSession(data.session_id)
-        break
+
       case 'whiteboard_update':
         if (data.session_id) whiteboard.setSession(data.session_id)
         whiteboard.setBoard(data)
@@ -73,6 +67,9 @@ function handleMessage(e) {
         streaming.handleChunk(data.content)
         break
       case 'chunk_reset':
+        // Engine discarded its buffer (retry): drop our partial row too,
+        // or the restarted text appends to the old and doubles.
+        streaming.reset()
         break
       case 'tool_call':
         streaming.flush()
@@ -81,10 +78,20 @@ function handleMessage(e) {
       case 'tool_result':
         toolCalls.handleToolResult(data.tool_call_id, data.name, data.output)
         break
-      case 'done':
-        streaming.handleDone(data.content)
+      case 'done': {
+        // Turn-keyed upsert: a history row for this turn (rendered from a
+        // reconnect fetch) wins — drop our partial and update it instead of
+        // appending a second row. Fresh turns finalize normally.
+        const tid = data.turn_id || ''
+        let replaced = false
+        if (tid) {
+          try { replaced = upsertAssistantTurn(tid, data.content || '') } catch {}
+        }
+        if (replaced) streaming.dropPartial()
+        else streaming.handleDone(data.content, tid)
         if (onStateChange) onStateChange('done')
         break
+      }
       case 'error':
         streaming.cancel()
         addMessage('error', data.message || data.error || 'Unknown error')
@@ -266,18 +273,24 @@ export function connect() {
 
   network.connect(url, {
     onOpen: () => {
-      fetchHistory()
       whiteboard.setSession(authState.sessionId)
       whiteboard.sync()
-      // Ephemeral replay: if we were mid-stream when the socket dropped,
-      // ask the server to replay buffered deltas since our last seq.
-      // This is NOT history — history stays agent DB. Buffer drains 10 min
-      // after turn_complete so it never grows.
-      const sid = authState.sessionId || localStorage.getItem('zerowrapper_session') || ''
-      const since = getLastSeq(sid)
-      if (sid && since > 0) {
-        try { network.send(JSON.stringify({ type: 'resume', session_id: sid, since })) } catch {}
+      const sendResume = () => {
+        // Ephemeral replay: if we were mid-stream when the socket dropped,
+        // ask the server to replay buffered deltas since our last seq.
+        // Runs AFTER history renders, so replayed turns upsert against
+        // known turn ids instead of doubling as fresh rows.
+        const sid = authState.sessionId || localStorage.getItem('zerowrapper_session') || ''
+        const since = getLastSeq(sid)
+        if (sid && since > 0) {
+          try { network.send(JSON.stringify({ type: 'resume', session_id: sid, since })) } catch {}
+        }
       }
+      try {
+        const p = fetchHistory()
+        if (p && p.then) p.then(sendResume, sendResume)
+        else sendResume()
+      } catch { sendResume() }
     },
     onMessage: handleMessage,
     onClose: (e) => {
@@ -297,7 +310,7 @@ export function disconnect() {
   abortHistoryFetch()
 }
 
-export function send(text, role, attachments) {
+export function send(text, role, attachments, turn) {
   if (network.getState() !== network.State.CONNECTED) {
     addMessage('error', 'Not connected to backend.')
     return
@@ -308,6 +321,7 @@ export function send(text, role, attachments) {
     content: text,
   }
   if (attachments && attachments.length > 0) payload.attachments = attachments
+  if (turn) payload.turn = turn
   network.send(JSON.stringify(payload))
 }
 
