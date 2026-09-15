@@ -51,7 +51,13 @@ pub async fn agent_session_list() -> Vec<serde_json::Value> {
             })
         })
         .collect();
-    out.sort_by(|a, b| b.get("updated_at").cmp(&a.get("updated_at")));
+    // `updated_at` is RFC3339: lexicographic order == chronological.
+    // (`serde_json::Value` has no `Ord`; compare as strings.)
+    out.sort_by(|a, b| {
+        b.get("updated_at")
+            .and_then(|v| v.as_str())
+            .cmp(&a.get("updated_at").and_then(|v| v.as_str()))
+    });
     out
 }
 
