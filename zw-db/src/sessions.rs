@@ -172,7 +172,7 @@ impl DbPool {
     pub async fn get_session(&self, id: &str) -> anyhow::Result<Option<SessionRow>> {
         let conn = self.conn().await;
         let mut rows = conn.query(
-            "SELECT id, user_id, title, agent_alias, account, chat_id, channel, created_at, last_active FROM sessions WHERE id = ?1",
+            "SELECT id, user_id, title, agent_alias, channel, created_at, last_active FROM sessions WHERE id = ?1",
             Params::Positional(vec![Value::from(id)]),
         ).await?;
         if let Some(row) = rows.next().await? {
@@ -181,11 +181,9 @@ impl DbPool {
                 user_id: match row.get_value(1)? { Value::Text(s) => s, _ => String::from("single") },
                 title: match row.get_value(2)? { Value::Text(s) => s, _ => String::new() },
                 agent_alias: match row.get_value(3)? { Value::Text(s) => s, _ => return Err(anyhow::anyhow!("invalid agent_alias")) },
-                account: match row.get_value(4)? { Value::Text(s) => Some(s), _ => None },
-                chat_id: match row.get_value(5)? { Value::Text(s) => Some(s), _ => None },
-                channel: match row.get_value(6)? { Value::Text(s) => s, _ => String::from("web") },
-                created_at: match row.get_value(7)? { Value::Text(s) => s, _ => String::new() },
-                last_active: match row.get_value(8)? { Value::Text(s) => s, _ => String::new() },
+                channel: match row.get_value(4)? { Value::Text(s) => s, _ => String::from("web") },
+                created_at: match row.get_value(5)? { Value::Text(s) => s, _ => String::new() },
+                last_active: match row.get_value(6)? { Value::Text(s) => s, _ => String::new() },
             }))
         } else {
             Ok(None)
