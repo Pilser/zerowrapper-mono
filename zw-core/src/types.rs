@@ -38,6 +38,13 @@ pub enum StreamEvent {
     ToolResult { tool_call_id: String, name: String, output: String },
     Done { content: String, turn_id: String },
     Error { message: String },
+    /// The native `ask_user` tool needs a human: right drawer opens,
+    /// answers go back via REST (never the live socket).
+    AskRequest {
+        ask_id: String,
+        session_id: String,
+        questions: serde_json::Value,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

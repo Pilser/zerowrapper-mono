@@ -118,7 +118,7 @@ async fn run_embedded_turn(
         } else {
             // Agent-owned session: resumes its file when present, else fresh
             // with our id — either way the engine holds the transcript.
-            match zw_agent_embed::new_engine(&session_id, &display_title) {
+            match zw_agent_embed::new_engine(&session_id, &display_title, db.clone()) {
                 Ok(mut e) => {
                     e.session_mut().id = session_id.clone().into();
                     e.session_mut().name = display_title.clone().into();

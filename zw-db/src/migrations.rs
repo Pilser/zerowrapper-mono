@@ -26,6 +26,17 @@ CREATE TABLE IF NOT EXISTS chat_messages (
 );
 CREATE INDEX IF NOT EXISTS idx_chat_messages_session ON chat_messages(session_id, id);
 
+CREATE TABLE IF NOT EXISTS ask_requests (
+    id         TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL,
+    questions  TEXT NOT NULL DEFAULT '[]',
+    status     TEXT NOT NULL DEFAULT 'pending',
+    answers    TEXT NOT NULL DEFAULT '[]',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    resolved_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_ask_session ON ask_requests(session_id, status);
+
 CREATE TABLE IF NOT EXISTS wb_keys (
     bucket      TEXT PRIMARY KEY,
     board_id    TEXT NOT NULL,
