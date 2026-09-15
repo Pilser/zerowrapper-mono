@@ -110,16 +110,12 @@ impl WhiteboardHandle {
             let mut ticker = tokio::time::interval(poll_interval);
             loop {
                 ticker.tick().await;
-                let sessions: Vec<String> = {
-                    let core = state.lock().await;
-                    core.seen.keys().cloned().collect()
-                };
-                for sid in sessions {
-                    if let Some(store) = &db {
-                        poll_with_db(store, &dir, &cache, &state, &tx, &sid).await;
-                    } else {
-                        poll_without_db(&dir, &cache, &state, &tx, &sid).await;
-                    }
+                // Fully shared board: one poll per tick, always under the
+                // shared key — never once per chat session (same file/DB).
+                if let Some(store) = &db {
+                    poll_with_db(store, &dir, &cache, &state, &tx, SHARED_SID).await;
+                } else {
+                    poll_without_db(&dir, &cache, &state, &tx, SHARED_SID).await;
                 }
             }
         })

@@ -261,7 +261,8 @@ export function setBoard(data) {
   if (spin) spin.classList.add('hidden')
   clearTimeout(syncHideTimer)
   if (!data) return
-  if (data.session_id) sessionId = data.session_id
+  // Fully shared board: never adopt the event's session id (always the
+  // shared key now) — the whiteboard module keeps the chat's session.
   if (data.state) {
     currentState = data.state
     const pages = data.state.pages || []

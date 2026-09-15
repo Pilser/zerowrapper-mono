@@ -206,13 +206,14 @@ async fn buffer_event(db: &zw_db::DbPool, session_id: &str, event: &StreamEvent)
 fn spawn_whiteboard_forwarding(
     ws_sender: &Arc<tokio::sync::Mutex<futures_util::stream::SplitSink<WebSocket, Message>>>,
     handle: zw_whiteboard::WhiteboardHandle,
-    session_id: String,
-    spawned: &mut Option<String>,
+    spawned: &mut bool,
 ) {
-    if spawned.as_deref() == Some(session_id.as_str()) {
+    // One shared board: a single forward task per connection, no session
+    // filter — every broadcast belongs to every chat session.
+    if *spawned {
         return;
     }
-    *spawned = Some(session_id.clone());
+    *spawned = true;
     let ws = ws_sender.clone();
     tokio::spawn(async move {
         let mut rx = handle.subscribe();
@@ -222,9 +223,6 @@ fn spawn_whiteboard_forwarding(
                     session_id: sid,
                     state,
                 }) => {
-                    if sid != session_id {
-                        continue;
-                    }
                     let flat = serde_json::json!({
                         "type": "whiteboard_update",
                         "session_id": sid,
@@ -239,9 +237,6 @@ fn spawn_whiteboard_forwarding(
                     session_id: sid,
                     board,
                 }) => {
-                    if sid != session_id {
-                        continue;
-                    }
                     let flat = serde_json::json!({
                         "type": "whiteboard_update",
                         "session_id": sid,
@@ -287,7 +282,7 @@ pub async fn handle_ws_connection(
     }
 
     let mut current_session_id = String::new();
-    let mut whiteboard_forwarding_for: Option<String> = None;
+    let mut whiteboard_forwarding_for = false;
 
     // Forward inspect commands from MCP tool to browser tab.
     let ws_inspect = ws_sender.clone();
@@ -401,7 +396,7 @@ pub async fn handle_ws_connection(
                     if let Err(e) = handle.ensure(&sid).await {
                         tracing::warn!("whiteboard ensure on sync failed: {}", e);
                     }
-                    spawn_whiteboard_forwarding(&ws_sender, handle, sid.clone(), &mut whiteboard_forwarding_for);
+                    spawn_whiteboard_forwarding(&ws_sender, handle, &mut whiteboard_forwarding_for);
                 }
                 let flat = match &whiteboard {
                     Some(handle) => match handle.latest_state(&sid).await {
@@ -491,7 +486,7 @@ pub async fn handle_ws_connection(
 
         current_session_id = session_id.clone();
         if let Some(handle) = whiteboard.clone() {
-            spawn_whiteboard_forwarding(&ws_sender, handle, current_session_id.clone(), &mut whiteboard_forwarding_for);
+            spawn_whiteboard_forwarding(&ws_sender, handle, &mut whiteboard_forwarding_for);
         }
         let (event_tx, mut event_rx) = mpsc::channel::<StreamEvent>(256);
         let ws = ws_sender.clone();

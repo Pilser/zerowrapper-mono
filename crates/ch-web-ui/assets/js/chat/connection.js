@@ -54,7 +54,6 @@ function handleMessage(e) {
     switch (data.type) {
 
       case 'whiteboard_update':
-        if (data.session_id) whiteboard.setSession(data.session_id)
         whiteboard.setBoard(data)
         break
       case 'resumed':
