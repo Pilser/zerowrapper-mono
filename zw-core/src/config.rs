@@ -57,6 +57,15 @@ impl WebChannelConfig {
 }
 
 fn default_upload_dir() -> PathBuf {
+    // The system already knows the workspace (ZW_WORKDIR, else AGENTS_DIR):
+    // uploads live directly under it, no extra env, no data/ folder.
+    for var in ["ZW_WORKDIR", "AGENTS_DIR"] {
+        if let Ok(dir) = std::env::var(var) {
+            if !dir.trim().is_empty() {
+                return PathBuf::from(dir).join("uploads");
+            }
+        }
+    }
     PathBuf::from("./data/uploads")
 }
 
