@@ -183,7 +183,6 @@ impl StateValue for BoardState {
         json!({
             "page_no": self.pages.iter().map(|p| p.page_no).collect::<Vec<_>>(),
             "active_page": self.active_page,
-            "locked": self.locked,
             "pages": self.pages,
         })
     }

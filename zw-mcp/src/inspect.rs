@@ -486,7 +486,7 @@ impl InspectProvider {
     }
 }
 
-fn strip_program_name(mut tokens: Vec<String>) -> Vec<String> {
+fn strip_program_name(tokens: Vec<String>) -> Vec<String> {
     if tokens.first().map(|s| s.as_str()) == Some("inspect") {
         // keep for execute which also strips, but dispatch may have already stripped?
         // we keep tokens as-is for execute to handle
