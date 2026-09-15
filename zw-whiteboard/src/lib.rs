@@ -40,7 +40,6 @@ pub struct BoardState {
     pub session_id: String,
     pub pages: Vec<BoardPage>,
     pub active_page: Option<i64>,
-    pub locked: bool,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -331,7 +330,6 @@ async fn build_board_state(
         session_id: sid.to_string(),
         pages: state_pages,
         active_page: meta.active_page,
-        locked: meta.locked,
     })
 }
 
@@ -372,17 +370,15 @@ async fn poll_with_db(
                     let changed = core.rev.get(sid) != Some(&meta.rev);
                     if changed {
                         core.rev.insert(sid.to_string(), meta.rev);
-                        // DB -> file: keep the .wb mirror current when the agent isn't
-                        // actively editing it (page closed), so the file never resists DB changes.
-                        if !meta.locked {
-                            if let Some(active) = meta.active_page {
-                                if let Some(page) = pages.iter().find(|p| p.page_no == active) {
-                                    let path = session_path(dir, sid);
-                                    if std::fs::write(&path, &page.body_md).is_ok() {
-                                        set_world_writable(&path);
-                                        let snap = core.snapshot(&path);
-                                        core.seen.insert(sid.to_string(), snap);
-                                    }
+                        // DB -> file: keep the .wb mirror current so the file
+                        // never resists DB changes.
+                        if let Some(active) = meta.active_page {
+                            if let Some(page) = pages.iter().find(|p| p.page_no == active) {
+                                let path = session_path(dir, sid);
+                                if std::fs::write(&path, &page.body_md).is_ok() {
+                                    set_world_writable(&path);
+                                    let snap = core.snapshot(&path);
+                                    core.seen.insert(sid.to_string(), snap);
                                 }
                             }
                         }

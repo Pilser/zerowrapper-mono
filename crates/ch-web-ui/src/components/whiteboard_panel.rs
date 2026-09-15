@@ -20,7 +20,6 @@ pub async fn whiteboard_panel() -> Result {
                 <span id="wb-nav-spinner" class="wb-nav-spinner" aria-hidden="true"></span>
                 <button id="wb-share" type="button" class="wb-btn wb-btn-primary hidden">"Share"</button>
                 <button id="wb-copy-link" type="button" class="wb-btn wb-btn-ghost hidden">"Copy link"</button>
-                <span id="wb-lock-badge" class="wb-lock-badge hidden">"agent editing"</span>
                 <div id="wb-link-pop" class="wb-link-pop hidden">
                     <span class="wb-link-title">"Link:"</span>
                     <input id="wb-link-input" class="wb-link-input" type="text" readonly="true" value="" />

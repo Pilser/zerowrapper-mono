@@ -221,7 +221,6 @@ export function setSession(sid) {
 
 function renderCurrent() {
   const label = getEl('wb-page-label')
-  const badge = getEl('wb-lock-badge')
   const share = getEl('wb-share')
   const copyLink = getEl('wb-copy-link')
   const prev = getEl('wb-prev')
@@ -229,7 +228,6 @@ function renderCurrent() {
   if (!currentState || !Array.isArray(currentState.pages) || currentState.pages.length === 0) {
     renderBoard(body, pins, { body_md: '', pins: [] })
     if (label) label.textContent = 'Page 1 of 1'
-    if (badge) badge.classList.add('hidden')
     if (share) share.classList.add('hidden')
     if (copyLink) copyLink.classList.add('hidden')
     if (prev) prev.disabled = true
@@ -243,9 +241,7 @@ function renderCurrent() {
   if (label) label.textContent = `Page ${currentPage + 1} of ${pages.length}`
   if (prev) prev.disabled = currentPage <= 0
   if (next) next.disabled = currentPage >= pages.length - 1
-  const active = currentState.locked && page && page.page_no === currentState.active_page
   const isPub = !!(page && page.public_slug)
-  if (badge) badge.classList.toggle('hidden', !active)
   if (share) share.classList.toggle('hidden', !isPub)
   if (copyLink) copyLink.classList.toggle('hidden', !isPub)
   const pop = getEl('wb-link-pop')
@@ -275,14 +271,12 @@ export function setBoard(data) {
   currentState = null
   renderBoard(body, pins, data)
   const label = getEl('wb-page-label')
-  const badge = getEl('wb-lock-badge')
   const share = getEl('wb-share')
   const copyLink = getEl('wb-copy-link')
   const pop = getEl('wb-link-pop')
   const prev = getEl('wb-prev')
   const next = getEl('wb-next')
   if (label) label.textContent = 'Page 1 of 1'
-  if (badge) badge.classList.add('hidden')
   if (share) share.classList.add('hidden')
   if (copyLink) copyLink.classList.add('hidden')
   if (pop) pop.classList.add('hidden')

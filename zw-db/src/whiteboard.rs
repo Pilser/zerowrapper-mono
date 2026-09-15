@@ -14,7 +14,6 @@ pub struct WbPage {
 #[derive(Debug, Clone, Serialize)]
 pub struct WbMeta {
     pub active_page: Option<i64>,
-    pub locked: bool,
     pub rev: i64,
 }
 
@@ -37,15 +36,11 @@ async fn read_meta(rows: &mut turso::Rows) -> anyhow::Result<Option<WbMeta>> {
             Value::Integer(i) => Some(i),
             _ => None,
         };
-        let locked = match row.get_value(1)? {
-            Value::Integer(i) => i != 0,
-            _ => false,
-        };
-        let rev = match row.get_value(2)? {
+        let rev = match row.get_value(1)? {
             Value::Integer(i) => i,
             _ => 0,
         };
-        Ok(Some(WbMeta { active_page, locked, rev }))
+        Ok(Some(WbMeta { active_page, rev }))
     } else {
         Ok(None)
     }
@@ -97,13 +92,12 @@ impl DbPool {
         }
         let mut meta_rows = conn
             .query(
-                "SELECT active_page, locked, rev FROM whiteboard_meta WHERE session_id = ?1",
+                "SELECT active_page, rev FROM whiteboard_meta WHERE session_id = ?1",
                 Params::Positional(vec![Value::from(sid)]),
             )
             .await?;
         let meta = read_meta(&mut meta_rows).await?.unwrap_or(WbMeta {
             active_page: None,
-            locked: false,
             rev: 0,
         });
         Ok((pages, meta))

@@ -560,16 +560,6 @@
     text-decoration: underline;
   }
   .wb-btn-ghost:hover:not(:disabled) { color: var(--color-text-strong); }
-  .wb-lock-badge {
-    margin-left: auto;
-    font-size: 11px;
-    color: #e74c3c;
-    border: 1px solid currentColor;
-    border-radius: 999px;
-    padding: 0 8px;
-    line-height: 18px;
-    white-space: nowrap;
-  }
   .wb-link-pop {
     position: absolute;
     right: 16px;

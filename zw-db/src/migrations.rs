@@ -131,7 +131,6 @@ CREATE TABLE IF NOT EXISTS whiteboard_pages (
 CREATE TABLE IF NOT EXISTS whiteboard_meta (
     session_id  TEXT PRIMARY KEY,
     active_page INTEGER,
-    locked      INTEGER NOT NULL DEFAULT 0,
     rev         INTEGER NOT NULL DEFAULT 0,
     updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -251,6 +250,7 @@ pub const SYSTEM_MIGRATIONS: &[&str] = &[
     "ALTER TABLE sessions DROP COLUMN account;",
     "ALTER TABLE sessions DROP COLUMN chat_id;",
     "ALTER TABLE chat_messages ADD COLUMN turn_id TEXT NOT NULL DEFAULT '';",
+    "ALTER TABLE whiteboard_meta DROP COLUMN locked;",
 ];
 
 pub const SESSION_MIGRATIONS: &[&str] = &[
