@@ -183,6 +183,70 @@ pub fn provider_health() -> serde_json::Value {
     }
 }
 
+/// Bridge: one rig-native tool per MCP provider, built programmatically —
+/// no HTTP, no JSON-RPC hop, no config file. Names, descriptions and JSON
+/// schemas pass through untouched (no prefixes added); `call` invokes the
+/// provider in-process via `McpToolProvider::call`.
+pub struct McpBridgeTool {
+    provider: std::sync::Arc<dyn zw_core::McpToolProvider>,
+}
+
+impl McpBridgeTool {
+    pub fn new(provider: std::sync::Arc<dyn zw_core::McpToolProvider>) -> Self {
+        Self { provider }
+    }
+}
+
+impl zerostack::rig::tool::ToolDyn for McpBridgeTool {
+    fn name(&self) -> String {
+        self.provider.name().to_string()
+    }
+
+    fn description(&self) -> String {
+        self.provider.description().to_string()
+    }
+
+    fn parameters(&self) -> serde_json::Value {
+        self.provider.input_schema()
+    }
+
+    fn call<'a>(
+        &'a self,
+        args: String,
+    ) -> zerostack::rig::wasm_compat::WasmBoxedFuture<'a,
+        Result<String, zerostack::rig::tool::ToolError>,
+    > {
+        Box::pin(async move {
+            use zerostack::rig::tool::ToolError;
+            let value: serde_json::Value =
+                serde_json::from_str(&args).map_err(ToolError::JsonError)?;
+            let out = self
+                .provider
+                .call(value)
+                .await
+                .map_err(|e| ToolError::ToolCallError(e.into()))?;
+            Ok(out.text)
+        })
+    }
+}
+
+/// Build one factory per provider and hand them to the engine crate. Call
+/// once at boot, before the first chat turn — later agent builds pick them
+/// up with their original names (`manage_whiteboard`, `inspect`, …).
+pub fn register_agent_tools(providers: Vec<std::sync::Arc<dyn zw_core::McpToolProvider>>) {
+    let factories: Vec<zerostack::agent::builder::ExtraToolFactory> = providers
+        .into_iter()
+        .map(|p| {
+            let q = p.clone();
+            std::sync::Arc::new(move || {
+                Box::new(McpBridgeTool::new(q.clone()))
+                    as Box<dyn zerostack::rig::tool::ToolDyn>
+            }) as zerostack::agent::builder::ExtraToolFactory
+        })
+        .collect();
+    zerostack::agent::builder::set_extra_tool_factories(factories);
+}
+
 /// Headless engine with server-safe defaults: no TUI, no disk writes
 /// (`no_session` disables both chat-history and session-file writes), no CWD
 /// context scan, provider/model from `Cli::resolve_*` (flags → config →

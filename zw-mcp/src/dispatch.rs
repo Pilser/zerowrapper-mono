@@ -3,7 +3,7 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::sync::RwLock;
 use tracing::{debug, error, warn};
 
-pub type McpProviders = Arc<RwLock<Vec<Box<dyn zw_core::McpToolProvider>>>>;
+pub type McpProviders = Arc<RwLock<Vec<Arc<dyn zw_core::McpToolProvider>>>>;
 
 fn mcp_log(method: &str, msg: &str) {
     if let Ok(mut file) = std::fs::OpenOptions::new()

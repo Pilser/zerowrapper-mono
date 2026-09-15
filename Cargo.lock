@@ -10529,7 +10529,7 @@ checksum = "e13c156562582aa81c60cb29407084cdb54c4164760106ab78e6c5b0858cf64e"
 [[package]]
 name = "zerostack"
 version = "1.8.4"
-source = "git+https://github.com/Pilser/zerostack.git#b75a28052dfd75a6f93cc7b8bdc0a22ffa9ea762"
+source = "git+https://github.com/Pilser/zerostack.git#9e5f989e94428e1cbba4fa99f976958d6d0a6dcf"
 dependencies = [
  "agent-client-protocol",
  "anyhow",
@@ -10665,6 +10665,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "zw-agent-embed",
  "zw-cache",
  "zw-channels",
  "zw-core",
@@ -10680,7 +10681,12 @@ dependencies = [
 name = "zw-agent-embed"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
+ "serde_json",
+ "tokio",
+ "tracing",
  "zerostack",
+ "zw-core",
 ]
 
 [[package]]

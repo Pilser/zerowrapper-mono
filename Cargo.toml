@@ -30,6 +30,7 @@ zw-whiteboard = { path = "zw-whiteboard" }
 zw-materials = { path = "zw-materials" }
 zw-expr = { path = "zw-expr" }
 zw-recipe = { path = "zw-recipe" }
+zw-agent-embed = { path = "crates/zw-agent-embed" }
 mcp-web-files-render = { path = "crates/mcp-web-files-render" }
 ch-web-ui = { path = "crates/ch-web-ui" }
 tokio = { workspace = true }

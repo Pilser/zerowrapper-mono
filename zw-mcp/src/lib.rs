@@ -21,8 +21,9 @@ impl McpRegistry {
         }
     }
 
-    /// Register a provider. Call from async context with `.await`.
-    pub async fn register_provider(&self, provider: Box<dyn zw_core::McpToolProvider>) {
+    /// Register a provider (shared `Arc`, so the same instance can also be
+    /// bridged into the embedded engine's toolset). Call with `.await`.
+    pub async fn register_provider(&self, provider: std::sync::Arc<dyn zw_core::McpToolProvider>) {
         let name = provider.name().to_string();
         tracing::info!("Registering MCP tool provider: {}", name);
         self.providers.write().await.push(provider);
