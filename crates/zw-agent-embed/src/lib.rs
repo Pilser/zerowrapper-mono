@@ -85,6 +85,7 @@ pub async fn run_embedded(
     prompt: &str,
     event_tx: mpsc::Sender<StreamEvent>,
     turn_id: &str,
+    abort_slot: ::zerostack::engine::AbortSlot,
 ) -> anyhow::Result<RunOutput> {
     let (agent_tx, mut agent_rx) = mpsc::channel::<AgentEvent>(512);
     // Per-turn ask notifier: the session-bound `ask_user` tool pushes here,
@@ -126,6 +127,9 @@ pub async fn run_embedded(
         }
     });
 
+    // Arm true-cancel BEFORE the turn starts so the drain loop publishes
+    // the runner's abort handle into our slot.
+    engine.set_abort_slot(abort_slot);
     let out = engine
         .run_streaming(prompt, agent_tx, Some(turn_id.to_string()))
         .await;

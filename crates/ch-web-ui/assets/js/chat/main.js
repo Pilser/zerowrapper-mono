@@ -45,6 +45,13 @@ export function init() {
   refreshSessionList()
   drawer.init()
   askDrawer.init()
+  // Send→cancel window: after any (re)connect, ask the server whether this
+  // session has a turn in flight and show the matching button. Turn end
+  // flips back via streaming.onFinalize; cancel is a real runner abort.
+  network.on('stateChange', (s) => {
+    if (s === network.State.CONNECTED) syncCancelButton()
+  })
+  syncCancelButton()
 
   if (els.sessionNewBtn) els.sessionNewBtn.addEventListener('click', handleNewSession)
   if (els.sessionSelect) els.sessionSelect.addEventListener('change', handleSwitchSession)
@@ -80,6 +87,27 @@ function showSendIcon() {
 function showStopIcon() {
   if (els.sendBtn) { els.sendBtn.classList.add('hidden'); els.sendBtn.style.display = 'none' }
   if (els.cancelBtn) { els.cancelBtn.classList.remove('hidden'); els.cancelBtn.style.display = 'flex' }
+}
+
+async function syncCancelButton() {
+  // Send→cancel window: after any (re)connect, ask the server whether this
+  // session has a turn in flight and show the matching button. Turn end
+  // flips back via streaming.onFinalize; cancel is a real runner abort.
+  try {
+    let running = false
+    for (const url of ['/api/agent_sessions', '?api=agent_sessions']) {
+      try {
+        const r = await fetch(url)
+        if (!r.ok) continue
+        const j = await r.json()
+        const hit = (j.sessions || []).find((s) => (s.id || s.session_id) === auth.state.sessionId)
+        running = !!(hit && hit.running)
+        break
+      } catch {}
+    }
+    if (running) showStopIcon()
+    else showSendIcon()
+  } catch {}
 }
 
 function handleCancel() {

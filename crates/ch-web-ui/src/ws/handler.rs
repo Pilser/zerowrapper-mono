@@ -17,38 +17,69 @@ static MEM_BUFFER: LazyLock<tokio::sync::Mutex<HashMap<String, Vec<serde_json::V
 // Native engines, one per chat session. The lock is only held to take or
 // return an engine — never across a turn — so sessions never block each other.
 // There is no daemon path anymore: every prompt runs here, in-process.
+/// Native engines, one per chat session, each behind its own mutex: turns
+/// on the same session serialize (a second prompt waits for the running
+/// turn instead of forking a second engine), while sessions never block
+/// each other. Engines stay in the map for life — history and the picker
+/// always see them, running or not.
 static ENGINES: LazyLock<
-    tokio::sync::Mutex<HashMap<String, zw_agent_embed::engine::Engine>>,
+    tokio::sync::Mutex<
+        HashMap<String, std::sync::Arc<tokio::sync::Mutex<zw_agent_embed::engine::Engine>>>,
+    >,
 > = LazyLock::new(|| tokio::sync::Mutex::new(HashMap::new()));
 
-// In-flight native turns, one JoinHandle per session. Cancel = abort the
-// handle (the engine goes down with it; next message builds a fresh one,
-// history display intact). Refresh/reconnect never cancels: the turn keeps
-// running and the stream resumes from the buffer.
+// In-flight native turns: task handle + true-cancel slot per session.
+// Cancel aborts the RUNNER (model stream + tool children die for real),
+// never our task: the turn closes gracefully, the engine survives with its
+// context, and only a pre-drain cancel falls back to aborting the task
+// (engine dropped, rebuilt next message). Refresh/reconnect never cancels:
+// the turn keeps running and the stream resumes from the buffer.
 static TASKS: LazyLock<
-    tokio::sync::Mutex<HashMap<String, tokio::task::JoinHandle<()>>>,
+    tokio::sync::Mutex<
+        HashMap<
+            String,
+            (
+                tokio::task::JoinHandle<()>,
+                zw_agent_embed::engine::AbortSlot,
+            ),
+        >,
+    >,
 > = LazyLock::new(|| tokio::sync::Mutex::new(HashMap::new()));
 
 /// Live native sessions for the picker: id, display name, model/provider,
-/// message count, token totals and cost — straight from the engines.
+/// message count, token totals, cost — plus `running` while a turn is in
+/// flight (drives the send→cancel button window). Straight from the engines.
 /// Sorted newest-first by engine `updated_at`.
 pub async fn agent_session_list() -> Vec<serde_json::Value> {
     let engines = ENGINES.lock().await;
+    let tasks = TASKS.lock().await;
     let mut out: Vec<serde_json::Value> = engines
         .iter()
         .map(|(sid, e)| {
-            let s = e.session();
-            serde_json::json!({
-                "id": sid,
-                "name": s.name.to_string(),
-                "model": s.model.to_string(),
-                "provider": s.provider.to_string(),
-                "messages": s.messages.len(),
-                "input_tokens": s.total_input_tokens,
-                "output_tokens": s.total_output_tokens,
-                "cost": s.total_cost,
-                "updated_at": s.updated_at.to_string(),
-            })
+            let running = tasks.contains_key(sid);
+            match e.try_lock() {
+                Ok(guard) => {
+                    let s = guard.session();
+                    serde_json::json!({
+                        "id": sid,
+                        "name": s.name.to_string(),
+                        "model": s.model.to_string(),
+                        "provider": s.provider.to_string(),
+                        "messages": s.messages.len(),
+                        "input_tokens": s.total_input_tokens,
+                        "output_tokens": s.total_output_tokens,
+                        "cost": s.total_cost,
+                        "updated_at": s.updated_at.to_string(),
+                        "running": running,
+                    })
+                }
+                // Mid-turn: details locked, but presence + running flag still
+                // answer the picker and the cancel-button window.
+                Err(_) => serde_json::json!({
+                    "id": sid,
+                    "running": true,
+                }),
+            }
         })
         .collect();
     // `updated_at` is RFC3339: lexicographic order == chronological.
@@ -68,7 +99,10 @@ pub async fn engine_history(session_id: &str) -> Vec<zw_agent_embed::HistoryMsg>
     {
         let engines = ENGINES.lock().await;
         if let Some(e) = engines.get(session_id) {
-            return zw_agent_embed::session_history(e);
+            if let Ok(guard) = e.try_lock() {
+                return zw_agent_embed::session_history(&guard);
+            }
+            // Mid-turn: engine is busy; fall through to its last save.
         }
     }
     zw_agent_embed::load_session_history(session_id).unwrap_or_default()
@@ -83,6 +117,7 @@ async fn run_embedded_turn(
     db: zw_db::DbPool,
     turn_id: String,
     raw: String,
+    abort_slot: zw_agent_embed::engine::AbortSlot,
 ) {
     let _ = db.touch_session(&session_id).await;
     // Our title, unless it is still the raw id (auto-created rows): then the
@@ -110,11 +145,13 @@ async fn run_embedded_turn(
         .or_else(|| auto_title.clone())
         .unwrap_or_else(|| session_id.clone());
 
+    // Get-or-create the session engine WITHOUT holding the map lock while
+    // building (provider init can hit network). A lost create-race just
+    // drops our spare; the winner serves every turn through its mutex.
     let engine = {
         let mut engines = ENGINES.lock().await;
-        if let Some(mut e) = engines.remove(&session_id) {
-            e.session_mut().name = display_title.clone().into();
-            Some(e)
+        if let Some(e) = engines.get(&session_id) {
+            e.clone()
         } else {
             // Agent-owned session: resumes its file when present, else fresh
             // with our id — either way the engine holds the transcript.
@@ -122,7 +159,10 @@ async fn run_embedded_turn(
                 Ok(mut e) => {
                     e.session_mut().id = session_id.clone().into();
                     e.session_mut().name = display_title.clone().into();
-                    Some(e)
+                    let shared =
+                        std::sync::Arc::new(tokio::sync::Mutex::new(e));
+                    engines.insert(session_id.clone(), shared.clone());
+                    shared
                 }
                 Err(err) => {
                     let _ = event_tx
@@ -130,14 +170,23 @@ async fn run_embedded_turn(
                             message: format!("embedded engine init failed: {err:#}"),
                         })
                         .await;
-                    None
+                    return;
                 }
             }
         }
     };
-    let Some(mut engine) = engine else { return };
-    let result =
-        zw_agent_embed::run_embedded(&mut engine, &prompt, event_tx.clone(), &turn_id).await;
+    // Adopt the current title (rename-safe), then run serialized: a second
+    // prompt on this session waits here instead of forking another engine.
+    let mut guard = engine.lock().await;
+    guard.session_mut().name = display_title.clone().into();
+    let result = zw_agent_embed::run_embedded(
+        &mut guard,
+        &prompt,
+        event_tx.clone(),
+        &turn_id,
+        abort_slot,
+    )
+    .await;
     // Transcript lives in the agent (it saves its session file itself).
     // Here we only keep our thread row fresh: title on first turn.
     if let Ok(out) = &result {
@@ -148,13 +197,13 @@ async fn run_embedded_turn(
         }
     }
     // `run_embedded` already sent the closing event on error; nothing to add.
-    ENGINES.lock().await.insert(session_id.clone(), engine);
+    drop(guard);
     // Drop our task record — but only if it is still ours and finished: a
     // newer turn's running handle must survive (abort-then-resend race).
     let mut tasks = TASKS.lock().await;
     if tasks
         .get(&session_id)
-        .map(|h| h.is_finished())
+        .map(|(h, _)| h.is_finished())
         .unwrap_or(false)
     {
         tasks.remove(&session_id);
@@ -337,11 +386,27 @@ pub async fn handle_ws_connection(
                     if current_session_id.is_empty() { None } else { Some(current_session_id.as_str()) }
                 });
             if let Some(sid) = sid {
-                // Native cancel: abort the in-flight turn. The engine is
-                // dropped with it; the next message starts a fresh engine
-                // (agent context restarts, chat history display is intact).
-                if let Some(h) = TASKS.lock().await.remove(sid) {
-                    h.abort();
+                // True cancel: abort the runner via its published handle.
+                // Model stream + tool children stop; our task then closes
+                // the turn gracefully and the engine is kept. Only when the
+                // runner hasn't published yet (pre-drain) fall back to
+                // aborting the task itself.
+                let record = TASKS.lock().await.remove(sid);
+                if let Some((h, slot)) = record {
+                    // Runner abort first: model stream + tool children die,
+                    // our task then closes the turn gracefully (record is
+                    // already out; its end-cleanup becomes a no-op).
+                    let runner_aborted = slot
+                        .lock()
+                        .ok()
+                        .and_then(|g| g.clone())
+                        .map(|a| {
+                            a.abort();
+                        })
+                        .is_some();
+                    if !runner_aborted {
+                        h.abort();
+                    }
                 }
             }
             continue;
@@ -530,10 +595,21 @@ pub async fn handle_ws_connection(
                     .unwrap_or(0);
                 format!("srv-{nanos:x}")
             });
+        let abort_slot: zw_agent_embed::engine::AbortSlot = Default::default();
+        let slot_tracked = abort_slot.clone();
         let turn = tokio::spawn(async move {
-            run_embedded_turn(sid_tracked, prompt, event_tx, db_for_turn, turn_id, content).await;
+            run_embedded_turn(
+                sid_tracked,
+                prompt,
+                event_tx,
+                db_for_turn,
+                turn_id,
+                content,
+                slot_tracked,
+            )
+            .await;
         });
-        TASKS.lock().await.insert(sid, turn);
+        TASKS.lock().await.insert(sid, (turn, abort_slot));
     }
 
     let mut sender = ws_sender.lock().await;
