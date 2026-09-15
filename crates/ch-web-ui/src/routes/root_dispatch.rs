@@ -114,6 +114,8 @@ async fn dispatch_api(cx: &Cx, api: &str, body: Body) -> Result<Response> {
     match api {
         "history" => api_history(cx).await,
         "sessions" => api_sessions_list(cx).await,
+        "ask_pending" => api_ask_pending(cx).await,
+        "ask_answer" => api_ask_answer(cx, body).await,
         "agent_sessions" => Ok(Response::builder()
             .status(StatusCode::OK)
             .header("Content-Type", "application/json")
@@ -206,6 +208,64 @@ async fn api_sessions_create(cx: &Cx, body: Body) -> Result<Response> {
         .header("Content-Type", "application/json")
         .body(Body::from(serde_json::json!({"ok": true, "session_id": id, "title": id}).to_string()))
         .unwrap())
+}
+
+/// Pending human questions for the native `ask_user` tool (drawer polls).
+async fn api_ask_pending(cx: &Cx) -> Result<Response> {
+    let app: &AppContext = app_context(cx);
+    let sid = sanitize_key(&query_value(cx, "session_id").unwrap_or_default());
+    let rows = app
+        .db
+        .system()
+        .ask_pending_for_session(&sid)
+        .await
+        .unwrap_or_default();
+    Ok(Response::builder()
+        .status(StatusCode::OK)
+        .header("Content-Type", "application/json")
+        .body(Body::from(
+            serde_json::json!({"ok": true, "pending": rows}).to_string(),
+        ))
+        .unwrap())
+}
+
+/// Answer a pending question set: persists + wakes the waiting tool call.
+/// Late answers are fine — the turn waits server-side, never on the socket.
+async fn api_ask_answer(cx: &Cx, body: Body) -> Result<Response> {
+    let app: &AppContext = app_context(cx);
+    let bytes = to_bytes(body, 100_000).await.unwrap_or_default();
+    let req: serde_json::Value = serde_json::from_slice(&bytes).unwrap_or_default();
+    let id = req.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
+    let answers = req.get("answers").cloned().unwrap_or(serde_json::json!([]));
+    if id.is_empty() {
+        return Ok(Response::builder()
+            .status(StatusCode::BAD_REQUEST)
+            .header("Content-Type", "application/json")
+            .body(Body::from(serde_json::json!({"error": "missing id"}).to_string()))
+            .unwrap());
+    }
+    let existing = app.db.system().ask_get(&id).await.unwrap_or(None);
+    match existing {
+        None => Ok(Response::builder()
+            .status(StatusCode::NOT_FOUND)
+            .header("Content-Type", "application/json")
+            .body(Body::from(serde_json::json!({"error": "unknown ask id"}).to_string()))
+            .unwrap()),
+        Some(row) if row.status != "pending" => Ok(Response::builder()
+            .status(StatusCode::GONE)
+            .header("Content-Type", "application/json")
+            .body(Body::from(serde_json::json!({"error": "already resolved"}).to_string()))
+            .unwrap()),
+        Some(_) => {
+            let _ = app.db.system().ask_answer(&id, &answers.to_string()).await;
+            zw_agent_embed::publish_answer(&id, answers);
+            Ok(Response::builder()
+                .status(StatusCode::OK)
+                .header("Content-Type", "application/json")
+                .body(Body::from(serde_json::json!({"ok": true}).to_string()))
+                .unwrap())
+        }
+    }
 }
 
 /// Mirrors `api/upload.rs` but keyed from the root query params.

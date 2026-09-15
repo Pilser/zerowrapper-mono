@@ -31,4 +31,13 @@ export function init() {
   els.drawerNewBtn = document.getElementById('drawer-new-btn')
   els.drawerList = document.getElementById('drawer-list')
   els.drawerUsage = document.getElementById('drawer-usage')
+  els.askDrawer = document.getElementById('ask-drawer')
+  els.askOverlay = document.getElementById('ask-overlay')
+  els.askCloseBtn = document.getElementById('ask-close-btn')
+  els.askAddBtn = document.getElementById('ask-add-btn')
+  els.askBackBtn = document.getElementById('ask-back-btn')
+  els.askReviewBtn = document.getElementById('ask-review-btn')
+  els.askSubmitBtn = document.getElementById('ask-submit-btn')
+  els.askBody = document.getElementById('ask-body')
+  els.askStatus = document.getElementById('ask-status')
 }

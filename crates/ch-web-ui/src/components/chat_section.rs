@@ -66,6 +66,26 @@ pub async fn chat_section(cx: &Cx) -> Result {
                 </form>
             </div>
         </section>
+        <div id="ask-overlay" class="hidden"></div>
+        <aside id="ask-drawer" aria-label="Agent questions" aria-hidden="true">
+            <div id="ask-header">
+                <span id="ask-title">"Agent asks"</span>
+                <button type="button" id="ask-close-btn" title="Close">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+            </div>
+            <div id="ask-body"></div>
+            <div id="ask-footer">
+                <button type="button" id="ask-add-btn">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    <span>"My question"</span>
+                </button>
+                <button type="button" id="ask-back-btn" class="hidden"><span>"Back"</span></button>
+                <button type="button" id="ask-review-btn"><span>"Review"</span></button>
+                <button type="button" id="ask-submit-btn" class="hidden"><span>"Submit answers"</span></button>
+            </div>
+            <div id="ask-status"></div>
+        </aside>
         <div id="drawer-overlay" class="hidden"></div>
         <aside id="side-drawer" aria-label="Chats and tools" aria-hidden="true">
             <div id="drawer-header">

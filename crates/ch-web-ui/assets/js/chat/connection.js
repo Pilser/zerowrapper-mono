@@ -102,6 +102,22 @@ function handleMessage(e) {
           else els.agentBanner.classList.remove('hidden')
         }
         break
+      case 'ask_requested': {
+        // The native ask_user tool needs a human: open the right drawer.
+        // Answers travel via REST, so a dropped socket never strands a turn.
+        try {
+          import('./ask-drawer.js').then((m) => {
+            if (m && m.openWith) {
+              m.openWith({
+                ask_id: data.ask_id || '',
+                session_id: data.session_id || authState.sessionId,
+                questions: data.questions || [],
+              })
+            }
+          }).catch(() => {})
+        } catch {}
+        break
+      }
       case 'snap':
       case 'webscreenshot': {
         // Agent-triggered webscreenshot via WS: {type:'webscreenshot', target:'#whiteboard-body'} — agent (isTrusted false) path writes to temp

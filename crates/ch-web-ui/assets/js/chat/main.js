@@ -8,6 +8,7 @@ import { addMessage } from './messages.js'
 import * as lightbox from './lightbox.js'
 import { uploadFile, createAttachmentChip, uploadState } from './file-upload.js'
 import * as drawer from './drawer.js'
+import * as askDrawer from './ask-drawer.js'
 
 function logPendingResources() {
   const entries = performance.getEntriesByType('resource')
@@ -43,6 +44,7 @@ export function init() {
   connection.connect()
   refreshSessionList()
   drawer.init()
+  askDrawer.init()
 
   if (els.sessionNewBtn) els.sessionNewBtn.addEventListener('click', handleNewSession)
   if (els.sessionSelect) els.sessionSelect.addEventListener('change', handleSwitchSession)

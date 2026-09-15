@@ -12,8 +12,10 @@ zerostack = { git = "https://github.com/Pilser/zerostack.git",
               features = ["acp"],
               default-features = false }
 zw-core = { path = "../../zw-core" }
+zw-db = { path = "../../zw-db" }
 tokio = { version = "1", features = ["sync", "rt"] }
 anyhow = "1"
+async-trait = "0.1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tracing = "0.1"

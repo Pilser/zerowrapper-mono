@@ -9,6 +9,9 @@ pub mod engine {
     pub use ::zerostack::engine::*;
 }
 
+pub mod ask;
+pub use ask::{AskEvent, AskUserProvider, publish_answer};
+
 use std::sync::{
     Arc,
     atomic::{AtomicBool, Ordering},
@@ -84,6 +87,27 @@ pub async fn run_embedded(
     turn_id: &str,
 ) -> anyhow::Result<RunOutput> {
     let (agent_tx, mut agent_rx) = mpsc::channel::<AgentEvent>(512);
+    // Per-turn ask notifier: the session-bound `ask_user` tool pushes here,
+    // this task forwards into the event stream (buffered ⇒ drop-safe).
+    // Correctness never depends on it — the drawer polls pending too.
+    let (ask_tx, mut ask_rx) = mpsc::channel::<AskEvent>(16);
+    let sid_for_bus = engine.session().id.to_string();
+    if let Some(bus) = ask::bus_for(&sid_for_bus) {
+        bus.arm(ask_tx);
+    }
+    let ask_tx_forward = event_tx.clone();
+    let ask_forward = tokio::spawn(async move {
+        while let Some(ev) = ask_rx.recv().await {
+            let se = StreamEvent::AskRequest {
+                ask_id: ev.ask_id,
+                session_id: ev.session_id,
+                questions: ev.questions,
+            };
+            if ask_tx_forward.send(se).await.is_err() {
+                break;
+            }
+        }
+    });
     let done_seen = Arc::new(AtomicBool::new(false));
     let done_flag = done_seen.clone();
     // Clone: the original stays with us for the synthesized closing event.
@@ -106,8 +130,13 @@ pub async fn run_embedded(
         .run_streaming(prompt, agent_tx, Some(turn_id.to_string()))
         .await;
     // `agent_tx` moved into `run_streaming` and drops on return → the
-    // forward task drains the remainder and ends.
+    // forward task drains the remainder and ends. Same for the ask channel:
+    // disarm first so its sender drops and the forwarder finishes.
     let _ = forward.await;
+    if let Some(bus) = ask::bus_for(&sid_for_bus) {
+        bus.disarm();
+    }
+    let _ = ask_forward.await;
 
     match &out {
         Ok(o) => {
@@ -310,9 +339,17 @@ pub fn load_session_history(session_id: &str) -> Option<Vec<HistoryMsg>> {
 /// Sessions are agent-owned: an existing session file is resumed (keeping its
 /// id, adopting the current display name); otherwise a fresh session is built
 /// with our id. Disk persistence stays ON (this is the durable transcript).
-pub fn new_engine(session_id: &str, display_name: &str) -> anyhow::Result<Engine> {
+pub fn new_engine(
+    session_id: &str,
+    display_name: &str,
+    db: zw_db::DbPool,
+) -> anyhow::Result<Engine> {
     use zerostack::{cli::Cli, config, context, provider, sandbox, session::Session};
 
+    // YOLO policy (hardcoded, not env-configurable): no permission checker
+    // means every tool auto-allows, inside and outside the workspace. The
+    // only human gate is the session-bound `ask_user` tool below, which
+    // always surfaces in the frontend first.
     let cli = Cli {
         no_session: false,
         ..Default::default()
@@ -340,6 +377,13 @@ pub fn new_engine(session_id: &str, display_name: &str) -> anyhow::Result<Engine
         &cfg.custom_providers_map(),
         cfg.api_keys.as_ref(),
     )?;
+    // Session-bound ask tool: this engine's turns get their own instance
+    // (holds sid + db), attached before first build. Global whiteboard
+    // bridges arrive separately via the fork's factory registry.
+    let ask_tool: Box<dyn zerostack::rig::tool::ToolDyn> =
+        Box::new(McpBridgeTool::new(std::sync::Arc::new(
+            ask::AskUserProvider::new(session_id, db),
+        )));
     Ok(Engine::new(
         cli,
         cfg,
@@ -348,5 +392,6 @@ pub fn new_engine(session_id: &str, display_name: &str) -> anyhow::Result<Engine
         client,
         None,
         sandbox::Sandbox::new(false, "bwrap"),
-    ))
+    )
+    .with_extra_tools(vec![ask_tool]))
 }
