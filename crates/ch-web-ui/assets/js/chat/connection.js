@@ -142,8 +142,6 @@ function stopHttpPoll() {
 function handleMessage(e) {
   try {
     const data = JSON.parse(e.data)
-    // debug: keep last 50 handleMessage types for agent-browser inspection
-    try { window._handleMessageLog = window._handleMessageLog || []; window._handleMessageLog.push(data.type+':'+(data.seq||'')+':'+(data.content||'').slice(0,30)); if(window._handleMessageLog.length>80) window._handleMessageLog.shift(); } catch {}
     // B: dedup by seq so WS resume + HTTP poll overlap never doubles chunks
     if (data && typeof data.seq === 'number' && data.seq > 0) {
       const sid0 = data.session_id || authState.sessionId || localStorage.getItem('zerowrapper_session') || ''
@@ -400,7 +398,6 @@ export function connect() {
 
   network.connect(url, {
     onOpen: () => {
-      try { window._onOpenLog = (window._onOpenLog||0)+1; window._handleMessageLog = window._handleMessageLog || []; window._handleMessageLog.push('onOpen:'+authState.sessionId); } catch {}
       whiteboard.setSession(authState.sessionId)
       whiteboard.sync()
       const sendResume = (snap) => {
