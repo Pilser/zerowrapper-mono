@@ -33,7 +33,7 @@ function scheduleRender(id) {
   if (id !== streamId) return
   if (renderPending) return
   renderPending = true
-  requestAnimationFrame(() => {
+  const doRender = () => {
     renderPending = false
     if (streamId !== id) return
     const target = getEl()
@@ -43,7 +43,16 @@ function scheduleRender(id) {
     }
     renderMarkdown(target, html)
     autoScroll()
-  })
+  }
+  if (typeof requestAnimationFrame === 'function') {
+    requestAnimationFrame(doRender)
+    // Headless/throttled tabs may never fire rAF — fallback to timeout
+    setTimeout(() => {
+      if (renderPending && streamId === id) doRender()
+    }, 50)
+  } else {
+    setTimeout(doRender, 0)
+  }
 }
 
 export function appendThought(content, container) {
