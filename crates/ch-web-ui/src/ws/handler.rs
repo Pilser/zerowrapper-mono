@@ -92,20 +92,87 @@ pub async fn agent_session_list() -> Vec<serde_json::Value> {
     out
 }
 
-/// Transcript straight from the agent: live engine first, its session file
-/// on disk second. This is what history displays — the wrapper keeps no
-/// parallel transcript (its old `chat_messages` rows, if any, are ignored).
+/// Unified transcript (B): DB cache is source of truth, agent file is fallback.
+///
+/// On first run DB is empty, we backfill from live engine/file. Once a turn
+/// commits via `run_embedded_turn`, its `chat_messages` rows become the
+/// durable history. While a turn is `processing`, callers still get the last
+/// committed snapshot — live deltas arrive via `stream_buffer` replay + WS, not
+/// via this call. This makes refresh/busy never return a stale file that
+/// hides the message right after the questions.
 pub async fn engine_history(session_id: &str) -> Vec<zw_agent_embed::HistoryMsg> {
+    // 1) Try wrapper DB cache (written on every committed turn; survives
+    // busy `try_lock` and restarts). If any rows exist, they are the truth.
+    // We read via a short-lived pool clone without holding ENGINES lock.
+    // (The pool handle is looked up from the global? Instead we peek via
+    // session file as fallback — actual DB read happens in `history_snapshot`
+    // where the pool is available. Here we keep a best-effort fast path.)
     {
         let engines = ENGINES.lock().await;
         if let Some(e) = engines.get(session_id) {
             if let Ok(guard) = e.try_lock() {
-                return zw_agent_embed::session_history(&guard);
+                let live = zw_agent_embed::session_history(&guard);
+                // If DB cache already has rows, prefer to check elsewhere,
+                // but when called without DB handle we return live (pre-cache).
+                if !live.is_empty() {
+                    // Caller with DB will override; for bare callers return live.
+                } else {
+                    return live;
+                }
+                // For now return live — `history_snapshot` with DB will replace
+                // with DB rows when present. Keeping this path prevents breaking
+                // background callers that lack a pool.
+                return live;
             }
             // Mid-turn: engine is busy; fall through to its last save.
         }
     }
     zw_agent_embed::load_session_history(session_id).unwrap_or_default()
+}
+
+/// DB-backed history: committed rows from `chat_messages` plus session state.
+/// Used by HTTP history endpoint so refresh while `processing` never hides
+/// the committed transcript behind a locked engine.
+pub async fn db_history(db: &zw_db::DbPool, session_id: &str) -> Vec<zw_agent_embed::HistoryMsg> {
+    if let Ok(rows) = db.get_chat_messages(session_id, 500).await {
+        if !rows.is_empty() {
+            return rows
+                .into_iter()
+                .map(|r| zw_agent_embed::HistoryMsg { role: r.role, content: r.content, turn_id: r.turn_id })
+                .collect();
+        }
+    }
+    // Fallback to agent-owned file / live engine.
+    engine_history(session_id).await
+}
+
+/// Snapshot for the HTTP history API: committed history + smart status so the
+/// frontend knows whether to expect live deltas via resume/HTTP poll.
+pub async fn history_snapshot(
+    db: &zw_db::DbPool,
+    session_id: &str,
+) -> serde_json::Value {
+    let messages = db_history(db, session_id).await;
+    let (status, active_turn) = db.get_session_status(session_id).await.unwrap_or(("idle".into(), "".into()));
+    let tasks = TASKS.lock().await;
+    let running_mem = tasks.contains_key(session_id);
+    let status_eff = if running_mem { "processing".to_string() } else { status };
+    let max_seq = db.stream_buffer_max_seq(session_id).await.unwrap_or(0);
+    let pending = db.ask_pending_for_session(session_id).await.unwrap_or_default();
+    let pending_json: Vec<serde_json::Value> = pending.iter().map(|r| {
+        serde_json::json!({"id": r.id, "session_id": r.session_id, "questions": serde_json::from_str::<serde_json::Value>(&r.questions).unwrap_or(serde_json::json!([]))})
+    }).collect();
+    serde_json::json!({
+        "session_id": session_id,
+        "messages": messages,
+        "total": messages.len(),
+        "start": 0,
+        "status": status_eff,
+        "active_turn": active_turn,
+        "running": status_eff == "processing",
+        "max_seq": max_seq,
+        "pending_asks": pending_json,
+    })
 }
 
 /// Drive one prompt through the native engine, emitting typed `StreamEvent`s
@@ -120,6 +187,19 @@ async fn run_embedded_turn(
     abort_slot: zw_agent_embed::engine::AbortSlot,
 ) {
     let _ = db.touch_session(&session_id).await;
+    // B: mark processing BEFORE the engine mutex waits — even if this task
+    // is queued behind a running turn, the DB already tells history callers
+    // and refresh/resume that the session is busy so they use the live buffer.
+    let _ = db.set_session_processing(&session_id, &turn_id).await;
+    // Persist user turn eagerly: refresh while the engine is busy still sees
+    // the prompt (engine file + live buffer both still miss it). Idempotent
+    // per turn key so a queued duplicate doesn't double-insert.
+    {
+        let exists = db.get_chat_messages(&session_id, 500).await.map(|rows| rows.iter().any(|r| r.turn_id == turn_id && r.role == "user")).unwrap_or(false);
+        if !exists {
+            let _ = db.insert_chat_message(&session_id, "user", &raw, &turn_id).await;
+        }
+    }
     // Our title, unless it is still the raw id (auto-created rows): then the
     // first prompt names the session, human-readable in the picker.
     let stored_title = db
@@ -188,7 +268,20 @@ async fn run_embedded_turn(
     )
     .await;
     // Transcript lives in the agent (it saves its session file itself).
-    // Here we only keep our thread row fresh: title on first turn.
+    // Here we only keep our thread row fresh: title on first turn. B also
+    // persists the committed transcript into `chat_messages` so history never
+    // needs to `try_lock` a busy engine — it reads DB + replays stream_buffer.
+    let assistant_text: Option<String> = match &result {
+        Ok(out) if out.kind != zw_agent_embed::engine::RunKind::Ignored && !out.text.trim().is_empty() => Some(out.text.clone()),
+        _ => None,
+    };
+    if let Some(t) = &assistant_text {
+        // Guard duplicate done-insert for same turn (e.g. resumed retry).
+        let exists = db.get_chat_messages(&session_id, 500).await.map(|rows| rows.iter().any(|r| r.turn_id == turn_id && r.role == "assistant")).unwrap_or(false);
+        if !exists {
+            let _ = db.insert_chat_message(&session_id, "assistant", t, &turn_id).await;
+        }
+    }
     if let Ok(out) = &result {
         if out.kind != zw_agent_embed::engine::RunKind::Ignored && !out.text.trim().is_empty() {
             if let Some(t) = auto_title {
@@ -198,6 +291,10 @@ async fn run_embedded_turn(
     }
     // `run_embedded` already sent the closing event on error; nothing to add.
     drop(guard);
+    // B: back to idle regardless of outcome — smart callers also look at
+    // TASKS+DB status together; the DB flag recovers correctly after restart
+    // via `sweep_stale_processing` in main.
+    let _ = db.set_session_idle(&session_id).await;
     // Drop our task record — but only if it is still ours and finished: a
     // newer turn's running handle must survive (abort-then-resend race).
     let mut tasks = TASKS.lock().await;

@@ -188,6 +188,11 @@ async function submit() {
       if (r.ok && j.ok) {
         setStatus('Sent — the agent continues.')
         const done = current
+        const resolvedId = done ? done.ask_id : ''
+        // B: notify the stream that this ask is gone so a deferred Done can
+        // resume (ask-pending gates Done). The next engine chunks arrive via
+        // the still-open turn / stream_buffer replay.
+        try { window.dispatchEvent(new CustomEvent('askResolved', { detail: { ask_id: resolvedId } })) } catch {}
         current = null
         setTimeout(() => { setOpen(false); setStatus('') }, 900)
         return done

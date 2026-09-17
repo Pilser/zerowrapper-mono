@@ -47,10 +47,107 @@ function bumpSeqFrom(data) {
   if (seq) setLastSeq(sid, seq)
 }
 
+// B: smart stream — Done is gated while an ask is pending (otherwise the UI
+// finalizes before the post-answer continuation). HTTP poll is the smart
+// fallback when WS drops while `processing`: replay `stream_buffer` via REST
+// until WS resumes, so a refresh mid-turn never loses the tail.
+let pendingAskIds = new Set()
+let deferredDone = null
+let httpPollTimer = null
+let httpPollInFlight = false
+
+function isAskDrawerOpen() {
+  try { return !!(els.askDrawer && els.askDrawer.classList.contains('open')) } catch { return false }
+}
+function hasPendingAsk() {
+  return pendingAskIds.size > 0 || isAskDrawerOpen()
+}
+function deferDone(data) {
+  deferredDone = data
+  console.log('[stream] Done deferred while ask pending', data.turn_id || '')
+}
+function clearDeferredDone() {
+  deferredDone = null
+}
+try {
+  window.addEventListener('askResolved', (e) => {
+    const id = e && e.detail && e.detail.ask_id
+    if (id) pendingAskIds.delete(String(id))
+    else pendingAskIds.clear()
+    // If a Done was deferred waiting for this ask, keep the turn open
+    // and let the engine's continuation chunks + final Done close it. The
+    // stale deferred Done is dropped — the next true terminal closes it.
+    if (deferredDone && !hasPendingAsk()) {
+      console.log('[stream] ask resolved — dropping stale deferred Done, waiting for continuation Done')
+      deferredDone = null
+    }
+  })
+} catch {}
+
+function startHttpPoll() {
+  if (httpPollTimer) return
+  console.log('[stream] HTTP poll fallback armed')
+  httpPollTimer = window.setInterval(async () => {
+    try {
+      const sid = authState.sessionId || localStorage.getItem('zerowrapper_session') || ''
+      if (!sid) return
+      const since = getLastSeq(sid)
+      let data = null
+      for (const url of ['/api/stream?session_id=' + encodeURIComponent(sid) + '&since=' + since, '?api=stream&session_id=' + encodeURIComponent(sid) + '&since=' + since]) {
+        try {
+          const r = await fetch(url)
+          if (!r.ok) continue
+          data = await r.json().catch(() => null)
+          if (data) break
+        } catch {}
+      }
+      if (!data || !Array.isArray(data.events)) return
+      // Update status-driven UI hint
+      if (data.status === 'idle' && data.events.length === 0) {
+        // Processing finished and we caught up — stop polling, let WS drive
+        if (network.getState() === network.State.CONNECTED) stopHttpPoll()
+        // Also clear a deferred Done if we were waiting for this idle flip
+        if (deferredDone && !hasPendingAsk()) {
+          // No more continuation expected; finalize the deferred Done now
+          const d = deferredDone
+          deferredDone = null
+          const tid = d.turn_id || ''
+          let replaced = false
+          if (tid) { try { replaced = upsertAssistantTurn(tid, d.content || '') } catch {} }
+          if (replaced) streaming.dropPartial()
+          else streaming.handleDone(d.content, tid)
+          if (onStateChange) onStateChange('done')
+        }
+        return
+      }
+      if (httpPollInFlight) return
+      httpPollInFlight = true
+      for (const ev of data.events) {
+        // Feed through the same handler as live WS (seq bumps, dedup intact)
+        try { handleMessage({ data: JSON.stringify(ev) }) } catch {}
+      }
+      httpPollInFlight = false
+      // If WS is back and we drained, stop poll — resume handles the rest
+      if (network.getState() === network.State.CONNECTED && data.events.length === 0 && data.status !== 'processing') stopHttpPoll()
+    } catch { httpPollInFlight = false }
+  }, 3000)
+}
+function stopHttpPoll() {
+  if (!httpPollTimer) return
+  window.clearInterval(httpPollTimer)
+  httpPollTimer = null
+  console.log('[stream] HTTP poll fallback stopped')
+}
+
 function handleMessage(e) {
   try {
     const data = JSON.parse(e.data)
-    if (data && typeof data.seq === 'number') bumpSeqFrom(data)
+    // B: dedup by seq so WS resume + HTTP poll overlap never doubles chunks
+    if (data && typeof data.seq === 'number' && data.seq > 0) {
+      const sid0 = data.session_id || authState.sessionId || localStorage.getItem('zerowrapper_session') || ''
+      if (data.seq <= getLastSeq(sid0)) return
+      bumpSeqFrom(data)
+    } else if (data && typeof data.seq === 'number') bumpSeqFrom(data)
     switch (data.type) {
 
       case 'whiteboard_update':
@@ -78,6 +175,11 @@ function handleMessage(e) {
         toolCalls.handleToolResult(data.tool_call_id, data.name, data.output)
         break
       case 'done': {
+        // B: smart gate — if an ask is still pending, the engine hasn't
+        // really finished this turn (it will continue after the human
+        // answers). Defer finalizing so post-answer chunks still render as
+        // a continuation instead of freezing the chat.
+        if (hasPendingAsk()) { deferDone(data); break }
         // Turn-keyed upsert: a history row for this turn (rendered from a
         // reconnect fetch) wins — drop our partial and update it instead of
         // appending a second row. Fresh turns finalize normally.
@@ -88,6 +190,8 @@ function handleMessage(e) {
         }
         if (replaced) streaming.dropPartial()
         else streaming.handleDone(data.content, tid)
+        clearDeferredDone()
+        stopHttpPoll()
         if (onStateChange) onStateChange('done')
         break
       }
@@ -103,6 +207,12 @@ function handleMessage(e) {
         }
         break
       case 'ask_requested': {
+        // B: track pending ask so `Done` can be deferred; also show typing
+        // for the continuation that will arrive after the human answers.
+        try { if (data.ask_id) pendingAskIds.add(String(data.ask_id)) } catch {}
+        // While an ask is open the turn is still logically running — keep
+        // the cancel window meaningful and avoid finalizing early.
+        try { streaming.showTyping() } catch {}
         // The native ask_user tool needs a human: open the right drawer.
         // Answers travel via REST, so a dropped socket never strands a turn.
         try {
@@ -290,7 +400,7 @@ export function connect() {
     onOpen: () => {
       whiteboard.setSession(authState.sessionId)
       whiteboard.sync()
-      const sendResume = () => {
+      const sendResume = (snap) => {
         // Ephemeral replay: if we were mid-stream when the socket dropped,
         // ask the server to replay buffered deltas since our last seq.
         // Runs AFTER history renders, so replayed turns upsert against
@@ -300,19 +410,55 @@ export function connect() {
         if (sid && since > 0) {
           try { network.send(JSON.stringify({ type: 'resume', session_id: sid, since })) } catch {}
         }
+        // B: smart detection — history tells us if the session is still
+        // `processing` (even though we just reconnected, the turn is still
+        // running server-side). If so, keep the stop button, prime the HTTP
+        // poll fallback, and arm pending asks from the snapshot so `Done`
+        // gating works even before the first replayed `ask_requested`.
+        try {
+          const status = snap && snap.status
+          const running = snap && (snap.running === true || status === 'processing')
+          const pend = snap && snap.pending_asks
+          if (Array.isArray(pend)) {
+            for (const q of pend) if (q && q.id) pendingAskIds.add(String(q.id))
+            if (pend.length > 0) {
+              // Open drawer from snapshot if not already open (survives refresh)
+              import('./ask-drawer.js').then((m) => {
+                if (m && m.openWith && pend[0]) {
+                  let qs = []
+                  try { const raw = pend[0].questions; qs = typeof raw === 'string' ? JSON.parse(raw) : (Array.isArray(raw) ? raw : []) } catch { qs = [] }
+                  // Only open if not already showing this ask
+                  try { if (!m.isOpen()) m.openWith({ ask_id: pend[0].id, session_id: pend[0].session_id || sid, questions: qs }) } catch {}
+                }
+              }).catch(() => {})
+            }
+          }
+          if (running) { try { streaming.showTyping() } catch {}; startHttpPoll(); if (onStateChange) onStateChange('processing') }
+          else { stopHttpPoll() }
+        } catch {}
       }
+      const resumeWithHistoryStatus = () => sendResume(null)
       try {
         const p = fetchHistory()
-        if (p && p.then) p.then(sendResume, sendResume)
-        else sendResume()
-      } catch { sendResume() }
+        if (p && p.then) p.then((snap) => sendResume(snap), resumeWithHistoryStatus)
+        else sendResume(null)
+      } catch { sendResume(null) }
     },
-    onMessage: handleMessage,
     onClose: (e) => {
       // Network blip: local-only. Do NOT cancel the server turn — it
       // keeps buffering via consumeStream so resume can replay it.
       // Only explicit red-button cancel sends {type:cancel}.
       streaming.hideTyping()
+      // B: if the snapshot said `processing` but WS died, HTTP poll keeps
+      // the tail coming (refresh/network drop while agent busy). Otherwise
+      // the turn is idle and we stay quiet.
+      try {
+        const sid = authState.sessionId || localStorage.getItem('zerowrapper_session') || ''
+        // Kick poll optimistically — `startHttpPoll` self-stops if idle
+        startHttpPoll()
+        // Re-poll pending asks even when WS is down (drawer backup)
+        import('./ask-drawer.js').then(m => {}).catch(()=>{})
+      } catch {}
       if (onStateChange) onStateChange('disconnect')
     },
   })

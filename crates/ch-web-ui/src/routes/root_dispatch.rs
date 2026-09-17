@@ -113,6 +113,7 @@ async fn root_ws(cx: &Cx, body: Body) -> Result<Response> {
 async fn dispatch_api(cx: &Cx, api: &str, body: Body) -> Result<Response> {
     match api {
         "history" => api_history(cx).await,
+        "stream" => api_stream(cx).await,
         "sessions" => api_sessions_list(cx).await,
         "ask_pending" => api_ask_pending(cx).await,
         "ask_answer" => api_ask_answer(cx, body).await,
@@ -149,21 +150,14 @@ async fn api_history(cx: &Cx) -> Result<Response> {
             .unwrap());
     };
 
-    // Agent-owned transcript: live engine first, its session file second.
-    // The wrapper keeps no parallel copy.
-    let rows = crate::ws::handler::engine_history(&session_id).await;
+    // B: unified history — DB cache + status so frontend knows whether to
+    // resume via WS or poll HTTP while `processing`. Never returns a stale
+    // file that hides the in-flight user prompt.
+    let snap = crate::ws::handler::history_snapshot(app.db.system(), &session_id).await;
     Ok(Response::builder()
         .status(StatusCode::OK)
         .header("Content-Type", "application/json")
-        .body(Body::from(
-            serde_json::json!({
-                "session_id": session_id,
-                "messages": rows,
-                "total": rows.len(),
-                "start": 0
-            })
-            .to_string(),
-        ))
+        .body(Body::from(snap.to_string()))
         .unwrap())
 }
 
@@ -223,6 +217,25 @@ async fn api_ask_pending(cx: &Cx) -> Result<Response> {
             serde_json::json!({"ok": true, "pending": rows}).to_string(),
         ))
         .unwrap())
+}
+
+/// HTTP fallback for `stream_buffer` replay when WS is down but session is
+/// still `processing`. Frontend polls `?api=stream&session_id=&since=` till
+/// `status` flips to `idle` (or WS resumes).
+async fn api_stream(cx: &Cx) -> Result<Response> {
+    let app: &AppContext = app_context(cx);
+    let sid = sanitize_key(&query_value(cx, "session_id").unwrap_or_default());
+    let since: i64 = query_value(cx, "since").and_then(|v| v.parse().ok()).unwrap_or(0);
+    let events = app.db.system().stream_buffer_replay(&sid, since).await.unwrap_or_default();
+    let max_seq = app.db.system().stream_buffer_max_seq(&sid).await.unwrap_or(0);
+    let (status, _) = app.db.system().get_session_status(&sid).await.unwrap_or(("idle".into(), "".into()));
+    let payload: Vec<serde_json::Value> = events.into_iter().map(|be| {
+        let mut v = be.payload;
+        if let Some(o) = v.as_object_mut() { o.insert("seq".to_string(), serde_json::json!(be.seq)); }
+        v
+    }).collect();
+    Ok(Response::builder().status(StatusCode::OK).header("Content-Type","application/json")
+        .body(Body::from(serde_json::json!({"ok":true,"session_id":sid,"since":since,"max_seq":max_seq,"status":status,"events":payload}).to_string())).unwrap())
 }
 
 /// Answer a pending question set: persists + wakes the waiting tool call.

@@ -80,6 +80,12 @@ async fn main() -> anyhow::Result<()> {
 
     let db = zw_db::DbPool::open(&config.db_path).await?;
     db.migrate().await?;
+    // B: stale `processing` rows after a crash/restart become idle so fresh
+    // history callers don't wait forever for a buffer that will never arrive.
+    // In-process `TASKS` is empty at boot, so anything older than 10 min is stale.
+    if let Ok(n) = db.sweep_stale_processing(600).await {
+        if n > 0 { tracing::info!("swept {n} stale processing sessions to idle"); }
+    }
     tracing::info!("Database migrated");
 
     let whiteboard_dir = config.ch_web.whiteboard_dir.clone().unwrap_or_else(|| {

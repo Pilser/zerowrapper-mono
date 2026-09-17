@@ -262,6 +262,12 @@ pub const SYSTEM_MIGRATIONS: &[&str] = &[
     "ALTER TABLE sessions DROP COLUMN channel;",
     "ALTER TABLE chat_messages ADD COLUMN turn_id TEXT NOT NULL DEFAULT '';",
     "ALTER TABLE whiteboard_meta DROP COLUMN locked;",
+    // B: unified transcript cache — session state so frontend knows where to get stream.
+    // `status` = 'idle' | 'processing', `active_turn_id` tracks the in-flight turn,
+    // `active_started_at` for stale detection after restart/crash.
+    "ALTER TABLE sessions ADD COLUMN status TEXT NOT NULL DEFAULT 'idle';",
+    "ALTER TABLE sessions ADD COLUMN active_turn_id TEXT NOT NULL DEFAULT '';",
+    "ALTER TABLE sessions ADD COLUMN active_started_at TEXT NOT NULL DEFAULT '';",
 ];
 
 pub const SESSION_MIGRATIONS: &[&str] = &[

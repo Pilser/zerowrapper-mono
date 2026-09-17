@@ -119,29 +119,34 @@ export function fetchHistory() {
   };
   return tryFetch(0)
     .then(data => {
-      if (!data) return
+      if (!data) return data
       if (data.session_id) {
         localStorage.setItem('zerowrapper_session', data.session_id)
       }
-      if (!data.messages || data.messages.length === 0) return
-      const frag = document.createDocumentFragment()
-      data.messages.forEach(msg => {
-        if (msg.role === 'user' || msg.role === 'assistant') {
-          // Turn-keyed dedup: a row for this turn already on screen (live or
-          // an earlier fetch) wins — never render it twice.
-          if (msg.turn_id) {
-            try {
-              if (els.messages.querySelector('[data-turn="' + CSS.escape(msg.turn_id) + '"]')) return
-            } catch {}
+      // B: expose status to caller even when there are no messages, so
+      // refresh while `processing` can resume the live tail instead of
+      // showing an empty chat. Committed rows still render.
+      if (data.messages && data.messages.length > 0) {
+        const frag = document.createDocumentFragment()
+        data.messages.forEach(msg => {
+          if (msg.role === 'user' || msg.role === 'assistant') {
+            // Turn-keyed dedup: a row for this turn already on screen (live or
+            // an earlier fetch) wins — never render it twice.
+            if (msg.turn_id) {
+              try {
+                if (els.messages.querySelector('[data-turn="' + CSS.escape(msg.turn_id) + '"]')) return
+              } catch {}
+            }
+            const row = buildMessageRow(msg.role, msg.content, msg.turn_id || '')
+            if (row) frag.appendChild(row)
           }
-          const row = buildMessageRow(msg.role, msg.content, msg.turn_id || '')
-          if (row) frag.appendChild(row)
-        }
-      })
-      els.messages.appendChild(frag)
-      scrollToBottom(false)
+        })
+        els.messages.appendChild(frag)
+        scrollToBottom(false)
+      }
+      return data
     })
-    .catch(() => {})
+    .catch(() => null)
 }
 
 export function abortHistoryFetch() {

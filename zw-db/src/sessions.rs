@@ -166,4 +166,58 @@ impl DbPool {
             Ok(None)
         }
     }
+
+    // --- B: session state (processing/idle) for smart resume ---
+
+    pub async fn set_session_processing(&self, id: &str, turn_id: &str) -> anyhow::Result<()> {
+        let conn = self.conn().await;
+        conn.execute(
+            "UPDATE sessions SET status='processing', active_turn_id=?1, active_started_at=datetime('now'), last_active=datetime('now') WHERE id=?2",
+            Params::Positional(vec![Value::from(turn_id), Value::from(id)]),
+        ).await?;
+        // Ensure row exists even if never upserted.
+        conn.execute(
+            "INSERT OR IGNORE INTO sessions (id, title, status, active_turn_id) VALUES (?1, ?2, 'processing', ?3)",
+            Params::Positional(vec![Value::from(id), Value::from(id), Value::from(turn_id)]),
+        ).await?;
+        // Second pass in case the INSERT created idle row.
+        conn.execute(
+            "UPDATE sessions SET status='processing', active_turn_id=?1, active_started_at=datetime('now') WHERE id=?2 AND status!='processing'",
+            Params::Positional(vec![Value::from(turn_id), Value::from(id)]),
+        ).await?;
+        Ok(())
+    }
+
+    pub async fn set_session_idle(&self, id: &str) -> anyhow::Result<()> {
+        let conn = self.conn().await;
+        conn.execute(
+            "UPDATE sessions SET status='idle', active_turn_id='', active_started_at='' WHERE id=?1",
+            Params::Positional(vec![Value::from(id)]),
+        ).await?;
+        Ok(())
+    }
+
+    pub async fn get_session_status(&self, id: &str) -> anyhow::Result<(String, String)> {
+        let conn = self.conn().await;
+        let mut rows = conn.query(
+            "SELECT status, active_turn_id FROM sessions WHERE id=?1",
+            Params::Positional(vec![Value::from(id)]),
+        ).await?;
+        if let Some(row) = rows.next().await? {
+            let status = match row.get_value(0)? { Value::Text(s) => s, _ => "idle".to_string() };
+            let turn = match row.get_value(1)? { Value::Text(s) => s, _ => String::new() };
+            Ok((status, turn))
+        } else {
+            Ok(("idle".to_string(), String::new()))
+        }
+    }
+
+    pub async fn sweep_stale_processing(&self, older_than_secs: i64) -> anyhow::Result<u64> {
+        let conn = self.conn().await;
+        let n = conn.execute(
+            "UPDATE sessions SET status='idle', active_turn_id='', active_started_at='' WHERE status='processing' AND active_started_at < datetime('now', ?1)",
+            Params::Positional(vec![Value::from(format!("-{} seconds", older_than_secs))]),
+        ).await?;
+        Ok(n as u64)
+    }
 }
