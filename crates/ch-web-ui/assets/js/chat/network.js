@@ -80,6 +80,7 @@ function onWsOpen() {
 }
 
 function onWsMessage(e) {
+  try { window._networkLog = window._networkLog || []; window._networkLog.push('onWsMessage:'+String(e.data).slice(0,80)); if(window._networkLog.length>50) window._networkLog.shift(); } catch {}
   if (callbacks.onMessage) callbacks.onMessage(e)
 }
 
