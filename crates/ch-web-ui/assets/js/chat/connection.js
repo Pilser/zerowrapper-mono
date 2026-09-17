@@ -390,11 +390,11 @@ export function connect() {
   abortHistoryFetch()
 
   const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:'
-  // WS path is derived from the document <base href> so it works both standalone
-  // (/ws) and through the daemon's board-scoped AI proxy (/srv/<board>/ai/ws).
-  const base = (document.querySelector('base')?.getAttribute('href') || '/').replace(/\/+$/, '')
-  const wsPath = base === '' || base === '/' ? '/ws' : base + '/ws'
-  const url = protocol + '//' + location.host + wsPath
+  // WS path is derived from <base href> so it works both standalone (/ws)
+  // and embedded under a tenant prefix (/tenant_.../) via root_dispatch ?ws=1.
+  const baseHref = document.querySelector('base')?.getAttribute('href') || '/'
+  const wsUrl = baseHref === '/' || baseHref === '' ? '/ws' : baseHref + (baseHref.includes('?') ? '&ws=1' : '?ws=1')
+  const url = protocol + '//' + location.host + wsUrl
 
   network.connect(url, {
     onOpen: () => {
@@ -444,6 +444,10 @@ export function connect() {
         else sendResume(null)
       } catch { sendResume(null) }
     },
+    // DISPATCH: without this every pushed frame (thinking/chunk/done,
+    // whiteboard_update, agent_status, resumed) is parsed and dropped, so the
+    // whiteboard never renders and only the /api/stream poll keeps chat alive.
+    onMessage: handleMessage,
     onClose: (e) => {
       // Network blip: local-only. Do NOT cancel the server turn — it
       // keeps buffering via consumeStream so resume can replay it.
