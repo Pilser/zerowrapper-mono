@@ -284,7 +284,7 @@ async fn run_embedded_turn(
         &prompt,
         event_tx.clone(),
         &turn_id,
-        abort_slot,
+        abort_slot.clone(),
     )
     .await;
     // Transcript lives in the agent (it saves its session file itself).
