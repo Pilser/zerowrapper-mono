@@ -259,9 +259,6 @@ function currentPageData() {
   return (currentState && currentState.pages && currentState.pages[currentPage]) || null
 }
 
-let lastPageNo = null
-let lastBodyHash = ''
-
 export function setBoard(data) {
   const spin = getEl('wb-nav-spinner')
   if (spin) spin.classList.add('hidden')
@@ -270,36 +267,11 @@ export function setBoard(data) {
   // Fully shared board: never adopt the event's session id (always the
   // shared key now) — the whiteboard module keeps the chat's session.
   if (data.state) {
-    const pages = data.state.pages || []
-    // B: decouple viewed page from agent's active_page — agent opening a
-    // page must not snap the user's view. Preserve current page_no if still
-    // present; only on first load or after deletion fall back to active_page.
-    const prevNo = currentState && currentState.pages && currentState.pages[currentPage]
-      ? currentState.pages[currentPage].page_no
-      : null
-    let idx = -1
-    if (prevNo !== null) idx = pages.findIndex(p => p.page_no === prevNo)
-    if (idx < 0) {
-      idx = pages.findIndex(p => p.page_no === data.state.active_page)
-      if (idx < 0) idx = 0
-    }
     currentState = data.state
+    const pages = data.state.pages || []
+    let idx = pages.findIndex(p => p.page_no === data.state.active_page)
+    if (idx < 0) idx = 0
     currentPage = Math.max(0, Math.min(idx, pages.length - 1))
-    // B: skip full re-render when the visible page didn't change — the
-    // 500 ms poll was "refresh instead of update" and destroyed in-progress
-    // inputs/apps (lost data). Only render when body/pins actually changed.
-    const cur = pages[currentPage]
-    const curHash = cur ? (cur.body_md + '|' + JSON.stringify(cur.pins || [])) : ''
-    const curNo = cur ? cur.page_no : 0
-    if (lastPageNo === curNo && lastBodyHash === curHash && pages.length === (window.__wbPrevLen || 0)) {
-      // No visible change — just ensure nav labels are current
-      const label = getEl('wb-page-label')
-      if (label) label.textContent = `Page ${currentPage + 1} of ${pages.length}`
-      return
-    }
-    lastPageNo = curNo
-    lastBodyHash = curHash
-    window.__wbPrevLen = pages.length
     renderCurrent()
     return
   }
