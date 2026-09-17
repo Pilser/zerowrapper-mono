@@ -48,20 +48,12 @@ pub async fn history(cx: &Cx) -> Result<Response> {
             .unwrap());
     };
 
-    // Agent-owned transcript: live engine first, its session file second.
-    // The wrapper keeps no parallel copy.
-    let rows = crate::ws::handler::engine_history(&session_id).await;
+    // B: unified cache — DB committed + status so refresh while
+    // `processing` never hides the tail. See ws::handler::history_snapshot.
+    let snap = crate::ws::handler::history_snapshot(ctx.db.system(), &session_id).await;
     Ok(Response::builder()
         .status(StatusCode::OK)
         .header("Content-Type", "application/json")
-        .body(Body::from(
-            serde_json::json!({
-                "session_id": session_id,
-                "messages": rows,
-                "total": rows.len(),
-                "start": 0
-            })
-            .to_string(),
-        ))
+        .body(Body::from(snap.to_string()))
         .unwrap())
 }

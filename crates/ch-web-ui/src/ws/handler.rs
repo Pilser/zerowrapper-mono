@@ -1,16 +1,36 @@
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::LazyLock;
 use futures_util::{SinkExt, StreamExt};
 use tokio::sync::mpsc;
 use topcoat::router::content::websocket::{Message, WebSocket};
 use zw_core::StreamEvent;
 use zw_mcp::inspect_cmd;
 
+// B: frontend base URL per session (from whiteboard_sync) so the agent can
+// construct tenant-aware public URLs https://host/tenant/?wb=slug and
+// correct /api/srv base, mirroring how check.js reports location.href.
+const SHARED_ID_FALLBACK: &str = "shared";
+static FRONTEND_BASES: LazyLock<tokio::sync::Mutex<HashMap<String, String>>> =
+    LazyLock::new(|| tokio::sync::Mutex::new(HashMap::new()));
+pub async fn frontend_base_for(session_id: &str) -> Option<String> {
+    let m = FRONTEND_BASES.lock().await;
+    if let Some(v) = m.get(session_id) { return Some(v.clone()); }
+    // manage_whiteboard uses `shared` id — also try that
+    if let Some(v) = m.get(SHARED_ID_FALLBACK) { return Some(v.clone()); }
+    None
+}
+async fn set_frontend_base(session_id: &str, base: String) {
+    if base.is_empty() { return }
+    let mut m = FRONTEND_BASES.lock().await;
+    m.insert(session_id.to_string(), base.clone());
+    m.insert(SHARED_ID_FALLBACK.to_string(), base);
+}
+
 // Ephemeral replay buffer: hybrid memory + DB. Memory for fast reconnect
 // within the same process, DB for cross-restart resumption. This is NOT
 // session message storage — agent DB remains the source of truth for
 // history. Buffer drains 10 min after turn_complete, 60 min for orphaned.
-use std::sync::LazyLock;
 static MEM_BUFFER: LazyLock<tokio::sync::Mutex<HashMap<String, Vec<serde_json::Value>>>> =
     LazyLock::new(|| tokio::sync::Mutex::new(HashMap::new()));
 
@@ -552,6 +572,14 @@ pub async fn handle_ws_connection(
                 .and_then(|v| v.as_str())
                 .unwrap_or("")
                 .to_string();
+            // B: remember the tenant-aware base so `manage_whiteboard set-public`
+            // can return https://host/tenant/?wb=slug instead of local /w/slug.
+            let base_url = parsed.get("base_url").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            let href = parsed.get("href").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            let effective_base = if !base_url.is_empty() { base_url } else if !href.is_empty() { href } else { String::new() };
+            if !sid.is_empty() && !effective_base.is_empty() {
+                set_frontend_base(&sid, effective_base).await;
+            }
             if !sid.is_empty() {
                 current_session_id = sid.clone();
                 if let Some(handle) = whiteboard.clone() {

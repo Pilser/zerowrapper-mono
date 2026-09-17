@@ -126,8 +126,13 @@ impl ManageWhiteboardProvider {
                     .await
                     .map_err(|e| err_json(&e.to_string(), raw, "set-public <page_no> on|off", "set-public <page_no> on"))?;
                 let mut st = self.state_json(&sid).await?;
+                // B: tenant-aware hint — frontend is often under /tenant_xxx/,
+                // so the pretty /w/<slug> is only valid at root; under a
+                // tenant the snapshot is ?wb=<slug> on the tenant base.
+                // check.js now reports base_url, and whiteboard.js pageBase()
+                // builds the correct link client-side.
                 let note = match slug {
-                    Some(s) => format!("page {n} is public: /w/{s}"),
+                    Some(s) => format!("page {n} is public: /w/{s} (or ?wb={s} when embedded under a tenant prefix) — frontend builds the full https://host/tenant/?wb={s} link via <base href>"),
                     None => format!("page {n} is no longer public; URL removed"),
                 };
                 st["message"] = json!(note);

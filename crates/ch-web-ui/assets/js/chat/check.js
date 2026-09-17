@@ -314,11 +314,27 @@ export async function runE2E(steps) {
   return { ok, results }
 }
 
+function srvReportUrl() {
+  try {
+    const base = document.querySelector('base')?.getAttribute('href') || '/'
+    const prefix = base === '/' ? '' : base.replace(/\/+$/, '')
+    return prefix + '/api/srv/inspect-reports/submit'
+  } catch { return '/api/srv/inspect-reports/submit' }
+}
 export function report(obj) {
   ensureWrappers()
-  const payload = Object.assign({ ts: Date.now(), url: location.href }, obj || {})
+  // B: tenant-aware — frontend may be under /tenant_xxx/, so use base-relative
+  // URL (mirrors whiteboard.js pageBase() / connection.js WS base). Also
+  // include full base so backend `frontend_base_for` can return
+  // https://host/tenant/?wb=slug for the agent's share links.
+  const href = (() => { try { return location.href } catch { return '' } })()
+  const baseUrl = (() => { try {
+    const base = document.querySelector('base')?.getAttribute('href') || '/'
+    return location.origin + (base.endsWith('/') ? base : base + '/')
+  } catch { return href } })()
+  const payload = Object.assign({ ts: Date.now(), url: href, base_url: baseUrl }, obj || {})
   try {
-    fetch('/api/srv/inspect-reports/submit', {
+    fetch(srvReportUrl(), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer inspect-reports' },
       body: JSON.stringify(payload)
