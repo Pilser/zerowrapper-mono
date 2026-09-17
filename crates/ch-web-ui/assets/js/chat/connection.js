@@ -400,6 +400,7 @@ export function connect() {
 
   network.connect(url, {
     onOpen: () => {
+      try { window._onOpenLog = (window._onOpenLog||0)+1; window._handleMessageLog = window._handleMessageLog || []; window._handleMessageLog.push('onOpen:'+authState.sessionId); } catch {}
       whiteboard.setSession(authState.sessionId)
       whiteboard.sync()
       const sendResume = (snap) => {
