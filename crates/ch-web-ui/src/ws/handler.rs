@@ -315,15 +315,15 @@ async fn run_embedded_turn(
     // TASKS+DB status together; the DB flag recovers correctly after restart
     // via `sweep_stale_processing` in main.
     let _ = db.set_session_idle(&session_id).await;
-    // Drop our task record — but only if it is still ours and finished: a
-    // newer turn's running handle must survive (abort-then-resend race).
+    // Drop our task record — only if it is still ours: a newer turn's
+    // running handle must survive (abort-then-resend race). The old
+    // `is_finished()` check inside the task was always false, leaking
+    // `running:true` forever and breaking the live stream's Done gating.
     let mut tasks = TASKS.lock().await;
-    if tasks
-        .get(&session_id)
-        .map(|(h, _)| h.is_finished())
-        .unwrap_or(false)
-    {
-        tasks.remove(&session_id);
+    if let Some((_, stored_slot)) = tasks.get(&session_id) {
+        if std::sync::Arc::ptr_eq(stored_slot, &abort_slot) {
+            tasks.remove(&session_id);
+        }
     }
 }
 
