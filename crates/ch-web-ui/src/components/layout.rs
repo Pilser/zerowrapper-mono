@@ -27,7 +27,7 @@ pub async fn root_layout(cx: &Cx, slot: Result) -> Result {
     let marked_url = format!("/_topcoat/assets/{}", bundled_asset(cx, MARKED_JS).name());
     let highlight_url = format!("/_topcoat/assets/{}", bundled_asset(cx, HIGHLIGHT_JS).name());
     let katex_url = format!("/_topcoat/assets/{}", bundled_asset(cx, KATEX_JS).name());
-    let katex_css_url = format!("?asset={}", bundled_asset(cx, KATEX_CSS).name());
+    let katex_css_url = format!("/_topcoat/assets/{}", bundled_asset(cx, KATEX_CSS).name());
 
     // Base href = the directory of the request path, so relative URLs resolve
     // correctly whether the page is served at `/` or under a tenant prefix.
