@@ -18,19 +18,30 @@ impl DbPool {
         }
         let payload = serde_json::to_string(event)?;
         let conn = self.conn().await;
-        let mut rows = conn
-            .query(
-                "SELECT COALESCE(MAX(seq),0) FROM stream_buffer WHERE session_id=?1",
-                Params::Positional(vec![TursoValue::from(session_id)]),
-            )
-            .await?;
-        let next = if let Some(row) = rows.next().await? {
-            match row.get_value(0)? {
-                TursoValue::Integer(i) => i + 1,
-                _ => 1,
+        // Durable, globally monotonic seq. Per-session MAX(seq)+1 rewound to 1
+        // whenever the TTL sweeper drained the buffer, which made the frontend
+        // drop every live event (`seq <= lastSeq`) until a manual refresh.
+        conn.execute(
+            "INSERT OR IGNORE INTO stream_seq (id, value) VALUES (1, 0)",
+            Params::None,
+        )
+        .await?;
+        conn.execute(
+            "UPDATE stream_seq SET value = value + 1 WHERE id = 1",
+            Params::None,
+        )
+        .await?;
+        let next = {
+            let mut rows = conn
+                .query("SELECT value FROM stream_seq WHERE id = 1", Params::None)
+                .await?;
+            match rows.next().await? {
+                Some(row) => match row.get_value(0)? {
+                    TursoValue::Integer(i) => i,
+                    _ => 1,
+                },
+                None => 1,
             }
-        } else {
-            1
         };
         conn.execute(
             "INSERT INTO stream_buffer (session_id, seq, type, payload) VALUES (?1,?2,?3,?4)",

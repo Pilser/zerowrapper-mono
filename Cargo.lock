@@ -1628,6 +1628,7 @@ dependencies = [
  "tower",
  "tower-http 0.7.0",
  "tracing",
+ "zw-agent-embed",
  "zw-cache",
  "zw-core",
  "zw-db",
@@ -10682,11 +10683,14 @@ name = "zw-agent-embed"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
+ "serde",
  "serde_json",
  "tokio",
  "tracing",
  "zerostack",
  "zw-core",
+ "zw-db",
 ]
 
 [[package]]

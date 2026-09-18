@@ -41,6 +41,18 @@ function setLastSeq(sid, seq) {
   const cur = getLastSeq(sid)
   if (seq > cur) localStorage.setItem(lastSeqKey(sid), String(seq))
 }
+// Reconcile the cursor with the server's authoritative max_seq. Used when the
+// server buffer rewound (swept/restarted) so a stale high cursor would silently
+// drop every live event. `seq` is 0 when the buffer is empty.
+function resetLastSeq(sid, seq) {
+  if (!sid) return
+  const n = Number.isFinite(seq) && seq > 0 ? seq : 0
+  localStorage.setItem(lastSeqKey(sid), String(n))
+}
+function reconcileCursor(sid, maxSeq) {
+  if (!sid || typeof maxSeq !== 'number') return
+  if (maxSeq < getLastSeq(sid)) resetLastSeq(sid, maxSeq)
+}
 function bumpSeqFrom(data) {
   const seq = data && typeof data.seq === 'number' ? data.seq : 0
   const sid = data && data.session_id ? data.session_id : authState.sessionId
@@ -154,7 +166,9 @@ function handleMessage(e) {
         whiteboard.setBoard(data)
         break
       case 'resumed':
-        // Server ack of replay window; nothing to render
+        // Server ack of the replay window. If the buffer rewound below our
+        // cursor, resync to the server's max so future live events pass dedup.
+        reconcileCursor(data.session_id || authState.sessionId, data.max_seq)
         break
       case 'thinking':
         streaming.handleThinking(data.content)
@@ -279,36 +293,15 @@ function handleMessage(e) {
       }
       case 'whiteboard_open': {
         // Open whiteboard to a page: {type:'whiteboard_open', page:3}
-        try {
-          const targetPage = data.page || 1
-          const label = document.getElementById('wb-page-label')
-          let currentPage = 1
-          if (label) {
-            const m = label.textContent?.match(/Page\s+(\d+)/)
-            if (m) currentPage = parseInt(m[1], 10) || 1
-          }
-          const diff = targetPage - currentPage
-          const nextBtn = document.getElementById('wb-next')
-          const prevBtn = document.getElementById('wb-prev')
-          for (let i = 0; i < Math.abs(diff); i++) {
-            if (diff > 0 && nextBtn) nextBtn.click()
-            else if (diff < 0 && prevBtn) prevBtn.click()
-          }
-        } catch {}
+        try { whiteboard.goToPage(data.page || 1) } catch {}
         break
       }
       case 'whiteboard_next': {
-        try {
-          const btn = document.getElementById('wb-next')
-          if (btn) btn.click()
-        } catch {}
+        try { whiteboard.step(1) } catch {}
         break
       }
       case 'whiteboard_prev': {
-        try {
-          const btn = document.getElementById('wb-prev')
-          if (btn) btn.click()
-        } catch {}
+        try { whiteboard.step(-1) } catch {}
         break
       }
       case 'whiteboard_expand': {
@@ -406,6 +399,10 @@ export function connect() {
         // Runs AFTER history renders, so replayed turns upsert against
         // known turn ids instead of doubling as fresh rows.
         const sid = authState.sessionId || localStorage.getItem('zerowrapper_session') || ''
+        // Structured resync: history_snapshot carries the server's buffer
+        // max_seq. If our durable cursor is ahead of it (buffer swept/restarted),
+        // clamp before resuming so live events are no longer dropped.
+        if (snap && typeof snap.max_seq === 'number') reconcileCursor(sid, snap.max_seq)
         const since = getLastSeq(sid)
         if (sid && since > 0) {
           try { network.send(JSON.stringify({ type: 'resume', session_id: sid, since })) } catch {}

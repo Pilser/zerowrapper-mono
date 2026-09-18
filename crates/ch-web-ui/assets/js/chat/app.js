@@ -164,10 +164,96 @@ function init() {
   els.uploadBtn = document.getElementById("upload-btn");
   els.fileInput = document.getElementById("file-input");
   els.attachments = document.getElementById("attachments");
+  els.menuBtn = document.getElementById("menu-btn");
+  els.drawer = document.getElementById("side-drawer");
+  els.drawerOverlay = document.getElementById("drawer-overlay");
+  els.drawerCloseBtn = document.getElementById("drawer-close-btn");
+  els.drawerNewBtn = document.getElementById("drawer-new-btn");
+  els.drawerList = document.getElementById("drawer-list");
+  els.drawerUsage = document.getElementById("drawer-usage");
+  els.askDrawer = document.getElementById("ask-drawer");
+  els.askOverlay = document.getElementById("ask-overlay");
+  els.askCloseBtn = document.getElementById("ask-close-btn");
+  els.askAddBtn = document.getElementById("ask-add-btn");
+  els.askBackBtn = document.getElementById("ask-back-btn");
+  els.askReviewBtn = document.getElementById("ask-review-btn");
+  els.askSubmitBtn = document.getElementById("ask-submit-btn");
+  els.askBody = document.getElementById("ask-body");
+  els.askStatus = document.getElementById("ask-status");
 }
 var els;
 var init_dom = __esm(() => {
   els = {};
+});
+
+// auth.js
+function genSimpleSid() {
+  const n = Date.now().toString(36) + Math.floor(Math.random() * 1296).toString(36);
+  return "sess_" + n.replace(/[^a-z0-9]/gi, "").toLowerCase();
+}
+async function fetchSessions() {
+  for (const url2 of ["/api/sessions", "?api=sessions"]) {
+    try {
+      const r = await fetch(url2);
+      if (!r.ok)
+        continue;
+      const j = await r.json();
+      if (j.sessions)
+        return j.sessions;
+    } catch {}
+  }
+  return [];
+}
+async function createSession(title) {
+  for (const url2 of ["/api/sessions", "?api=sessions_create"]) {
+    try {
+      const r = await fetch(url2, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: title || "" })
+      });
+      if (!r.ok)
+        continue;
+      return await r.json();
+    } catch {}
+  }
+  const id = genSimpleSid();
+  return { session_id: id, title: title || id };
+}
+function loadFromStorage() {
+  state2.sessionId = localStorage.getItem(STORAGE_SESSION) || "";
+}
+function loadFromQuery() {
+  const qs = new URLSearchParams(location.search);
+  const sid = (qs.get("session_id") || "").trim();
+  if (sid) {
+    state2.sessionId = sid.replace(/[^a-zA-Z0-9_.-]/g, "_");
+    saveToStorage();
+  }
+}
+function ensureSession() {
+  if (!state2.sessionId) {
+    state2.sessionId = genSimpleSid();
+    saveToStorage();
+  }
+  return state2.sessionId;
+}
+function saveToStorage() {
+  if (state2.sessionId)
+    localStorage.setItem(STORAGE_SESSION, state2.sessionId);
+}
+function showBadge() {
+  if (els.authSection)
+    els.authSection.classList.add("hidden");
+  if (els.userBadge)
+    els.userBadge.classList.add("hidden");
+}
+var STORAGE_SESSION = "zerowrapper_session", state2;
+var init_auth = __esm(() => {
+  init_dom();
+  state2 = {
+    sessionId: ""
+  };
 });
 
 // constants.js
@@ -1109,7 +1195,7 @@ function scheduleRender(id) {
   if (renderPending)
     return;
   renderPending = true;
-  requestAnimationFrame(() => {
+  const doRender = () => {
     renderPending = false;
     if (streamId !== id)
       return;
@@ -1120,7 +1206,16 @@ function scheduleRender(id) {
     }
     render(target2, html);
     autoScroll();
-  });
+  };
+  if (typeof requestAnimationFrame === "function") {
+    requestAnimationFrame(doRender);
+    setTimeout(() => {
+      if (renderPending && streamId === id)
+        doRender();
+    }, 50);
+  } else {
+    setTimeout(doRender, 0);
+  }
 }
 function appendThought(content2, container2) {
   pushThought(content2 || "");
@@ -1178,12 +1273,30 @@ function finalizeIfActive() {
   if (content)
     flush();
 }
-function handleDone(text) {
+function handleDone(text, turnId) {
   finalizeThought();
   hideTyping();
   if (text)
     content = text;
+  if (turnId && el && el.parentElement) {
+    try {
+      el.parentElement.dataset.turn = turnId;
+      el.parentElement.dataset.role = "assistant";
+    } catch {}
+  }
   finalize();
+}
+function dropPartial() {
+  if (el) {
+    const parent = el.parentElement;
+    if (parent)
+      parent.remove();
+    el = null;
+  }
+  content = "";
+  streamId++;
+  if (onFinalize)
+    onFinalize();
 }
 function cancel() {
   finalizeThought();
@@ -1227,7 +1340,8 @@ __export(exports_messages, {
   abortHistoryFetch: () => abortHistoryFetch,
   addMessage: () => addMessage,
   fetchHistory: () => fetchHistory,
-  scrollToBottom: () => scrollToBottom
+  scrollToBottom: () => scrollToBottom,
+  upsertAssistantTurn: () => upsertAssistantTurn
 });
 import { marked as marked3 } from "marked";
 function extractMessageText(raw) {
@@ -1276,9 +1390,12 @@ function renderTextWithAttachments(text) {
   }
   return div;
 }
-function buildMessageRow(role, text) {
+function buildMessageRow(role, text, turn) {
   const row = document.createElement("div");
   row.className = "message-row " + role;
+  row.dataset.role = role;
+  if (turn)
+    row.dataset.turn = turn;
   if (role === "error") {
     const content2 = document.createElement("div");
     content2.className = "msg-content";
@@ -1331,31 +1448,62 @@ function fetchHistory() {
       return Promise.resolve(null);
     return fetch(urls[i], { signal: abortController.signal }).then((r) => r.ok ? r.json() : tryFetch(i + 1)).catch(() => tryFetch(i + 1));
   };
-  tryFetch(0).then((data) => {
+  return tryFetch(0).then((data) => {
     if (!data)
-      return;
+      return data;
     if (data.session_id) {
       localStorage.setItem("zerowrapper_session", data.session_id);
     }
-    if (!data.messages || data.messages.length === 0)
-      return;
-    const frag = document.createDocumentFragment();
-    data.messages.forEach((msg) => {
-      if (msg.role === "user" || msg.role === "assistant") {
-        const row = buildMessageRow(msg.role, msg.content);
-        if (row)
-          frag.appendChild(row);
-      }
-    });
-    els.messages.appendChild(frag);
-    scrollToBottom(false);
-  }).catch(() => {});
+    if (data.messages && data.messages.length > 0) {
+      const frag = document.createDocumentFragment();
+      data.messages.forEach((msg) => {
+        if (msg.role === "user" || msg.role === "assistant") {
+          if (msg.turn_id) {
+            try {
+              if (els.messages.querySelector('[data-turn="' + CSS.escape(msg.turn_id) + '"]'))
+                return;
+            } catch {}
+          }
+          const row = buildMessageRow(msg.role, msg.content, msg.turn_id || "");
+          if (row)
+            frag.appendChild(row);
+        }
+      });
+      els.messages.appendChild(frag);
+      scrollToBottom(false);
+    }
+    return data;
+  }).catch(() => null);
 }
 function abortHistoryFetch() {
   if (abortController) {
     abortController.abort();
     abortController = null;
   }
+}
+function upsertAssistantTurn(turnId, content2) {
+  if (!turnId)
+    return false;
+  let row = null;
+  try {
+    row = els.messages.querySelector('[data-turn="' + CSS.escape(turnId) + '"][data-role="assistant"]');
+  } catch {
+    return false;
+  }
+  if (!row)
+    return false;
+  const target2 = row.querySelector(".msg-content.chat-markdown") || row.querySelector(".msg-content");
+  if (!target2)
+    return false;
+  try {
+    render(target2, marked3.parse(content2 || ""));
+  } catch {
+    target2.textContent = content2 || "";
+  }
+  try {
+    autoScroll();
+  } catch {}
+  return true;
 }
 var abortController = null;
 var init_messages = __esm(() => {
@@ -1462,9 +1610,11 @@ var init_whiteboard_render = __esm(() => {
 // whiteboard.js
 var exports_whiteboard = {};
 __export(exports_whiteboard, {
+  goToPage: () => goToPage,
   init: () => init2,
   setBoard: () => setBoard,
   setSession: () => setSession,
+  step: () => step,
   sync: () => sync
 });
 function getEl2(id) {
@@ -1683,7 +1833,13 @@ function sync() {
     if (spin)
       spin.classList.add("hidden");
   }, 5000);
-  send(JSON.stringify({ type: "whiteboard_sync", session_id: sessionId }));
+  let baseUrl = "";
+  let href = "";
+  try {
+    baseUrl = location.origin + pageBase();
+    href = location.href;
+  } catch {}
+  send(JSON.stringify({ type: "whiteboard_sync", session_id: sessionId, base_url: baseUrl, href }));
 }
 function setSession(sid) {
   if (!sid)
@@ -1695,7 +1851,6 @@ function setSession(sid) {
 }
 function renderCurrent() {
   const label = getEl2("wb-page-label");
-  const badge = getEl2("wb-lock-badge");
   const share = getEl2("wb-share");
   const copyLink = getEl2("wb-copy-link");
   const prev = getEl2("wb-prev");
@@ -1704,8 +1859,6 @@ function renderCurrent() {
     renderBoard(body, pins, { body_md: "", pins: [] });
     if (label)
       label.textContent = "Page 1 of 1";
-    if (badge)
-      badge.classList.add("hidden");
     if (share)
       share.classList.add("hidden");
     if (copyLink)
@@ -1726,10 +1879,7 @@ function renderCurrent() {
     prev.disabled = currentPage <= 0;
   if (next)
     next.disabled = currentPage >= pages.length - 1;
-  const active = currentState.locked && page && page.page_no === currentState.active_page;
   const isPub = !!(page && page.public_slug);
-  if (badge)
-    badge.classList.toggle("hidden", !active);
   if (share)
     share.classList.toggle("hidden", !isPub);
   if (copyLink)
@@ -1741,6 +1891,25 @@ function renderCurrent() {
 function currentPageData() {
   return currentState && currentState.pages && currentState.pages[currentPage] || null;
 }
+function goToPage(pageNo) {
+  if (!currentState || !Array.isArray(currentState.pages) || currentState.pages.length === 0)
+    return false;
+  const n = Number(pageNo);
+  if (!Number.isFinite(n))
+    return false;
+  let idx = currentState.pages.findIndex((p) => p.page_no === n);
+  if (idx < 0)
+    idx = Math.max(0, Math.min(Math.round(n) - 1, currentState.pages.length - 1));
+  currentPage = idx;
+  renderCurrent();
+  return true;
+}
+function step(delta) {
+  if (!currentState || !Array.isArray(currentState.pages) || currentState.pages.length === 0)
+    return;
+  currentPage = Math.max(0, Math.min(currentPage + delta, currentState.pages.length - 1));
+  renderCurrent();
+}
 function setBoard(data) {
   const spin = getEl2("wb-nav-spinner");
   if (spin)
@@ -1748,8 +1917,6 @@ function setBoard(data) {
   clearTimeout(syncHideTimer);
   if (!data)
     return;
-  if (data.session_id)
-    sessionId = data.session_id;
   if (data.state) {
     currentState = data.state;
     const pages = data.state.pages || [];
@@ -1763,7 +1930,6 @@ function setBoard(data) {
   currentState = null;
   renderBoard(body, pins, data);
   const label = getEl2("wb-page-label");
-  const badge = getEl2("wb-lock-badge");
   const share = getEl2("wb-share");
   const copyLink = getEl2("wb-copy-link");
   const pop = getEl2("wb-link-pop");
@@ -1771,8 +1937,6 @@ function setBoard(data) {
   const next = getEl2("wb-next");
   if (label)
     label.textContent = "Page 1 of 1";
-  if (badge)
-    badge.classList.add("hidden");
   if (share)
     share.classList.add("hidden");
   if (copyLink)
@@ -1788,6 +1952,266 @@ var SWIPE_THRESHOLD = 40, sessionId = "", mode = "closed", panel = null, body = 
 var init_whiteboard = __esm(() => {
   init_network();
   init_whiteboard_render();
+});
+
+// ask-drawer.js
+var exports_ask_drawer = {};
+__export(exports_ask_drawer, {
+  init: () => init3,
+  isOpen: () => isOpen2,
+  openWith: () => openWith,
+  setOpen: () => setOpen
+});
+function esc(s) {
+  return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+function isOpen2() {
+  return !!(els.askDrawer && els.askDrawer.classList.contains("open"));
+}
+function setOpen(open2) {
+  if (!els.askDrawer || !els.askOverlay)
+    return;
+  if (open2) {
+    els.askDrawer.classList.add("open");
+    els.askDrawer.setAttribute("aria-hidden", "false");
+    els.askOverlay.classList.remove("hidden");
+  } else {
+    els.askDrawer.classList.remove("open");
+    els.askDrawer.setAttribute("aria-hidden", "true");
+    els.askOverlay.classList.add("hidden");
+  }
+}
+function setStatus(msg, isError) {
+  if (!els.askStatus)
+    return;
+  els.askStatus.textContent = msg || "";
+  els.askStatus.style.color = isError ? "var(--color-status-error)" : "var(--color-text-weak)";
+}
+function readForm() {
+  if (!current || !els.askBody)
+    return;
+  const cards = els.askBody.querySelectorAll("[data-qid]");
+  cards.forEach((card) => {
+    const qid = card.getAttribute("data-qid");
+    const q = current.questions.find((x) => x.id === qid);
+    if (!q)
+      return;
+    const qta = card.querySelector('textarea[data-q="text"]');
+    if (qta)
+      q.question = qta.value;
+    const sel = card.querySelector('select[data-q="answer"]');
+    const custom = card.querySelector('input[data-q="custom"]');
+    const ta = card.querySelector('textarea[data-q="answer"]');
+    if (sel && custom) {
+      q.answer = sel.value === "__custom__" ? custom.value : sel.value;
+    } else if (ta) {
+      q.answer = ta.value;
+    }
+  });
+}
+function answerControl(q) {
+  if (q.options && q.options.length > 0) {
+    const opts = q.options.map((o) => '<option value="' + esc(o) + '"' + (q.answer === o ? " selected" : "") + ">" + esc(o) + "</option>").join("");
+    const useCustom = q.answer && !q.options.includes(q.answer);
+    return '<select data-q="answer">' + opts + '<option value="__custom__"' + (useCustom ? " selected" : "") + ">Custom…</option></select>" + '<input data-q="custom" type="text" placeholder="Or type your own…" value="' + esc(useCustom ? q.answer : "") + '"' + (useCustom ? "" : ' style="display:none"') + " />";
+  }
+  return '<textarea data-q="answer" rows="2" placeholder="Your answer…">' + esc(q.answer || "") + "</textarea>";
+}
+function renderEdit() {
+  if (!els.askBody || !current)
+    return;
+  els.askBody.innerHTML = "";
+  current.questions.forEach((q) => {
+    const card = document.createElement("div");
+    card.className = "ask-card";
+    card.setAttribute("data-qid", q.id);
+    card.innerHTML = (q.objective ? '<div class="ask-objective">' + esc(q.objective) + "</div>" : "") + '<textarea data-q="text" rows="2">' + esc(q.question) + "</textarea>" + answerControl(q);
+    els.askBody.appendChild(card);
+  });
+  els.askBody.querySelectorAll('select[data-q="answer"]').forEach((sel) => {
+    sel.addEventListener("change", () => {
+      const card = sel.closest("[data-qid]");
+      const custom = card ? card.querySelector('input[data-q="custom"]') : null;
+      if (custom)
+        custom.style.display = sel.value === "__custom__" ? "" : "none";
+    });
+  });
+  els.askBackBtn.classList.add("hidden");
+  els.askReviewBtn.classList.remove("hidden");
+  els.askSubmitBtn.classList.add("hidden");
+  mode2 = "edit";
+}
+function renderReview() {
+  readForm();
+  if (!els.askBody || !current)
+    return;
+  els.askBody.innerHTML = "";
+  current.questions.forEach((q) => {
+    const card = document.createElement("div");
+    card.className = "ask-card ask-review-card";
+    card.setAttribute("data-qid", q.id);
+    const shownQ = (q.question || "").trim() || "(empty question)";
+    const shownA = (q.answer || "").trim() || "— no answer —";
+    card.innerHTML = '<div class="ask-review-q">' + esc(shownQ) + "</div>" + (q.objective ? '<div class="ask-objective">' + esc(q.objective) + "</div>" : "") + '<div class="ask-review-a">' + esc(shownA) + "</div>";
+    els.askBody.appendChild(card);
+  });
+  els.askBackBtn.classList.remove("hidden");
+  els.askReviewBtn.classList.add("hidden");
+  els.askSubmitBtn.classList.remove("hidden");
+  mode2 = "review";
+}
+function openWith(ask) {
+  if (!ask || !ask.ask_id)
+    return;
+  if (current && current.ask_id === ask.ask_id && isOpen2())
+    return;
+  customCount = 0;
+  const qs = Array.isArray(ask.questions) ? ask.questions : [];
+  current = {
+    ask_id: ask.ask_id,
+    session_id: ask.session_id || state2.sessionId,
+    questions: qs.map((q, i) => ({
+      id: q.id && String(q.id) || "q" + (i + 1),
+      question: q.question || "",
+      objective: q.objective || "",
+      options: Array.isArray(q.options) ? q.options.filter((o) => typeof o === "string").slice(0, 12) : [],
+      answer: "",
+      custom: false
+    }))
+  };
+  setStatus("");
+  renderEdit();
+  setOpen(true);
+}
+function addOwnQuestion() {
+  if (!current)
+    return;
+  readForm();
+  customCount += 1;
+  current.questions.push({
+    id: "custom-" + customCount,
+    question: "",
+    objective: "",
+    options: [],
+    answer: "",
+    custom: true
+  });
+  if (mode2 === "review")
+    renderEdit();
+  else
+    renderEdit();
+  try {
+    const cards = els.askBody.querySelectorAll("[data-qid]");
+    const last = cards[cards.length - 1];
+    const ta = last ? last.querySelector('textarea[data-q="text"]') : null;
+    if (ta)
+      ta.focus();
+  } catch {}
+}
+async function submit() {
+  readForm();
+  if (!current)
+    return;
+  const answers = current.questions.map((q) => ({
+    id: q.id,
+    question: q.question,
+    answer: q.answer || ""
+  }));
+  const body2 = JSON.stringify({ id: current.ask_id, answers });
+  setStatus("Submitting…");
+  for (const url2 of ["/api/ask/answer", "?api=ask_answer"]) {
+    try {
+      const r = await fetch(url2, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: body2
+      });
+      const j = await r.json().catch(() => ({}));
+      if (r.ok && j.ok) {
+        setStatus("Sent — the agent continues.");
+        const done = current;
+        const resolvedId = done ? done.ask_id : "";
+        try {
+          window.dispatchEvent(new CustomEvent("askResolved", { detail: { ask_id: resolvedId } }));
+        } catch {}
+        current = null;
+        setTimeout(() => {
+          setOpen(false);
+          setStatus("");
+        }, 900);
+        return done;
+      }
+      if (r.status === 410 || r.status === 404) {
+        setStatus("Already resolved — closing.", true);
+        current = null;
+        setTimeout(() => {
+          setOpen(false);
+          setStatus("");
+        }, 900);
+        return null;
+      }
+    } catch {}
+  }
+  setStatus("Submit failed — network issue? Answers are kept; retry.", true);
+  return null;
+}
+async function pollPending() {
+  try {
+    if (getState() !== State.CONNECTED)
+      return;
+    const sid = state2.sessionId || localStorage.getItem("zerowrapper_session") || "";
+    if (!sid)
+      return;
+    for (const url2 of ["/api/ask/pending?session_id=" + encodeURIComponent(sid), "?api=ask_pending&session_id=" + encodeURIComponent(sid)]) {
+      try {
+        const r = await fetch(url2);
+        if (!r.ok)
+          continue;
+        const j = await r.json().catch(() => ({}));
+        const list = j.pending || [];
+        if (list.length > 0 && !isOpen2()) {
+          const first = list[0];
+          let questions = [];
+          try {
+            questions = JSON.parse(first.questions || "[]");
+          } catch {}
+          openWith({ ask_id: first.id, session_id: first.session_id, questions });
+        }
+        return;
+      } catch {}
+    }
+  } catch {}
+}
+function init3() {
+  if (els.askCloseBtn)
+    els.askCloseBtn.addEventListener("click", () => setOpen(false));
+  if (els.askOverlay)
+    els.askOverlay.addEventListener("click", () => setOpen(false));
+  if (els.askAddBtn)
+    els.askAddBtn.addEventListener("click", addOwnQuestion);
+  if (els.askBackBtn)
+    els.askBackBtn.addEventListener("click", renderEdit);
+  if (els.askReviewBtn)
+    els.askReviewBtn.addEventListener("click", () => {
+      if (current)
+        renderReview();
+    });
+  if (els.askSubmitBtn)
+    els.askSubmitBtn.addEventListener("click", submit);
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && isOpen2())
+      setOpen(false);
+  });
+  if (pollTimer)
+    clearInterval(pollTimer);
+  pollTimer = setInterval(pollPending, 15000);
+  setTimeout(pollPending, 4000);
+}
+var current = null, mode2 = "edit", customCount = 0, pollTimer = null;
+var init_ask_drawer = __esm(() => {
+  init_dom();
+  init_network();
+  init_auth();
 });
 
 // html2canvas.js
@@ -2201,11 +2625,35 @@ async function runE2E(steps) {
   report({ type: "e2e", check: "e2e", ok, steps: results.length, url: location.href, ts: Date.now() });
   return { ok, results };
 }
+function srvReportUrl() {
+  try {
+    const base = document.querySelector("base")?.getAttribute("href") || "/";
+    const prefix = base === "/" ? "" : base.replace(/\/+$/, "");
+    return prefix + "/api/srv/inspect-reports/submit";
+  } catch {
+    return "/api/srv/inspect-reports/submit";
+  }
+}
 function report(obj) {
   ensureWrappers();
-  const payload = Object.assign({ ts: Date.now(), url: location.href }, obj || {});
+  const href = (() => {
+    try {
+      return location.href;
+    } catch {
+      return "";
+    }
+  })();
+  const baseUrl = (() => {
+    try {
+      const base = document.querySelector("base")?.getAttribute("href") || "/";
+      return location.origin + (base.endsWith("/") ? base : base + "/");
+    } catch {
+      return href;
+    }
+  })();
+  const payload = Object.assign({ ts: Date.now(), url: href, base_url: baseUrl }, obj || {});
   try {
-    fetch("/api/srv/inspect-reports/submit", {
+    fetch(srvReportUrl(), {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: "Bearer inspect-reports" },
       body: JSON.stringify(payload)
@@ -2353,101 +2801,12 @@ var init_file_upload = __esm(() => {
 init_network();
 init_dom();
 init_dom();
-
-// auth.js
-init_dom();
-var STORAGE_SESSION = "zerowrapper_session";
-var state2 = {
-  email: "",
-  sessionId: "",
-  name: "",
-  role: "",
-  roles: []
-};
-var agent = (window.ZW_AGENT || "").toString();
-function buildSessionId(email) {
-  const sanitized = String(email || "").replace(/[^a-zA-Z0-9_.@-]/g, "_");
-  return "web." + agent + "." + sanitized;
-}
-function genSimpleSid() {
-  const n = Date.now().toString(36) + Math.floor(Math.random() * 1296).toString(36);
-  return "sess_" + n.replace(/[^a-z0-9]/gi, "").toLowerCase();
-}
-async function fetchSessions() {
-  for (const url2 of ["/api/sessions", "?api=sessions"]) {
-    try {
-      const r = await fetch(url2);
-      if (!r.ok)
-        continue;
-      const j = await r.json();
-      if (j.sessions)
-        return j.sessions;
-    } catch {}
-  }
-  return [];
-}
-async function createSession(title) {
-  for (const url2 of ["/api/sessions", "?api=sessions_create"]) {
-    try {
-      const r = await fetch(url2, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: title || "" })
-      });
-      if (!r.ok)
-        continue;
-      return await r.json();
-    } catch {}
-  }
-  const id = genSimpleSid();
-  return { session_id: id, title: title || id };
-}
-function loadFromStorage() {
-  state2.sessionId = localStorage.getItem(STORAGE_SESSION) || "";
-  state2.email = "single";
-  state2.name = "single user";
-  state2.role = "";
-  state2.roles = [];
-}
-function loadFromQuery() {
-  const qs = new URLSearchParams(location.search);
-  const sid = (qs.get("session_id") || "").trim();
-  if (sid) {
-    state2.sessionId = sid.replace(/[^a-zA-Z0-9_.-]/g, "_");
-    state2.email = "single";
-    saveToStorage();
-    return;
-  }
-  const email = (qs.get("email") || "").trim();
-  if (!email)
-    return;
-  if (localStorage.getItem(STORAGE_SESSION))
-    return;
-  state2.email = "single";
-  state2.sessionId = buildSessionId(email);
-  saveToStorage();
-}
-function ensureSession() {
-  if (!state2.sessionId) {
-    state2.sessionId = genSimpleSid();
-    saveToStorage();
-  }
-  return state2.sessionId;
-}
-function saveToStorage() {
-  if (state2.sessionId)
-    localStorage.setItem(STORAGE_SESSION, state2.sessionId);
-}
-function showBadge() {
-  if (els.authSection)
-    els.authSection.classList.add("hidden");
-  if (els.userBadge)
-    els.userBadge.classList.add("hidden");
-}
+init_auth();
 
 // connection.js
 init_network();
 init_dom();
+init_auth();
 init_messages();
 init_streaming();
 
@@ -2466,6 +2825,9 @@ function clearPending() {
 // connection.js
 init_whiteboard();
 var onStateChange = null;
+function setOnStateChange(cb) {
+  onStateChange = cb;
+}
 function setHint(state3) {
   if (!els.hint)
     return;
@@ -2505,31 +2867,142 @@ function setLastSeq(sid, seq) {
   if (seq > cur)
     localStorage.setItem(lastSeqKey(sid), String(seq));
 }
+function resetLastSeq(sid, seq) {
+  if (!sid)
+    return;
+  const n = Number.isFinite(seq) && seq > 0 ? seq : 0;
+  localStorage.setItem(lastSeqKey(sid), String(n));
+}
+function reconcileCursor(sid, maxSeq) {
+  if (!sid || typeof maxSeq !== "number")
+    return;
+  if (maxSeq < getLastSeq(sid))
+    resetLastSeq(sid, maxSeq);
+}
 function bumpSeqFrom(data) {
   const seq = data && typeof data.seq === "number" ? data.seq : 0;
   const sid = data && data.session_id ? data.session_id : state2.sessionId;
   if (seq)
     setLastSeq(sid, seq);
 }
+var pendingAskIds = new Set;
+var deferredDone = null;
+var httpPollTimer = null;
+var httpPollInFlight = false;
+function isAskDrawerOpen() {
+  try {
+    return !!(els.askDrawer && els.askDrawer.classList.contains("open"));
+  } catch {
+    return false;
+  }
+}
+function hasPendingAsk() {
+  return pendingAskIds.size > 0 || isAskDrawerOpen();
+}
+function deferDone(data) {
+  deferredDone = data;
+  console.log("[stream] Done deferred while ask pending", data.turn_id || "");
+}
+function clearDeferredDone() {
+  deferredDone = null;
+}
+try {
+  window.addEventListener("askResolved", (e) => {
+    const id = e && e.detail && e.detail.ask_id;
+    if (id)
+      pendingAskIds.delete(String(id));
+    else
+      pendingAskIds.clear();
+    if (deferredDone && !hasPendingAsk()) {
+      console.log("[stream] ask resolved — dropping stale deferred Done, waiting for continuation Done");
+      deferredDone = null;
+    }
+  });
+} catch {}
+function startHttpPoll() {
+  if (httpPollTimer)
+    return;
+  console.log("[stream] HTTP poll fallback armed");
+  httpPollTimer = window.setInterval(async () => {
+    try {
+      const sid = state2.sessionId || localStorage.getItem("zerowrapper_session") || "";
+      if (!sid)
+        return;
+      const since = getLastSeq(sid);
+      let data = null;
+      for (const url2 of ["/api/stream?session_id=" + encodeURIComponent(sid) + "&since=" + since, "?api=stream&session_id=" + encodeURIComponent(sid) + "&since=" + since]) {
+        try {
+          const r = await fetch(url2);
+          if (!r.ok)
+            continue;
+          data = await r.json().catch(() => null);
+          if (data)
+            break;
+        } catch {}
+      }
+      if (!data || !Array.isArray(data.events))
+        return;
+      if (data.status === "idle" && data.events.length === 0) {
+        if (getState() === State.CONNECTED)
+          stopHttpPoll();
+        if (deferredDone && !hasPendingAsk()) {
+          const d = deferredDone;
+          deferredDone = null;
+          const tid = d.turn_id || "";
+          let replaced = false;
+          if (tid) {
+            try {
+              replaced = upsertAssistantTurn(tid, d.content || "");
+            } catch {}
+          }
+          if (replaced)
+            dropPartial();
+          else
+            handleDone(d.content, tid);
+          if (onStateChange)
+            onStateChange("done");
+        }
+        return;
+      }
+      if (httpPollInFlight)
+        return;
+      httpPollInFlight = true;
+      for (const ev of data.events) {
+        try {
+          handleMessage({ data: JSON.stringify(ev) });
+        } catch {}
+      }
+      httpPollInFlight = false;
+      if (getState() === State.CONNECTED && data.events.length === 0 && data.status !== "processing")
+        stopHttpPoll();
+    } catch {
+      httpPollInFlight = false;
+    }
+  }, 3000);
+}
+function stopHttpPoll() {
+  if (!httpPollTimer)
+    return;
+  window.clearInterval(httpPollTimer);
+  httpPollTimer = null;
+  console.log("[stream] HTTP poll fallback stopped");
+}
 function handleMessage(e) {
   try {
     const data = JSON.parse(e.data);
-    if (data && typeof data.seq === "number")
+    if (data && typeof data.seq === "number" && data.seq > 0) {
+      const sid0 = data.session_id || state2.sessionId || localStorage.getItem("zerowrapper_session") || "";
+      if (data.seq <= getLastSeq(sid0))
+        return;
+      bumpSeqFrom(data);
+    } else if (data && typeof data.seq === "number")
       bumpSeqFrom(data);
     switch (data.type) {
-      case "session_created":
-        if (data.session_id && data.session_id !== state2.sessionId) {
-          state2.sessionId = data.session_id;
-          saveToStorage();
-        }
-        setSession(data.session_id);
-        break;
       case "whiteboard_update":
-        if (data.session_id)
-          setSession(data.session_id);
         setBoard(data);
         break;
       case "resumed":
+        reconcileCursor(data.session_id || state2.sessionId, data.max_seq);
         break;
       case "thinking":
         handleThinking(data.content);
@@ -2538,6 +3011,7 @@ function handleMessage(e) {
         handleChunk(data.content);
         break;
       case "chunk_reset":
+        reset();
         break;
       case "tool_call":
         flush();
@@ -2546,11 +3020,28 @@ function handleMessage(e) {
       case "tool_result":
         handleToolResult(data.tool_call_id, data.name, data.output);
         break;
-      case "done":
-        handleDone(data.content);
+      case "done": {
+        if (hasPendingAsk()) {
+          deferDone(data);
+          break;
+        }
+        const tid = data.turn_id || "";
+        let replaced = false;
+        if (tid) {
+          try {
+            replaced = upsertAssistantTurn(tid, data.content || "");
+          } catch {}
+        }
+        if (replaced)
+          dropPartial();
+        else
+          handleDone(data.content, tid);
+        clearDeferredDone();
+        stopHttpPoll();
         if (onStateChange)
           onStateChange("done");
         break;
+      }
       case "error":
         cancel();
         addMessage("error", data.message || data.error || "Unknown error");
@@ -2565,6 +3056,27 @@ function handleMessage(e) {
             els.agentBanner.classList.remove("hidden");
         }
         break;
+      case "ask_requested": {
+        try {
+          if (data.ask_id)
+            pendingAskIds.add(String(data.ask_id));
+        } catch {}
+        try {
+          showTyping();
+        } catch {}
+        try {
+          Promise.resolve().then(() => (init_ask_drawer(), exports_ask_drawer)).then((m) => {
+            if (m && m.openWith) {
+              m.openWith({
+                ask_id: data.ask_id || "",
+                session_id: data.session_id || state2.sessionId,
+                questions: data.questions || []
+              });
+            }
+          }).catch(() => {});
+        } catch {}
+        break;
+      }
       case "snap":
       case "webscreenshot": {
         try {
@@ -2624,39 +3136,19 @@ function handleMessage(e) {
       }
       case "whiteboard_open": {
         try {
-          const targetPage = data.page || 1;
-          const label = document.getElementById("wb-page-label");
-          let currentPage2 = 1;
-          if (label) {
-            const m = label.textContent?.match(/Page\s+(\d+)/);
-            if (m)
-              currentPage2 = parseInt(m[1], 10) || 1;
-          }
-          const diff = targetPage - currentPage2;
-          const nextBtn = document.getElementById("wb-next");
-          const prevBtn = document.getElementById("wb-prev");
-          for (let i = 0;i < Math.abs(diff); i++) {
-            if (diff > 0 && nextBtn)
-              nextBtn.click();
-            else if (diff < 0 && prevBtn)
-              prevBtn.click();
-          }
+          goToPage(data.page || 1);
         } catch {}
         break;
       }
       case "whiteboard_next": {
         try {
-          const btn = document.getElementById("wb-next");
-          if (btn)
-            btn.click();
+          step(1);
         } catch {}
         break;
       }
       case "whiteboard_prev": {
         try {
-          const btn = document.getElementById("wb-prev");
-          if (btn)
-            btn.click();
+          step(-1);
         } catch {}
         break;
       }
@@ -2737,25 +3229,80 @@ function connect2() {
     disconnect();
   abortHistoryFetch();
   const protocol = location.protocol === "https:" ? "wss:" : "ws:";
-  const base = (document.querySelector("base")?.getAttribute("href") || "/").replace(/\/+$/, "");
-  const wsPath = base === "" || base === "/" ? "/ws" : base + "/ws";
-  const url2 = protocol + "//" + location.host + wsPath;
+  const baseHref = document.querySelector("base")?.getAttribute("href") || "/";
+  const wsUrl = baseHref === "/" || baseHref === "" ? "/ws" : baseHref + (baseHref.includes("?") ? "&ws=1" : "?ws=1");
+  const url2 = protocol + "//" + location.host + wsUrl;
   connect(url2, {
     onOpen: () => {
-      fetchHistory();
       setSession(state2.sessionId);
       sync();
-      const sid = state2.sessionId || localStorage.getItem("zerowrapper_session") || "";
-      const since = getLastSeq(sid);
-      if (sid && since > 0) {
+      const sendResume = (snap) => {
+        const sid = state2.sessionId || localStorage.getItem("zerowrapper_session") || "";
+        if (snap && typeof snap.max_seq === "number")
+          reconcileCursor(sid, snap.max_seq);
+        const since = getLastSeq(sid);
+        if (sid && since > 0) {
+          try {
+            send(JSON.stringify({ type: "resume", session_id: sid, since }));
+          } catch {}
+        }
         try {
-          send(JSON.stringify({ type: "resume", session_id: sid, since }));
+          const status = snap && snap.status;
+          const running = snap && (snap.running === true || status === "processing");
+          const pend = snap && snap.pending_asks;
+          if (Array.isArray(pend)) {
+            for (const q of pend)
+              if (q && q.id)
+                pendingAskIds.add(String(q.id));
+            if (pend.length > 0) {
+              Promise.resolve().then(() => (init_ask_drawer(), exports_ask_drawer)).then((m) => {
+                if (m && m.openWith && pend[0]) {
+                  let qs = [];
+                  try {
+                    const raw = pend[0].questions;
+                    qs = typeof raw === "string" ? JSON.parse(raw) : Array.isArray(raw) ? raw : [];
+                  } catch {
+                    qs = [];
+                  }
+                  try {
+                    if (!m.isOpen())
+                      m.openWith({ ask_id: pend[0].id, session_id: pend[0].session_id || sid, questions: qs });
+                  } catch {}
+                }
+              }).catch(() => {});
+            }
+          }
+          if (running) {
+            try {
+              showTyping();
+            } catch {}
+            startHttpPoll();
+            if (onStateChange)
+              onStateChange("processing");
+          } else {
+            stopHttpPoll();
+          }
         } catch {}
+      };
+      const resumeWithHistoryStatus = () => sendResume(null);
+      try {
+        const p = fetchHistory();
+        if (p && p.then)
+          p.then((snap) => sendResume(snap), resumeWithHistoryStatus);
+        else
+          sendResume(null);
+      } catch {
+        sendResume(null);
       }
     },
     onMessage: handleMessage,
     onClose: (e) => {
       hideTyping();
+      try {
+        const sid = state2.sessionId || localStorage.getItem("zerowrapper_session") || "";
+        startHttpPoll();
+        Promise.resolve().then(() => (init_ask_drawer(), exports_ask_drawer)).then((m) => {}).catch(() => {});
+      } catch {}
       if (onStateChange)
         onStateChange("disconnect");
     }
@@ -2767,18 +3314,19 @@ function disconnect2() {
   clearPending();
   abortHistoryFetch();
 }
-function send2(text, role, attachments) {
+function send2(text, role, attachments, turn) {
   if (getState() !== State.CONNECTED) {
     addMessage("error", "Not connected to backend.");
     return;
   }
   const payload = {
     session_id: state2.sessionId || localStorage.getItem("zerowrapper_session") || "",
-    user_id: "single",
     content: text
   };
   if (attachments && attachments.length > 0)
     payload.attachments = attachments;
+  if (turn)
+    payload.turn = turn;
   send(JSON.stringify(payload));
 }
 function sendCancel2() {
@@ -2894,7 +3442,7 @@ function updateNavButtons() {
   if (next)
     next.style.display = currentIndex >= images.length - 1 ? "none" : "flex";
 }
-function init3(messagesEl) {
+function init4(messagesEl) {
   messagesEl.addEventListener("click", (e) => {
     if (e.target.tagName === "IMG" && e.target.closest(".chat-markdown")) {
       const container2 = e.target.closest(".chat-markdown");
@@ -2912,6 +3460,160 @@ function init3(messagesEl) {
 
 // main.js
 init_file_upload();
+
+// drawer.js
+init_dom();
+init_auth();
+init_messages();
+function fmtTokens(n) {
+  n = Number(n) || 0;
+  if (n >= 1000)
+    return (n / 1000).toFixed(1) + "k";
+  return String(n);
+}
+function fmtCost(c) {
+  c = Number(c) || 0;
+  return "$" + c.toFixed(4);
+}
+async function loadLive() {
+  for (const url2 of ["?api=agent_sessions", "/api/agent_sessions"]) {
+    try {
+      const r = await fetch(url2);
+      if (!r.ok)
+        continue;
+      const j = await r.json();
+      const map = {};
+      for (const s of j.sessions || [])
+        map[s.id] = s;
+      return map;
+    } catch {}
+  }
+  return {};
+}
+function isOpen3() {
+  return !!(els.drawer && els.drawer.classList.contains("open"));
+}
+function setOpen2(open2) {
+  if (!els.drawer || !els.drawerOverlay)
+    return;
+  if (open2) {
+    els.drawer.classList.add("open");
+    els.drawer.setAttribute("aria-hidden", "false");
+    els.drawerOverlay.classList.remove("hidden");
+    renderList();
+  } else {
+    els.drawer.classList.remove("open");
+    els.drawer.setAttribute("aria-hidden", "true");
+    els.drawerOverlay.classList.add("hidden");
+  }
+}
+function toggle() {
+  setOpen2(!isOpen3());
+}
+async function renderList() {
+  if (!els.drawerList)
+    return;
+  const list = await fetchSessions();
+  const live = await loadLive();
+  els.drawerList.innerHTML = "";
+  if (!list || list.length === 0) {
+    const d = document.createElement("div");
+    d.className = "drawer-empty";
+    d.textContent = "No chats yet — start a new one.";
+    els.drawerList.appendChild(d);
+  }
+  const seen = new Set;
+  for (const s of list || []) {
+    const id = s.id || s.session_id;
+    if (!id || seen.has(id))
+      continue;
+    seen.add(id);
+    const title = s.title && s.title !== id ? s.title : id;
+    const lv = live[id];
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "drawer-item" + (id === state2.sessionId ? " active" : "");
+    const t = document.createElement("span");
+    t.className = "drawer-item-title";
+    t.textContent = title;
+    t.title = title + `
+` + id;
+    btn.appendChild(t);
+    const meta = document.createElement("span");
+    meta.className = "drawer-item-meta";
+    meta.textContent = lv && lv.model ? lv.model + " · " + fmtTokens(lv.input_tokens) + " in / " + fmtTokens(lv.output_tokens) + " out · " + fmtCost(lv.cost) : id;
+    btn.appendChild(meta);
+    btn.addEventListener("click", () => switchSession(id));
+    els.drawerList.appendChild(btn);
+  }
+  renderUsage(live);
+}
+function renderUsage(live) {
+  if (!els.drawerUsage)
+    return;
+  const id = state2.sessionId;
+  const lv = (live || {})[id];
+  if (lv && lv.model) {
+    els.drawerUsage.textContent = lv.model + " · " + (lv.messages || 0) + " msgs · " + fmtTokens(lv.input_tokens) + " in / " + fmtTokens(lv.output_tokens) + " out · " + fmtCost(lv.cost);
+  } else {
+    els.drawerUsage.textContent = "Usage appears here once this chat runs.";
+  }
+}
+async function refreshUsage() {
+  if (!isOpen3())
+    return;
+  renderUsage(await loadLive());
+}
+async function switchSession(id) {
+  if (!id || id === state2.sessionId) {
+    setOpen2(false);
+    return;
+  }
+  state2.sessionId = id;
+  saveToStorage();
+  els.messages.innerHTML = "";
+  const { fetchHistory: fetchHistory2 } = await Promise.resolve().then(() => (init_messages(), exports_messages));
+  const whiteboard = await Promise.resolve().then(() => (init_whiteboard(), exports_whiteboard));
+  disconnect2();
+  connect2();
+  fetchHistory2();
+  whiteboard.setSession(id);
+  showBadge();
+  setOpen2(false);
+  renderList();
+}
+async function newChat() {
+  const res = await createSession("");
+  const id = res.session_id || res.id || genSimpleSid();
+  state2.sessionId = id;
+  saveToStorage();
+  els.messages.innerHTML = "";
+  disconnect2();
+  connect2();
+  setOpen2(false);
+  renderList();
+}
+function init5() {
+  if (els.menuBtn)
+    els.menuBtn.addEventListener("click", toggle);
+  if (els.drawerOverlay)
+    els.drawerOverlay.addEventListener("click", () => setOpen2(false));
+  if (els.drawerCloseBtn)
+    els.drawerCloseBtn.addEventListener("click", () => setOpen2(false));
+  if (els.drawerNewBtn)
+    els.drawerNewBtn.addEventListener("click", newChat);
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && isOpen3())
+      setOpen2(false);
+  });
+  try {
+    setOnStateChange(refreshUsage);
+  } catch {}
+  renderList();
+}
+
+// main.js
+init_ask_drawer();
 function logPendingResources() {
   const entries = performance.getEntriesByType("resource");
   const pending2 = entries.filter((e) => !e.responseEnd || e.responseEnd <= 0);
@@ -2923,7 +3625,7 @@ function logPendingResources() {
   const fonts = document.fonts ? document.fonts.status : "n/a";
   console.log("[resources] readyState:", document.readyState, "fonts:", fonts);
 }
-function init4() {
+function init6() {
   init();
   logPendingResources();
   setTimeout(logPendingResources, 3000);
@@ -2932,13 +3634,20 @@ function init4() {
   }
   if (!els.form)
     return;
-  init3(els.messages);
+  init4(els.messages);
   loadFromQuery();
   loadFromStorage();
   ensureSession();
   showBadge();
   connect2();
   refreshSessionList();
+  init5();
+  init3();
+  on("stateChange", (s) => {
+    if (s === State.CONNECTED)
+      syncCancelButton();
+  });
+  syncCancelButton();
   if (els.sessionNewBtn)
     els.sessionNewBtn.addEventListener("click", handleNewSession);
   if (els.sessionSelect)
@@ -2984,6 +3693,26 @@ function showStopIcon() {
     els.cancelBtn.style.display = "flex";
   }
 }
+async function syncCancelButton() {
+  try {
+    let running = false;
+    for (const url2 of ["?api=agent_sessions", "/api/agent_sessions"]) {
+      try {
+        const r = await fetch(url2);
+        if (!r.ok)
+          continue;
+        const j = await r.json();
+        const hit = (j.sessions || []).find((s) => (s.id || s.session_id) === state2.sessionId);
+        running = !!(hit && hit.running);
+        break;
+      } catch {}
+    }
+    if (running)
+      showStopIcon();
+    else
+      showSendIcon();
+  } catch {}
+}
 function handleCancel() {
   sendCancel2();
   cancel();
@@ -2991,6 +3720,20 @@ function handleCancel() {
 }
 async function refreshSessionList() {
   const list = await fetchSessions();
+  let live = {};
+  try {
+    for (const url2 of ["?api=agent_sessions", "/api/agent_sessions"]) {
+      try {
+        const r = await fetch(url2);
+        if (!r.ok)
+          continue;
+        const j = await r.json();
+        for (const s of j.sessions || [])
+          live[s.id] = s;
+        break;
+      } catch {}
+    }
+  } catch (e) {}
   if (!els.sessionSelect)
     return;
   els.sessionSelect.innerHTML = "";
@@ -3002,7 +3745,9 @@ async function refreshSessionList() {
     seen.add(id);
     const opt = document.createElement("option");
     opt.value = id;
-    opt.textContent = (s.title && s.title !== id ? s.title + " · " : "") + id;
+    const lv = live[id];
+    const liveSuffix = lv && lv.model ? " · " + lv.model + (lv.cost ? " · $" + Number(lv.cost).toFixed(4) : "") : "";
+    opt.textContent = (s.title && s.title !== id ? s.title + " · " : "") + id + liveSuffix;
     if (id === state2.sessionId)
       opt.selected = true;
     els.sessionSelect.appendChild(opt);
@@ -3025,6 +3770,7 @@ async function handleNewSession() {
   disconnect2();
   connect2();
   refreshSessionList();
+  renderList();
 }
 async function handleSwitchSession() {
   const id = els.sessionSelect.value;
@@ -3041,6 +3787,7 @@ async function handleSwitchSession() {
   whiteboard.setSession(id);
   showBadge();
   refreshSessionList();
+  renderList();
 }
 function handleSubmit(e) {
   e.preventDefault();
@@ -3056,10 +3803,19 @@ function handleSubmit(e) {
     addMessage("error", "Not connected to backend.");
     return;
   }
-  showStopIcon();
-  const combined = text && attachments.length > 0 ? JSON.stringify({ message: text, attachments: attachments.map((a) => ({ filename: a.filename, mime_type: a.mime_type, path: a.path })) }) : attachments.length > 0 ? JSON.stringify({ attachments: attachments.map((a) => ({ filename: a.filename, mime_type: a.mime_type, path: a.path })) }) : text;
+  const wireAttachments = attachments.map((a) => ({ filename: a.filename, mime_type: a.mime_type, path: a.path, url: a.url || "" }));
+  const combined = text && attachments.length > 0 ? JSON.stringify({ message: text, attachments: wireAttachments }) : attachments.length > 0 ? JSON.stringify({ attachments: wireAttachments }) : text;
+  const turnKey = "t" + Date.now().toString(36) + Math.floor(Math.random() * 46656).toString(36);
   addMessage("user", combined);
-  send2(text, undefined, attachments.map((a) => ({ filename: a.filename, mime_type: a.mime_type, path: a.path })));
+  showStopIcon();
+  try {
+    const lr = els.messages.lastElementChild;
+    if (lr) {
+      lr.dataset.turn = turnKey;
+      lr.dataset.role = "user";
+    }
+  } catch {}
+  send2(text, undefined, wireAttachments, turnKey);
   showTyping();
   els.input.value = "";
   els.input.style.height = "auto";
@@ -3287,6 +4043,6 @@ function initSnap() {
 }
 
 // app-entry.js
-init4();
+init6();
 init2();
 initSnap();

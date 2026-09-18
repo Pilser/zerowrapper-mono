@@ -259,6 +259,25 @@ function currentPageData() {
   return (currentState && currentState.pages && currentState.pages[currentPage]) || null
 }
 
+// Structured navigation: the agent sends a page number, we resolve it against
+// the structured board state. No DOM-label parsing, no synthetic button clicks.
+export function goToPage(pageNo) {
+  if (!currentState || !Array.isArray(currentState.pages) || currentState.pages.length === 0) return false
+  const n = Number(pageNo)
+  if (!Number.isFinite(n)) return false
+  let idx = currentState.pages.findIndex((p) => p.page_no === n)
+  if (idx < 0) idx = Math.max(0, Math.min(Math.round(n) - 1, currentState.pages.length - 1))
+  currentPage = idx
+  renderCurrent()
+  return true
+}
+
+export function step(delta) {
+  if (!currentState || !Array.isArray(currentState.pages) || currentState.pages.length === 0) return
+  currentPage = Math.max(0, Math.min(currentPage + delta, currentState.pages.length - 1))
+  renderCurrent()
+}
+
 export function setBoard(data) {
   const spin = getEl('wb-nav-spinner')
   if (spin) spin.classList.add('hidden')

@@ -123,6 +123,15 @@ CREATE TABLE IF NOT EXISTS stream_buffer (
 );
 CREATE INDEX IF NOT EXISTS idx_stream_buffer_session ON stream_buffer(session_id, seq);
 CREATE INDEX IF NOT EXISTS idx_stream_buffer_created ON stream_buffer(created_at);
+
+-- Durable, globally monotonic event sequence. The ephemeral stream_buffer is
+-- swept (TTL), so a per-session MAX(seq)+1 would rewind to 1 and silently
+-- invalidate every client cursor. This counter is never swept, so `seq` only
+-- ever increases and the frontend cursor stays valid across sweeps/restarts.
+CREATE TABLE IF NOT EXISTS stream_seq (
+    id    INTEGER PRIMARY KEY,
+    value INTEGER NOT NULL DEFAULT 0
+);
 ";
 
 pub const SESSION_SCHEMA: &str = "
@@ -268,6 +277,9 @@ pub const SYSTEM_MIGRATIONS: &[&str] = &[
     "ALTER TABLE sessions ADD COLUMN status TEXT NOT NULL DEFAULT 'idle';",
     "ALTER TABLE sessions ADD COLUMN active_turn_id TEXT NOT NULL DEFAULT '';",
     "ALTER TABLE sessions ADD COLUMN active_started_at TEXT NOT NULL DEFAULT '';",
+    // Seed the durable stream seq from any pre-existing buffer so new events
+    // never collide with old (session_id, seq) rows. Idempotent: id=1 is set once.
+    "INSERT OR IGNORE INTO stream_seq (id, value) SELECT 1, COALESCE(MAX(seq),0) FROM stream_buffer;",
 ];
 
 pub const SESSION_MIGRATIONS: &[&str] = &[

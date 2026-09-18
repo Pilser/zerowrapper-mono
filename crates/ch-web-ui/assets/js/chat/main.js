@@ -95,7 +95,7 @@ async function syncCancelButton() {
   // flips back via streaming.onFinalize; cancel is a real runner abort.
   try {
     let running = false
-    for (const url of ['/api/agent_sessions', '?api=agent_sessions']) {
+    for (const url of ['?api=agent_sessions', '/api/agent_sessions']) {
       try {
         const r = await fetch(url)
         if (!r.ok) continue
@@ -122,10 +122,16 @@ async function refreshSessionList() {
   // Best-effort: the base list works without it.
   let live = {}
   try {
-    const r = await fetch('/api/agent_sessions')
-    if (r.ok) {
-      const j = await r.json()
-      for (const s of (j.sessions || [])) live[s.id] = s
+    // The path form only exists on newer servers; the query form is the
+    // canonical one — try both so the suffix works either way.
+    for (const url of ['?api=agent_sessions', '/api/agent_sessions']) {
+      try {
+        const r = await fetch(url)
+        if (!r.ok) continue
+        const j = await r.json()
+        for (const s of (j.sessions || [])) live[s.id] = s
+        break
+      } catch {}
     }
   } catch (e) {}
   if (!els.sessionSelect) return

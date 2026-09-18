@@ -130,3 +130,26 @@ async fn bug3_recipe_dollar_set_action_applies() {
 
     std::fs::remove_dir_all(&dir).ok();
 }
+
+// Regression: the stream cursor used to be per-session MAX(seq)+1, so when the
+// TTL sweeper drained the ephemeral buffer, seq rewound to 1 and the frontend
+// (`seq <= lastSeq`) silently dropped every live event until a manual refresh.
+// The durable stream_seq counter must never rewind across a buffer drain.
+#[tokio::test]
+async fn stream_seq_is_monotonic_across_buffer_drain() {
+    let (pool, dir) = tmp_pool().await;
+    let sid = "sess_seq_durable";
+    let a = pool.stream_buffer_append(sid, &json!({"type":"chunk","content":"a"})).await.unwrap();
+    let b = pool.stream_buffer_append(sid, &json!({"type":"chunk","content":"b"})).await.unwrap();
+    assert!(b > a, "seq must increase within a turn: {a} -> {b}");
+    // Simulate the TTL sweeper draining the ephemeral replay buffer.
+    pool.conn()
+        .await
+        .execute("DELETE FROM stream_buffer", turso::params::Params::None)
+        .await
+        .unwrap();
+    assert_eq!(pool.stream_buffer_max_seq(sid).await.unwrap(), 0, "buffer should be empty");
+    let c = pool.stream_buffer_append(sid, &json!({"type":"chunk","content":"c"})).await.unwrap();
+    assert!(c > b, "seq rewound after buffer drain: {b} -> {c}");
+    std::fs::remove_dir_all(&dir).ok();
+}

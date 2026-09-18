@@ -21,7 +21,7 @@ function fmtCost(c) {
 
 async function loadLive() {
   // Live engine info (model, token totals, cost) keyed by session id.
-  for (const url of ['/api/agent_sessions', '?api=agent_sessions']) {
+  for (const url of ['?api=agent_sessions', '/api/agent_sessions']) {
     try {
       const r = await fetch(url)
       if (!r.ok) continue
