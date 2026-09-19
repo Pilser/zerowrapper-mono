@@ -22,6 +22,91 @@ use zerostack::engine::{Engine, RunOutput};
 use zerostack::event::AgentEvent;
 use zw_core::StreamEvent;
 
+/// One tool step inside a turn's trace pile: what was called, with what,
+/// what came back, and the agent's own short note when it wrote one.
+#[derive(Debug, Clone, Default, serde::Serialize)]
+pub struct TracedTool {
+    pub call_id: String,
+    pub name: String,
+    pub args: serde_json::Value,
+    pub output: Option<String>,
+    pub note: String,
+}
+
+/// Structured per-turn trace pile: thinking bursts + tool steps in order.
+/// Built live as events forward; persisted as one `role='trace'` row and
+/// rendered on history load through the same pile builders as live.
+#[derive(Debug, Clone, Default, serde::Serialize)]
+pub struct TurnTrace {
+    pub thinking: String,
+    pub thought_count: usize,
+    pub tools: Vec<TracedTool>,
+}
+
+impl TurnTrace {
+    pub fn is_empty(&self) -> bool {
+        self.thinking.trim().is_empty() && self.tools.is_empty()
+    }
+
+    fn trunc(s: &str, n: usize) -> String {
+        let t = s.trim();
+        if t.chars().count() <= n {
+            return t.to_string();
+        }
+        let mut out: String = t.chars().take(n).collect();
+        out.push('…');
+        out
+    }
+
+    /// Note for one tool call: agent-written `note` arg wins, else "".
+    /// (Wrapper-derived fallback notes arrive in Phase 2; raw name/args
+    /// stay in the payload for the details view either way.)
+    fn tool_note(args: &serde_json::Value) -> String {
+        args.get("note")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .trim()
+            .to_string()
+    }
+
+    /// Capped JSON for the durable trace row / history payload: thinking
+    /// 8000 chars, args 2000, output 2000, at most 300 tools. Bounds the
+    /// row and the history response for very long turns.
+    pub fn to_capped_json(&self) -> String {
+        let tools: Vec<serde_json::Value> = self
+            .tools
+            .iter()
+            .take(300)
+            .map(|t| {
+                let args_str = serde_json::to_string(&t.args).unwrap_or_default();
+                serde_json::json!({
+                    "id": t.call_id,
+                    "name": t.name,
+                    "args": serde_json::from_str::<serde_json::Value>(&args_str).unwrap_or(serde_json::Value::Null),
+                    "args_text": Self::trunc(&args_str, 2000),
+                    "output": t.output.as_deref().map(|o| Self::trunc(o, 2000)),
+                    "note": t.note,
+                })
+            })
+            .collect();
+        serde_json::json!({
+            "thinking": Self::trunc(&self.thinking, 8000),
+            "thought_count": self.thought_count,
+            "tools": tools,
+            "tool_count": self.tools.len(),
+        })
+        .to_string()
+    }
+}
+
+/// What one embedded turn produced: the engine output, whether a final
+/// answer was seen, and the structured trace pile for history rendering.
+pub struct EmbeddedTurn {
+    pub output: RunOutput,
+    pub completed: bool,
+    pub trace: TurnTrace,
+}
+
 /// Map one engine event to the wire event.
 ///
 /// `CompletionCall` carries only usage accounting (already folded into
@@ -144,18 +229,18 @@ pub fn summarize_turn(session: &zerostack::session::Session, turn_id: &str) -> O
 /// `run_streaming` itself failed, a closing `Done`/`Error` is synthesized
 /// here so the frontend always finalizes.
 ///
-/// Returns `(output, completed)`: `completed` is false when no `Done` event
-/// was seen (budget/stall/early stop). In that case the raw error transcript
-/// is replaced with [`summarize_turn`] output when the turn left any trace,
-/// so both the live closing bubble and the committed history keep the last
-/// content instead of just `error: …`.
+/// Returns an [`EmbeddedTurn`]: output, whether a final answer was seen,
+/// and the structured trace pile. When no `Done` was seen the raw error
+/// transcript is replaced with [`summarize_turn`] output when the turn left
+/// any trace, so both the live closing bubble and the committed history keep
+/// the last content instead of just `error: …`.
 pub async fn run_embedded(
     engine: &mut Engine,
     prompt: &str,
     event_tx: mpsc::Sender<StreamEvent>,
     turn_id: &str,
     abort_slot: ::zerostack::engine::AbortSlot,
-) -> anyhow::Result<(RunOutput, bool)> {
+) -> anyhow::Result<EmbeddedTurn> {
     let (agent_tx, mut agent_rx) = mpsc::channel::<AgentEvent>(512);
     // Per-turn ask notifier: the session-bound `ask_user` tool pushes here,
     // this task forwards into the event stream (buffered ⇒ drop-safe).
@@ -180,6 +265,12 @@ pub async fn run_embedded(
     });
     let done_seen = Arc::new(AtomicBool::new(false));
     let done_flag = done_seen.clone();
+    // Structured trace pile accumulated as events forward (brief lock, never
+    // held across await). Thinking + tool steps; chunks excluded (they form
+    // the answer bubble). Persisted as one trace row, rendered on history.
+    let trace_acc: Arc<std::sync::Mutex<TurnTrace>> =
+        Arc::new(std::sync::Mutex::new(TurnTrace::default()));
+    let trace_fwd = trace_acc.clone();
     // Clone: the original stays with us for the synthesized closing event.
     let tx_forward = event_tx.clone();
     let turn_owned = turn_id.to_string();
@@ -187,6 +278,32 @@ pub async fn run_embedded(
         while let Some(ev) = agent_rx.recv().await {
             if matches!(ev, AgentEvent::Done { .. }) {
                 done_flag.store(true, Ordering::Relaxed);
+            }
+            {
+                let mut t = trace_fwd.lock().unwrap_or_else(|e| e.into_inner());
+                match &ev {
+                    AgentEvent::Reasoning(text) => {
+                        t.thinking.push_str(text);
+                        t.thought_count += 1;
+                    }
+                    AgentEvent::ToolCall { call_id, name, args } => {
+                        t.tools.push(TracedTool {
+                            call_id: call_id.to_string(),
+                            name: name.to_string(),
+                            args: args.clone(),
+                            output: None,
+                            note: TurnTrace::tool_note(args),
+                        });
+                    }
+                    AgentEvent::ToolResult { call_id, output, .. } => {
+                        if let Some(tool) =
+                            t.tools.iter_mut().rev().find(|x| x.call_id == call_id.as_str())
+                        {
+                            tool.output = Some(output.to_string());
+                        }
+                    }
+                    _ => {}
+                }
             }
             if let Some(se) = map_event(ev, &turn_owned) {
                 if tx_forward.send(se).await.is_err() {
@@ -212,6 +329,10 @@ pub async fn run_embedded(
     let _ = ask_forward.await;
 
     let completed = done_seen.load(Ordering::Relaxed);
+    let trace = trace_acc
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone();
     match &mut out {
         Ok(o) => {
             if let Some(u) = &o.usage {
@@ -246,7 +367,11 @@ pub async fn run_embedded(
                 .await;
         }
     }
-    out.map(|o| (o, completed))
+    out.map(|o| EmbeddedTurn {
+        output: o,
+        completed,
+        trace,
+    })
 }
 
 /// Provider health for the status banner / `/health`, without burning API
@@ -397,6 +522,106 @@ pub fn session_history(engine: &Engine) -> Vec<HistoryMsg> {
         .iter()
         .filter_map(|m| history_msg(&m.role, m.content.as_str(), &m.turn))
         .collect()
+}
+
+/// Tool steps per turn from the agent's session FILE (durable, read-only).
+/// Synthesizes history trace piles for turns that predate trace-row
+/// persistence. Never touches a live engine (no locks); completed turns are
+/// always flushed to the file by the engine's best-effort saves.
+/// Returns turn_id -> ordered tool steps. Thinking is NOT included — the
+/// engine never stored reasoning text, so pre-trace piles show tools only.
+pub fn load_tool_traces(
+    session_id: &str,
+) -> std::collections::HashMap<String, Vec<TracedTool>> {
+    use zerostack::session::{MessageRole, ToolRecord};
+    let mut out: std::collections::HashMap<String, Vec<TracedTool>> =
+        std::collections::HashMap::new();
+    let s = match zerostack::session::storage::load_session(session_id)
+        .ok()
+        .flatten()
+    {
+        Some(s) => s,
+        None => return out,
+    };
+    // (turn, session call id) -> index in that turn's vec, for pairing.
+    let mut pending: std::collections::HashMap<(String, u64), usize> =
+        std::collections::HashMap::new();
+    for m in &s.messages {
+        let turn = match m.turn.as_deref().filter(|t| !t.is_empty()) {
+            Some(t) => t.to_string(),
+            None => continue, // unstamped: unattributable, skip
+        };
+        match m.role {
+            MessageRole::ToolCall => {
+                let (cid, name, args) = match &m.tool {
+                    Some(ToolRecord::Call { id, name, args }) => (
+                        id.to_string(),
+                        name.to_string(),
+                        args.clone(),
+                    ),
+                    Some(ToolRecord::SubagentCall { name, args, .. }) => (
+                        format!("sub-{}", out.get(&turn).map(|v| v.len()).unwrap_or(0)),
+                        name.to_string(),
+                        args.clone(),
+                    ),
+                    _ => (
+                        format!("seq-{}", out.get(&turn).map(|v| v.len()).unwrap_or(0)),
+                        "action".to_string(),
+                        serde_json::Value::Null,
+                    ),
+                };
+                let vec = out.entry(turn.clone()).or_default();
+                // Remember numeric session ids for result pairing.
+                if let Some(ToolRecord::Call { id, .. }) = &m.tool {
+                    pending.insert((turn, *id), vec.len());
+                }
+                vec.push(TracedTool {
+                    call_id: cid,
+                    name,
+                    args: args.clone(),
+                    output: None,
+                    note: TurnTrace::tool_note(&args),
+                });
+            }
+            MessageRole::ToolResult => {
+                let content = m.content.to_string();
+                let mut paired = false;
+                if let Some(ToolRecord::Result { call_id, .. }) = &m.tool {
+                    if let Some(&idx) = pending.get(&(turn.clone(), *call_id)) {
+                        if let Some(tool) = out.get_mut(&turn).and_then(|v| v.get_mut(idx)) {
+                            tool.output = Some(content);
+                            paired = true;
+                        }
+                    }
+                }
+                if !paired {
+                    // Sequential fallback: attach to the most recent call in
+                    // this turn that still lacks an output.
+                    if let Some(vec) = out.get_mut(&turn) {
+                        if let Some(tool) = vec.iter_mut().rev().find(|t| t.output.is_none()) {
+                            tool.output = Some(content);
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    // Drop turns with no tool steps (keeps the map small and truthful).
+    out.retain(|_, v| !v.is_empty());
+    out
+}
+
+/// Build a capped trace-pile JSON from an explicit tool list (used when
+/// synthesizing history piles for pre-trace turns). Same schema as
+/// [`TurnTrace::to_capped_json`], thinking empty (never stored back then).
+pub fn tools_to_trace_json(tools: &[TracedTool]) -> String {
+    TurnTrace {
+        thinking: String::new(),
+        thought_count: 0,
+        tools: tools.to_vec(),
+    }
+    .to_capped_json()
 }
 
 /// History from the agent's session file (post-restart, pre-first-message).

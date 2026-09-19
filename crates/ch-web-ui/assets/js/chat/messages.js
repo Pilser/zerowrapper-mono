@@ -3,6 +3,7 @@ import { els } from './dom.js'
 import { USER_AVATAR, BOT_AVATAR, escapeHtml } from './constants.js'
 import { render as renderMarkdown } from './markdown.js'
 import { finalize } from './streaming.js'
+import { renderStaticTrace } from './activity.js'
 import { scrollToBottom, autoScroll } from './scroll.js'
 
 export { scrollToBottom }
@@ -139,6 +140,22 @@ export function fetchHistory() {
             }
             const row = buildMessageRow(msg.role, msg.content, msg.turn_id || '')
             if (row) frag.appendChild(row)
+          } else if (msg.role === 'trace') {
+            // Turn pile (thinking + tool steps), settled and collapsed.
+            // Additive branch: user/assistant rendering above untouched.
+            // Dedupes on data-trace (never data-turn) so piles and bubbles
+            // can never suppress each other.
+            const tid = msg.turn_id || ''
+            try {
+              if (tid && els.messages.querySelector('[data-trace="' + CSS.escape(tid) + '"]')) return
+              let trace = null
+              try { trace = JSON.parse(msg.content || 'null') } catch {}
+              if (!trace) return
+              const wrap = renderStaticTrace(frag, trace)
+              if (wrap && tid) {
+                try { wrap.dataset.trace = tid } catch {}
+              }
+            } catch {}
           }
         })
         els.messages.appendChild(frag)

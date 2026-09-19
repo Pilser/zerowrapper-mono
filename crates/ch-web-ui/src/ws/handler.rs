@@ -158,12 +158,16 @@ pub async fn engine_history(session_id: &str) -> Vec<zw_agent_embed::HistoryMsg>
 }
 
 /// DB-backed history: committed rows from `chat_messages` UNION the
-/// agent-owned engine/file transcript, deduped by (role, turn_id).
+/// agent-owned engine/file transcript, deduped by (role, turn_id), PLUS per-turn
+/// trace piles (thinking + tool steps) attached before their assistant bubble.
 /// Engine order is chronological, so it drives the output: DB content wins
 /// for rows it has (same turn), engine-only turns (e.g. pre-cache history)
 /// reappear instead of being shadowed, and DB-only rows (e.g. a failed
 /// turn's committed summary, which the engine never stores as a message)
-/// are spliced right after their turn. Read-only; never writes.
+/// are spliced right after their turn. Traces come from committed
+/// `role='trace'` rows, or are synthesized read-only from the engine file
+/// for pre-trace turns (tools only — thinking was never stored back then).
+/// Read-only; never writes.
 pub async fn db_history(db: &zw_db::DbPool, session_id: &str) -> Vec<zw_agent_embed::HistoryMsg> {
     let engine_msgs = engine_history(session_id).await;
     let db_rows = db.get_chat_messages(session_id, 500).await.unwrap_or_default();
@@ -174,11 +178,63 @@ pub async fn db_history(db: &zw_db::DbPool, session_id: &str) -> Vec<zw_agent_em
     // (role, turn_id) -> DB content. Empty turn_id keys are unusable for
     // dedupe (pre-stamp rows); they pass through untouched.
     let mut db_by_key: HashMap<(String, String), String> = HashMap::new();
+    // Committed trace piles by turn.
+    let mut db_traces: HashMap<String, String> = HashMap::new();
     for r in &db_rows {
+        if r.role == "trace" {
+            if !r.turn_id.is_empty() {
+                db_traces.insert(r.turn_id.clone(), r.content.clone());
+            }
+            continue;
+        }
         if !r.turn_id.is_empty() {
             db_by_key.insert((r.role.clone(), r.turn_id.clone()), r.content.clone());
         }
     }
+    // Turns with an assistant message but no committed trace get a
+    // synthesized pile from the engine file (read once, only if needed).
+    let mut need_synth = false;
+    for m in &engine_msgs {
+        if m.role == "assistant" && !m.turn_id.is_empty() && !db_traces.contains_key(&m.turn_id) {
+            need_synth = true;
+            break;
+        }
+    }
+    if !need_synth {
+        for r in &db_rows {
+            if r.role == "assistant" && !r.turn_id.is_empty() && !db_traces.contains_key(&r.turn_id) {
+                need_synth = true;
+                break;
+            }
+        }
+    }
+    let engine_traces: HashMap<String, Vec<zw_agent_embed::TracedTool>> = if need_synth {
+        zw_agent_embed::load_tool_traces(session_id)
+    } else {
+        HashMap::new()
+    };
+    let mut traced: HashSet<String> = HashSet::new();
+    // Trace pile for a turn: committed row wins, else synthesized file pile.
+    // Marks the turn so each pile renders once. Returns None when neither
+    // source has anything (e.g. bare user prompt, in-flight turn).
+    let mut trace_for = |turn: &str| -> Option<zw_agent_embed::HistoryMsg> {
+        if turn.is_empty() || traced.contains(turn) {
+            return None;
+        }
+        let content = if let Some(c) = db_traces.get(turn) {
+            c.clone()
+        } else if let Some(tools) = engine_traces.get(turn).filter(|v| !v.is_empty()) {
+            zw_agent_embed::tools_to_trace_json(tools)
+        } else {
+            return None;
+        };
+        traced.insert(turn.to_string());
+        Some(zw_agent_embed::HistoryMsg {
+            role: "trace".to_string(),
+            content,
+            turn_id: turn.to_string(),
+        })
+    };
     let mut out: Vec<zw_agent_embed::HistoryMsg> = Vec::new();
     // last output index per turn, so DB-only rows splice after their turn.
     let mut last_idx_of_turn: HashMap<String, usize> = HashMap::new();
@@ -189,6 +245,15 @@ pub async fn db_history(db: &zw_db::DbPool, session_id: &str) -> Vec<zw_agent_em
     for m in engine_msgs {
         if m.role != "user" && m.role != "assistant" {
             continue;
+        }
+        // Trace pile precedes its turn's assistant bubble (never the user row,
+        // never twice, never for turns with nothing to show).
+        if m.role == "assistant" && !m.turn_id.is_empty() {
+            let tid = m.turn_id.clone();
+            if let Some(tm) = trace_for(&tid) {
+                emitted_content.insert((tm.role.clone(), tm.content.clone()));
+                out.push(tm);
+            }
         }
         let key = (m.role.clone(), m.turn_id.clone());
         let content = match db_by_key.get(&key) {
@@ -207,10 +272,12 @@ pub async fn db_history(db: &zw_db::DbPool, session_id: &str) -> Vec<zw_agent_em
         });
     }
     // DB-only rows (turns/roles the engine file doesn't carry): splice after
-    // their turn when known, else append. Keeps chronological order without
-    // needing timestamps on either side.
+    // their turn when known, else append. Trace piles precede their turn's
+    // assistant bubble here too. Raw role='trace' rows are never emitted
+    // directly (trace_for covers their turn exactly once).
+    // Keeps chronological order without needing timestamps on either side.
     let mut trailing: Vec<zw_agent_embed::HistoryMsg> = Vec::new();
-    let mut splices: Vec<(usize, zw_agent_embed::HistoryMsg)> = Vec::new();
+    let mut splices: Vec<(usize, Vec<zw_agent_embed::HistoryMsg>)> = Vec::new();
     for r in db_rows {
         if r.role != "user" && r.role != "assistant" {
             continue;
@@ -222,22 +289,49 @@ pub async fn db_history(db: &zw_db::DbPool, session_id: &str) -> Vec<zw_agent_em
         if r.turn_id.is_empty() && emitted_content.contains(&(r.role.clone(), r.content.clone())) {
             continue;
         }
+        let mut batch: Vec<zw_agent_embed::HistoryMsg> = Vec::new();
+        if r.role == "assistant" && !r.turn_id.is_empty() {
+            let tid = r.turn_id.clone();
+            if let Some(tm) = trace_for(&tid) {
+                emitted_content.insert((tm.role.clone(), tm.content.clone()));
+                batch.push(tm);
+            }
+        }
         let msg = zw_agent_embed::HistoryMsg {
             role: r.role.clone(),
             content: r.content.clone(),
             turn_id: r.turn_id.clone(),
         };
+        emitted_content.insert((msg.role.clone(), msg.content.clone()));
+        batch.push(msg);
         match last_idx_of_turn.get(&r.turn_id) {
-            Some(&idx) => splices.push((idx, msg)),
-            None => trailing.push(msg),
+            Some(&idx) => splices.push((idx, batch)),
+            None => trailing.extend(batch),
         }
     }
     // Insert splices back-to-front so indices stay valid.
     splices.sort_by_key(|(idx, _)| std::cmp::Reverse(*idx));
-    for (idx, msg) in splices {
-        out.insert(idx + 1, msg);
+    for (idx, mut batch) in splices {
+        // batch is [trace?, msg]; insert in order at idx+1.
+        let mut at = idx + 1;
+        for msg in batch.drain(..) {
+            out.insert(at, msg);
+            at += 1;
+        }
     }
     out.extend(trailing);
+    // Orphan committed traces (turn has no assistant in this output):
+    // append the pile alone rather than dropping the content.
+    for (turn, content) in &db_traces {
+        if traced.contains(turn) {
+            continue;
+        }
+        out.push(zw_agent_embed::HistoryMsg {
+            role: "trace".to_string(),
+            content: content.clone(),
+            turn_id: turn.clone(),
+        });
+    }
     out
 }
 
@@ -371,11 +465,19 @@ async fn run_embedded_turn(
     // On a turn with no final answer, `run_embedded` already swapped the raw
     // error transcript for the structured turn summary, so this insert keeps
     // the last content (not just `error: …`).
-    let (assistant_text, completed): (Option<String>, bool) = match &result {
-        Ok((out, completed)) if out.kind != zw_agent_embed::engine::RunKind::Ignored && !out.text.trim().is_empty() => (Some(out.text.clone()), *completed),
-        Ok((_, completed)) => (None, *completed),
-        Err(_) => (None, false),
+    let (assistant_text, completed, trace_json): (Option<String>, bool, Option<String>) = match &result {
+        Ok(t) if t.output.kind != zw_agent_embed::engine::RunKind::Ignored && !t.output.text.trim().is_empty() => (Some(t.output.text.clone()), t.completed, Some(t.trace.to_capped_json()).filter(|_| !t.trace.is_empty())),
+        Ok(t) => (None, t.completed, Some(t.trace.to_capped_json()).filter(|_| !t.trace.is_empty())),
+        Err(_) => (None, false, None),
     };
+    if let Some(j) = &trace_json {
+        // Turn trace pile: persisted BEFORE the assistant row so history order
+        // is user → trace → assistant. Idempotent per turn like the rest.
+        let exists = db.get_chat_messages(&session_id, 500).await.map(|rows| rows.iter().any(|r| r.turn_id == turn_id && r.role == "trace")).unwrap_or(false);
+        if !exists {
+            let _ = db.insert_chat_message(&session_id, "trace", j, &turn_id).await;
+        }
+    }
     if let Some(t) = &assistant_text {
         // Guard duplicate done-insert for same turn (e.g. resumed retry).
         let exists = db.get_chat_messages(&session_id, 500).await.map(|rows| rows.iter().any(|r| r.turn_id == turn_id && r.role == "assistant")).unwrap_or(false);
@@ -383,8 +485,8 @@ async fn run_embedded_turn(
             let _ = db.insert_chat_message(&session_id, "assistant", t, &turn_id).await;
         }
     }
-    if let Ok((out, _)) = &result {
-        if out.kind != zw_agent_embed::engine::RunKind::Ignored && !out.text.trim().is_empty() {
+    if let Ok(t) = &result {
+        if t.output.kind != zw_agent_embed::engine::RunKind::Ignored && !t.output.text.trim().is_empty() {
             if let Some(t) = auto_title {
                 let _ = db.rename_session(&session_id, &t).await;
             }

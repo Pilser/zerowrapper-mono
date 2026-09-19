@@ -1,0 +1,76 @@
+TURN PILES, NOTES, ICONS, OVERLAY — PHASES
+Date: 2026-09-19
+Goal: young-user-friendly live + history view of what the agent does.
+Mid-response, thinking, and tool calls stay together in one pile per turn,
+readable at a glance, expandable for detail. Never one bloated file:
+split modules, import them.
+
+PHASE 1 — PILES + DATA + ICONS (build now, see it in frontend)
+---------------------------------------------------------------
+Backend (zerowrapper, no fork change except tool schemas):
+- run_embedded accumulates TurnTrace { thinking, thought_count,
+  tools: [{call_id, name, args, output, note}] } as it forwards events.
+- run_embedded_turn persists one role='trace' JSON row per turn BEFORE
+  the assistant row (natural pile order, no schema change).
+- history attaches DB trace rows before their turn's assistant bubble;
+  missing traces for old turns are synthesized read-only from the
+  engine session file (tools only — thinking was never stored there).
+- Trace caps (thinking 8000 chars, args/output 2000 each, 300 tools)
+  keep rows and history payloads bounded.
+
+Fork (agent):
+- Optional `note` field on core tool schemas (bash, read, write, edit,
+  grep, find_files, list_dir + subagent task): `#[serde(default)]
+  pub note: Option<String>` + parameters JSON property (NOT required)
+  + one system-prompt line telling the model to write a short note per
+  call. Backward compatible: old calls without note still parse.
+- Trace carries note through (event args -> TurnTrace -> trace row).
+
+Frontend (new modules, additive only — no live-path edits):
+- piles/pile.js  — turn pile container (ordered sub-piles, settle).
+- piles/think.js — ONE narrow pile per thinking burst (slim bar with
+  count + word preview, click to expand full text). A new burst after
+  tools/chunks opens a fresh narrow pile; never lumped with tools.
+- piles/tool.js  — ONE pile per tool call, appended one by one as they
+  arrive (icon + note/label + status, expandable args/output).
+- icons.js       — deterministic registry, no LLM, no backend change:
+  tool name -> icon; shell command -> CLI binary + subcommand
+  (argv[0] + first verb, e.g. `engram list` -> engram icon + "list").
+  Unknown binaries fall back to a generic terminal icon.
+- activity.js    — kept as thin facade with identical exports
+  (pushThought/pushToolCall/pushToolResult/finishTurn/resetTurn);
+  internals delegate to piles/. Callers unchanged, live behavior kept.
+- History: renderStaticTrace(trace) builds the same piles settled
+  (collapsed receipts). messages.js gains one additive role==='trace'
+  branch with its own data-trace dedup. user/assistant paths untouched.
+- CSS: reuse .turn-activity/.activity-row/etc.; only small new classes
+  (.think-pile.narrow, .tool-pile, .pile-sep). Words stay fully visible.
+
+PHASE 2 — NOTES everywhere (after Phase 1 looks right)
+-------------------------------------------------------
+- Prompt: strengthen the note instruction with examples.
+- Wrapper-derived fallback notes (deterministic summary from structured
+  args + CLI parse) for calls where the model wrote no note, so old
+  traces also read well. Display rule: agent note wins, else derived,
+  else tool label. Raw name/args stay in details.
+
+PHASE 3 — OVERLAY + COUNTDOWN (proposed)
+-----------------------------------------
+- overlay.js (new, presentational only, never touches message DOM):
+  fixed pill showing live agent state with icon + motion
+  (thinking pulse, tool spinner -> check, streaming shimmer) plus an
+  expandable feed of recent actions w/ elapsed times. Subscribes to the
+  existing event stream. Auto-hides when idle.
+- countdown.js (new): per tool pile with a timeout arg, a thin
+  elapsed/budget bar + mm:ss ticking via interval; under 10s turns
+  warm; on budget end with no result shows "past budget, still
+  running" (never a false timeout claim, backend may overrun).
+- Both subscribe; no changes to rendering or protocol.
+
+NON-GOALS / SAFETY
+-------------------
+- No change to chunk/bubble rendering, history user/assistant rows,
+  stream buffer, resume/dedup, or the ask drawer in Phase 1.
+- Trace rows are additive (role='trace'); old frontends ignore them.
+- Thinking for pre-trace turns is unrecoverable (never stored) —
+  piles show tools only there. Honest gap, documented.

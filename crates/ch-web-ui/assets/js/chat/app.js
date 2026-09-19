@@ -969,6 +969,360 @@ var init_scroll = __esm(() => {
   init_dom();
 });
 
+// piles/think.js
+function previewWords(text, n = 48) {
+  const t = String(text || "").replace(/\s+/g, " ").trim();
+  if (t.length <= n)
+    return t;
+  return t.slice(0, n) + "…";
+}
+function makeHead() {
+  const head = document.createElement("button");
+  head.className = "activity-head";
+  head.type = "button";
+  head.innerHTML = '<span class="activity-dot"></span><span class="activity-label"></span><span class="activity-num">0</span><span class="activity-chev">' + CHEV + "</span>";
+  return head;
+}
+function createThinkPile() {
+  const row = document.createElement("div");
+  row.className = "activity-row thinking active";
+  const head = makeHead();
+  const label = head.querySelector(".activity-label");
+  const num = head.querySelector(".activity-num");
+  const detail = document.createElement("div");
+  detail.className = "activity-detail";
+  const pre = document.createElement("pre");
+  detail.appendChild(pre);
+  row.appendChild(head);
+  row.appendChild(detail);
+  head.addEventListener("click", () => {
+    row.classList.toggle("open");
+    if (row.classList.contains("open"))
+      row.dataset.pinned = "1";
+    else
+      delete row.dataset.pinned;
+  });
+  let count = 0;
+  let full = "";
+  const paint = () => {
+    if (num)
+      num.textContent = count;
+    if (label)
+      label.textContent = "Thinking · " + count + (full ? " — " + previewWords(full) : "");
+  };
+  paint();
+  return {
+    row,
+    append(text) {
+      count += 1;
+      if (text) {
+        full += text;
+        pre.textContent += text;
+      }
+      paint();
+    },
+    settle() {
+      row.classList.remove("active");
+      if (label)
+        label.textContent = "Thought · " + count + (full ? " — " + previewWords(full) : "");
+      if (row.dataset.pinned !== "1")
+        row.classList.remove("open");
+    }
+  };
+}
+function renderStaticThink(container2, text, count) {
+  const pile = createThinkPile();
+  if (text) {
+    const pre = pile.row.querySelector("pre");
+    if (pre)
+      pre.textContent = text;
+  }
+  pile.settle();
+  try {
+    const num = pile.row.querySelector(".activity-num");
+    const label = pile.row.querySelector(".activity-label");
+    const n = Number.isFinite(count) && count > 0 ? count : text ? 1 : 0;
+    if (num)
+      num.textContent = n;
+    if (label)
+      label.textContent = "Thought · " + n + (text ? " — " + previewWords(text) : "");
+  } catch {}
+  container2.appendChild(pile.row);
+  return pile.row;
+}
+var CHEV = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>';
+
+// icons.js
+function splitArgs(cmd) {
+  const out = [];
+  let cur = "";
+  let q = null;
+  const flush = () => {
+    if (cur) {
+      out.push(cur);
+      cur = "";
+    }
+  };
+  for (let i = 0;i < cmd.length; i++) {
+    const ch = cmd[i];
+    if (q) {
+      if (ch === "\\" && i + 1 < cmd.length) {
+        cur += cmd[++i];
+        continue;
+      }
+      if (ch === q) {
+        q = null;
+        continue;
+      }
+      cur += ch;
+      continue;
+    }
+    if (ch === "\\" && i + 1 < cmd.length) {
+      cur += cmd[++i];
+      continue;
+    }
+    if (ch === '"' || ch === "'") {
+      q = ch;
+      continue;
+    }
+    if (/\s/.test(ch) || ch === `
+`) {
+      flush();
+      continue;
+    }
+    if (ch === ";") {
+      flush();
+      out.push(";");
+      continue;
+    }
+    if ((ch === "&" || ch === "|") && cmd[i + 1] === ch) {
+      flush();
+      out.push(ch + ch);
+      i++;
+      continue;
+    }
+    if (ch === "&" || ch === "|")
+      break;
+    cur += ch;
+  }
+  flush();
+  return out;
+}
+function parseCli(command) {
+  if (!command || typeof command !== "string")
+    return null;
+  let parts = splitArgs(command.trim());
+  while (parts.length > 0) {
+    const head = parts[0];
+    if (head === "&&" || head === "||" || head === ";") {
+      parts = parts.slice(1);
+      continue;
+    }
+    const base = head.split("/").pop();
+    if (base === "cd") {
+      parts = parts.slice(2);
+      if (parts[0] === "&&")
+        parts = parts.slice(1);
+      continue;
+    }
+    if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(head)) {
+      parts = parts.slice(1);
+      continue;
+    }
+    if (base === "sudo" || base === "timeout" || base === "env" || base === "bash" || base === "sh") {
+      parts = parts.slice(1);
+      if (parts[0] === "-c")
+        parts = parts.slice(1);
+      continue;
+    }
+    break;
+  }
+  if (!parts.length)
+    return null;
+  const binary = parts[0].split("/").pop();
+  let subcommand = "";
+  for (let i = 1;i < parts.length; i++) {
+    const t = parts[i];
+    if (!t || t === "&&" || t === "||" || t === ";")
+      break;
+    if (t.startsWith("-"))
+      continue;
+    subcommand = t.replace(/^["']|["']$/g, "");
+    break;
+  }
+  return { binary, subcommand };
+}
+function pileIdentity(name, args, note) {
+  const cleanNote = note && String(note).trim() || "";
+  if (name === "bash" && args && typeof args.command === "string") {
+    const cli = parseCli(args.command);
+    if (cli && cli.binary) {
+      const icon2 = CLI_ICONS[cli.binary] || "⌨️";
+      const label = cleanNote || cli.binary + (cli.subcommand ? " · " + cli.subcommand : "");
+      return { icon: icon2, label };
+    }
+    return { icon: TOOL_ICONS.bash, label: cleanNote || "shell" };
+  }
+  const icon = TOOL_ICONS[name] || "⚙️";
+  return { icon, label: cleanNote || name || "action" };
+}
+var TOOL_ICONS, CLI_ICONS;
+var init_icons = __esm(() => {
+  TOOL_ICONS = {
+    bash: "⌨️",
+    read: "\uD83D\uDCC4",
+    write: "✏️",
+    edit: "\uD83D\uDEE0️",
+    grep: "\uD83D\uDD0D",
+    find_files: "\uD83D\uDDC2️",
+    list_dir: "\uD83D\uDCC1",
+    subagent: "\uD83E\uDD16",
+    task: "\uD83E\uDD16",
+    inspect: "\uD83D\uDC41️",
+    manage_whiteboard: "\uD83D\uDCCC",
+    todo_write: "☑️",
+    ask_user: "❓",
+    memory_write: "\uD83E\uDDE0",
+    memory_read: "\uD83E\uDDE0",
+    memory_edit: "\uD83E\uDDE0",
+    memory_search: "\uD83E\uDDE0"
+  };
+  CLI_ICONS = {
+    engram: "\uD83E\uDDE0",
+    git: "\uD83C\uDF3F",
+    npm: "\uD83D\uDCE6",
+    bun: "\uD83E\uDD5F",
+    cargo: "\uD83E\uDD80",
+    docker: "\uD83D\uDC33",
+    kubectl: "☸️",
+    curl: "\uD83C\uDF10",
+    wget: "\uD83C\uDF10",
+    ssh: "\uD83D\uDD10",
+    python: "\uD83D\uDC0D",
+    python3: "\uD83D\uDC0D",
+    node: "\uD83D\uDFE2",
+    ls: "\uD83D\uDCC1",
+    cat: "\uD83D\uDCC4",
+    grep: "\uD83D\uDD0D",
+    find: "\uD83D\uDDC2️",
+    sleep: "⏳",
+    echo: "\uD83D\uDCAC"
+  };
+});
+
+// piles/tool.js
+function argsText(args) {
+  if (!args)
+    return "";
+  try {
+    return JSON.stringify(args, null, 2);
+  } catch {
+    return String(args);
+  }
+}
+function attachOutput(item, output) {
+  if (!output)
+    return;
+  let detail = item.querySelector(".action-detail");
+  if (!detail) {
+    detail = document.createElement("div");
+    detail.className = "action-detail hidden";
+    item.appendChild(detail);
+    const head = item.querySelector(".action-head");
+    if (head)
+      head.addEventListener("click", () => detail.classList.toggle("hidden"));
+  }
+  if (output.length <= 80) {
+    const span = document.createElement("div");
+    span.className = "action-output";
+    span.textContent = output;
+    detail.appendChild(span);
+    detail.classList.remove("hidden");
+  } else {
+    const det = document.createElement("details");
+    const sum = document.createElement("summary");
+    sum.textContent = output.slice(0, 80) + "...";
+    const pre = document.createElement("pre");
+    pre.textContent = output;
+    det.appendChild(sum);
+    det.appendChild(pre);
+    detail.appendChild(det);
+  }
+}
+function createToolPile({ name, args, note }) {
+  const { icon, label } = pileIdentity(name, args, note);
+  const row = document.createElement("div");
+  row.className = "activity-row acting active";
+  const head = document.createElement("button");
+  head.className = "activity-head";
+  head.type = "button";
+  head.innerHTML = '<span class="activity-dot"></span><span class="activity-label"></span><span class="activity-num"></span><span class="activity-chev">' + CHEV2 + "</span>";
+  head.querySelector(".activity-label").textContent = icon + " " + label;
+  const detail = document.createElement("div");
+  detail.className = "activity-detail";
+  const list = document.createElement("div");
+  list.className = "action-list";
+  detail.appendChild(list);
+  row.appendChild(head);
+  row.appendChild(detail);
+  head.addEventListener("click", () => {
+    row.classList.toggle("open");
+    if (row.classList.contains("open"))
+      row.dataset.pinned = "1";
+    else
+      delete row.dataset.pinned;
+  });
+  const item = document.createElement("div");
+  item.className = "action-item running";
+  const itemHead = document.createElement("button");
+  itemHead.className = "action-head";
+  itemHead.type = "button";
+  itemHead.innerHTML = '<span class="action-status">◌</span><span class="action-name"></span>';
+  itemHead.querySelector(".action-name").textContent = name || "action";
+  item.appendChild(itemHead);
+  const aStr = argsText(args);
+  if (aStr) {
+    const aDetail = document.createElement("div");
+    aDetail.className = "action-detail hidden";
+    const pre = document.createElement("pre");
+    pre.textContent = aStr;
+    aDetail.appendChild(pre);
+    item.appendChild(aDetail);
+    itemHead.addEventListener("click", () => aDetail.classList.toggle("hidden"));
+  }
+  list.appendChild(item);
+  const num = head.querySelector(".activity-num");
+  return {
+    row,
+    done(output) {
+      const status = item.querySelector(".action-status");
+      if (status) {
+        status.className = "action-status done";
+        status.textContent = "✓";
+      }
+      item.classList.remove("running");
+      item.classList.add("done");
+      attachOutput(item, output || "");
+      if (num)
+        num.textContent = "✓";
+      row.classList.remove("active");
+      if (row.dataset.pinned !== "1")
+        row.classList.remove("open");
+    }
+  };
+}
+function renderStaticTool(container2, tool) {
+  const t = tool || {};
+  const pile = createToolPile({ name: t.name, args: t.args, note: t.note });
+  pile.done(typeof t.output === "string" ? t.output : "");
+  container2.appendChild(pile.row);
+  return pile.row;
+}
+var CHEV2 = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>';
+var init_tool = __esm(() => {
+  init_icons();
+});
+
 // activity.js
 function target() {
   return els.messages || document.getElementById("chat-messages");
@@ -980,95 +1334,46 @@ function ensureBox() {
   if (!box || !box.isConnected || !turnOpen) {
     box = document.createElement("div");
     box.className = "turn-activity";
-    thinkRow = null;
-    thinkPre = null;
-    thinkCount = 0;
-    actRow = null;
-    actList = null;
-    actionTotal = 0;
+    thinkOpen = null;
+    pileCount = 0;
     pending.length = 0;
     turnOpen = true;
     t.appendChild(box);
   }
   return box;
 }
-function makeRow(kind, label) {
-  const row = document.createElement("div");
-  row.className = "activity-row " + kind + " active open";
-  const head = document.createElement("button");
-  head.className = "activity-head";
-  head.type = "button";
-  head.innerHTML = '<span class="activity-dot"></span><span class="activity-label"></span><span class="activity-num">0</span><span class="activity-chev">' + CHEV + "</span>";
-  head.querySelector(".activity-label").textContent = label;
-  head.addEventListener("click", () => {
-    row.classList.toggle("open");
-    if (row.classList.contains("open"))
-      row.dataset.pinned = "1";
-    else
-      delete row.dataset.pinned;
-  });
-  const detail = document.createElement("div");
-  detail.className = "activity-detail";
-  row.appendChild(head);
-  row.appendChild(detail);
-  return { row, head, detail };
-}
-function setNum(row, n) {
-  const el = row.querySelector(".activity-num");
-  if (el)
-    el.textContent = n;
+function settleThink() {
+  if (thinkOpen) {
+    try {
+      thinkOpen.settle();
+    } catch {}
+    thinkOpen = null;
+  }
 }
 function pushThought(text) {
   const b = ensureBox();
   if (!b)
     return;
-  if (!thinkRow) {
-    const made = makeRow("thinking", "Thinking");
-    thinkRow = made.row;
-    thinkPre = document.createElement("pre");
-    made.detail.appendChild(thinkPre);
-    b.appendChild(thinkRow);
+  if (!thinkOpen || !thinkOpen.row.isConnected) {
+    thinkOpen = createThinkPile();
+    b.appendChild(thinkOpen.row);
+    pileCount += 1;
   }
-  thinkCount += 1;
-  setNum(thinkRow, thinkCount);
-  if (text && thinkPre)
-    thinkPre.textContent += text;
+  try {
+    thinkOpen.append(text || "");
+  } catch {}
   autoScroll();
 }
 function pushToolCall(id, name, args) {
   const b = ensureBox();
   if (!b)
     return;
-  if (!actRow) {
-    const made = makeRow("acting", "Actions");
-    actRow = made.row;
-    actList = document.createElement("div");
-    actList.className = "action-list";
-    made.detail.appendChild(actList);
-    b.appendChild(actRow);
-  }
-  actionTotal += 1;
-  setNum(actRow, actionTotal);
-  const item = document.createElement("div");
-  item.className = "action-item running";
-  const argsStr = args ? JSON.stringify(args, null, 2) : "";
-  const head = document.createElement("button");
-  head.className = "action-head";
-  head.type = "button";
-  head.innerHTML = '<span class="action-status">◌</span><span class="action-name"></span>';
-  head.querySelector(".action-name").textContent = name || "action";
-  item.appendChild(head);
-  if (argsStr) {
-    const detail = document.createElement("div");
-    detail.className = "action-detail hidden";
-    const pre = document.createElement("pre");
-    pre.textContent = argsStr;
-    detail.appendChild(pre);
-    item.appendChild(detail);
-    head.addEventListener("click", () => detail.classList.toggle("hidden"));
-  }
-  actList.appendChild(item);
-  pending.push({ id: id || "", el: item, name });
+  settleThink();
+  const note = args && typeof args.note === "string" ? args.note : "";
+  const pile = createToolPile({ name, args, note });
+  b.appendChild(pile.row);
+  pileCount += 1;
+  pending.push({ id: id || "", done: pile.done });
   autoScroll();
 }
 function pushToolResult(id, name, output) {
@@ -1077,95 +1382,66 @@ function pushToolResult(id, name, output) {
     return;
   const item = pending[idx];
   pending.splice(idx, 1);
-  const status = item.el.querySelector(".action-status");
-  if (status) {
-    status.className = "action-status done";
-    status.textContent = "✓";
-  }
-  item.el.classList.remove("running");
-  item.el.classList.add("done");
-  if (output) {
-    let detail = item.el.querySelector(".action-detail");
-    if (!detail) {
-      detail = document.createElement("div");
-      detail.className = "action-detail hidden";
-      item.el.appendChild(detail);
-      const head = item.el.querySelector(".action-head");
-      if (head)
-        head.addEventListener("click", () => detail.classList.toggle("hidden"));
-    }
-    if (output.length <= 80) {
-      const span = document.createElement("div");
-      span.className = "action-output";
-      span.textContent = output;
-      detail.appendChild(span);
-      detail.classList.remove("hidden");
-    } else {
-      const det = document.createElement("details");
-      const sum = document.createElement("summary");
-      sum.textContent = output.slice(0, 80) + "...";
-      const pre = document.createElement("pre");
-      pre.textContent = output;
-      det.appendChild(sum);
-      det.appendChild(pre);
-      detail.appendChild(det);
-    }
-  }
+  try {
+    item.done(output || "");
+  } catch {}
   autoScroll();
-}
-function settleRow(row, receipt) {
-  if (!row)
-    return;
-  row.classList.remove("active");
-  const label = row.querySelector(".activity-label");
-  if (label)
-    label.textContent = receipt;
-  if (row.dataset.pinned !== "1")
-    row.classList.remove("open");
 }
 function finishTurn() {
   if (!turnOpen)
     return;
   turnOpen = false;
-  if (!thinkCount && !actionTotal) {
-    if (box)
-      box.remove();
+  settleThink();
+  while (pending.length > 0) {
+    const item = pending.pop();
+    try {
+      item.done("");
+    } catch {}
+  }
+  if (!pileCount && box) {
+    box.remove();
     box = null;
     return;
   }
-  if (thinkRow) {
-    if (!thinkCount)
-      thinkRow.remove();
-    else
-      settleRow(thinkRow, `Thought · ${thinkCount}`);
-    thinkRow = null;
-  }
-  if (actRow) {
-    if (!actionTotal)
-      actRow.remove();
-    else
-      settleRow(actRow, `Actions · ${actionTotal} ✓`);
-    actRow = null;
-  }
-  pending.length = 0;
 }
 function resetTurn() {
   if (box)
     box.remove();
   box = null;
   turnOpen = false;
-  thinkRow = null;
-  thinkPre = null;
-  thinkCount = 0;
-  actRow = null;
-  actList = null;
-  actionTotal = 0;
+  thinkOpen = null;
+  pileCount = 0;
   pending.length = 0;
 }
-var box = null, turnOpen = false, thinkRow = null, thinkPre = null, thinkCount = 0, actRow = null, actList = null, actionTotal = 0, pending, CHEV = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>';
+function renderStaticTrace(container2, trace) {
+  if (!container2 || !trace)
+    return null;
+  const thinking = typeof trace.thinking === "string" ? trace.thinking : "";
+  const tools = Array.isArray(trace.tools) ? trace.tools : [];
+  if (!thinking.trim() && tools.length === 0)
+    return null;
+  const wrap = document.createElement("div");
+  wrap.className = "turn-activity";
+  if (thinking.trim()) {
+    try {
+      renderStaticThink(wrap, thinking, trace.thought_count);
+    } catch {}
+  }
+  for (const t of tools) {
+    try {
+      renderStaticTool(wrap, t || {});
+    } catch {}
+  }
+  if (!wrap.hasChildNodes())
+    return null;
+  container2.appendChild(wrap);
+  return wrap;
+}
+var box = null, turnOpen = false, thinkOpen = null, pileCount = 0, pending;
 var init_activity = __esm(() => {
   init_dom();
   init_scroll();
+  init_tool();
   pending = [];
 });
 
@@ -1467,6 +1743,24 @@ function fetchHistory() {
           const row = buildMessageRow(msg.role, msg.content, msg.turn_id || "");
           if (row)
             frag.appendChild(row);
+        } else if (msg.role === "trace") {
+          const tid = msg.turn_id || "";
+          try {
+            if (tid && els.messages.querySelector('[data-trace="' + CSS.escape(tid) + '"]'))
+              return;
+            let trace = null;
+            try {
+              trace = JSON.parse(msg.content || "null");
+            } catch {}
+            if (!trace)
+              return;
+            const wrap = renderStaticTrace(frag, trace);
+            if (wrap && tid) {
+              try {
+                wrap.dataset.trace = tid;
+              } catch {}
+            }
+          } catch {}
         }
       });
       els.messages.appendChild(frag);
@@ -1510,6 +1804,7 @@ var init_messages = __esm(() => {
   init_dom();
   init_markdown();
   init_streaming();
+  init_activity();
   init_scroll();
 });
 
