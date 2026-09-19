@@ -73,6 +73,42 @@ static TASKS: LazyLock<
 static CANCELLED: LazyLock<tokio::sync::Mutex<std::collections::HashSet<String>>> =
     LazyLock::new(|| tokio::sync::Mutex::new(std::collections::HashSet::new()));
 
+// Latest live socket per session. Connections drop constantly here (proxy
+// resets idle sockets roughly every ~30s), while turns/supervisors outlive
+// any single socket. Anything that must reach the user NOW (ask pings,
+// continued turns) looks up the current socket here instead of holding a
+// stale one across reconnects; when no socket is live we still run (buffered)
+// and the client catches up via resume/poll/history.
+static LIVE_SENDERS: LazyLock<tokio::sync::Mutex<HashMap<String, WsSender>>> =
+    LazyLock::new(|| tokio::sync::Mutex::new(HashMap::new()));
+
+async fn remember_live_sender(session_id: &str, ws_sender: &WsSender) {
+    if session_id.is_empty() {
+        return;
+    }
+    LIVE_SENDERS
+        .lock()
+        .await
+        .insert(session_id.to_string(), ws_sender.clone());
+}
+
+async fn live_sender(session_id: &str) -> Option<WsSender> {
+    LIVE_SENDERS.lock().await.get(session_id).cloned()
+}
+
+async fn forget_live_sender(session_id: &str, ws_sender: &WsSender) {
+    if session_id.is_empty() {
+        return;
+    }
+    let mut m = LIVE_SENDERS.lock().await;
+    // Only remove if it's still ours (a reconnect may have replaced it).
+    if let Some(cur) = m.get(session_id) {
+        if Arc::ptr_eq(cur, ws_sender) {
+            m.remove(session_id);
+        }
+    }
+}
+
 /// Live native sessions for the picker: id, display name, model/provider,
 /// message count, token totals, cost — plus `running` while a turn is in
 /// flight (drives the send→cancel button window). Straight from the engines.
@@ -349,7 +385,10 @@ pub async fn history_snapshot(
     let max_seq = db.stream_buffer_max_seq(session_id).await.unwrap_or(0);
     let pending = db.ask_pending_for_session(session_id).await.unwrap_or_default();
     let pending_json: Vec<serde_json::Value> = pending.iter().map(|r| {
-        serde_json::json!({"id": r.id, "session_id": r.session_id, "questions": serde_json::from_str::<serde_json::Value>(&r.questions).unwrap_or(serde_json::json!([]))})
+        // kind marks wrapper system asks (id prefix we generate) vs model
+        // ask_user questions, so the drawer headers them distinctly.
+        let kind = if r.id.starts_with("continue-") { "system-continue" } else { "model" };
+        serde_json::json!({"id": r.id, "session_id": r.session_id, "questions": serde_json::from_str::<serde_json::Value>(&r.questions).unwrap_or(serde_json::json!([])), "kind": kind})
     }).collect();
     serde_json::json!({
         "session_id": session_id,
@@ -619,15 +658,17 @@ const CONTINUE_ASK_TIMEOUT_SECS: u64 = 900;
 const CONTINUE_PROMPT: &str = "Continue the previous task from exactly where it stopped. Do not repeat completed steps; drive it to a final answer.";
 
 /// Live forwarding channel: buffers every event (DB + memory, seq-tagged)
-/// then sends it on this connection. One per turn (plus one per
-/// continue-supervisor for its ask ping); each ends when its sender drops.
+/// then sends it on this connection when one is live. `None` means offline:
+/// the task only buffers and resume/poll catch the client up later.
+/// One per turn (plus one per continue-supervisor for its ask ping); each
+/// ends when its sender drops.
 fn spawn_live_forwarding(
-    ws_sender: &WsSender,
+    ws_sender: Option<&WsSender>,
     db: &zw_db::DbPool,
     session_id: &str,
 ) -> mpsc::Sender<StreamEvent> {
     let (event_tx, mut event_rx) = mpsc::channel::<StreamEvent>(256);
-    let ws = ws_sender.clone();
+    let ws = ws_sender.cloned();
     let db_for_buffer = db.clone();
     let sid_for_buffer = session_id.to_string();
     tokio::spawn(async move {
@@ -641,9 +682,17 @@ fn spawn_live_forwarding(
             } else {
                 continue;
             };
+            let Some(ws) = ws.as_ref() else {
+                continue;
+            };
             let mut sender = ws.lock().await;
+            // Never break on a dead socket: the turn must keep buffering so
+            // reconnect-resume replays everything. Breaking here used to
+            // silently kill the turn's tail (and backpressure the engine once
+            // the channel filled). Live delivery is best-effort; the buffer
+            // is the source of truth.
             if sender.send(Message::Text(to_send.to_string().into())).await.is_err() {
-                break;
+                continue;
             }
         }
     });
@@ -673,10 +722,13 @@ async fn start_turn(
             }
         }
     }
-    let done_rx = launch_turn(ws_sender, db, session_id.clone(), prompt, raw, turn_id).await;
+    let done_rx = launch_turn(Some(ws_sender), db, session_id.clone(), prompt, raw, turn_id).await;
     // Supervisor: nothing more on success; on an unfinished turn offer the
     // human a structured continue/cancel instead of a dead end.
-    let sup_ws = ws_sender.clone();
+    // NOTE: no ws_sender is captured here on purpose — by the time a long
+    // turn ends the socket has usually been reset at least once, so the
+    // supervisor resolves the CURRENT live socket at use time.
+    let sup_sid = session_id.clone();
     let sup_db = db.clone();
     tokio::spawn(async move {
         let completed = done_rx.await.unwrap_or(false);
@@ -685,10 +737,10 @@ async fn start_turn(
         }
         // Explicit user cancel is a decision, not a stall: no ask.
         // (Single-use marker, consumed here.)
-        if CANCELLED.lock().await.remove(&session_id) {
+        if CANCELLED.lock().await.remove(&sup_sid) {
             return;
         }
-        continue_flow(&sup_ws, &sup_db, session_id).await;
+        continue_flow(&sup_db, sup_sid).await;
     });
 }
 
@@ -698,7 +750,7 @@ async fn start_turn(
 /// (Kept separate from start_turn so the supervise→continue path stays
 /// acyclic for `Send`; see start_turn note.)
 async fn launch_turn(
-    ws_sender: &WsSender,
+    ws_sender: Option<&WsSender>,
     db: &zw_db::DbPool,
     session_id: String,
     prompt: String,
@@ -738,7 +790,7 @@ async fn launch_turn(
 /// human Continue); an explicit cancel or newer user prompt ends the loop
 /// (the prompt path expires pending system asks; cancel sets CANCELLED which
 /// the next supervisor consumes — a cancelled respawn simply never asks).
-async fn continue_flow(ws_sender: &WsSender, db: &zw_db::DbPool, session_id: String) {
+async fn continue_flow(db: &zw_db::DbPool, session_id: String) {
     loop {
         let nanos = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -759,43 +811,70 @@ async fn continue_flow(ws_sender: &WsSender, db: &zw_db::DbPool, session_id: Str
         if db.ask_insert(&ask_id, &session_id, &questions.to_string()).await.is_err() {
             return;
         }
-        let tx = spawn_live_forwarding(ws_sender, db, &session_id);
-        let _ = tx.send(StreamEvent::AskRequest {
-            ask_id: ask_id.clone(),
-            session_id: session_id.clone(),
-            questions: questions.clone(),
-        }).await;
-        // Wait for the REST answer (broadcast by the answer endpoint).
-        let mut rx = zw_agent_embed::ask::subscribe_answers();
-        let mut decision_continue = false;
-        loop {
-            match tokio::time::timeout(
-                std::time::Duration::from_secs(CONTINUE_ASK_TIMEOUT_SECS),
-                rx.recv(),
-            ).await {
-                Err(_) => break, // timeout
-                Ok(Err(_)) => break, // broadcaster gone
-                Ok(Ok((id, answers))) => {
-                    if id != ask_id {
-                        continue; // someone else's answer
+        // Live ping on the CURRENT socket (never a stale held one); the DB
+        // row + drawer poll/reconnect cover clients we can't reach live.
+        if let Some(live) = live_sender(&session_id).await {
+            let tx = spawn_live_forwarding(Some(&live), db, &session_id);
+            let _ = tx.send(StreamEvent::AskRequest {
+                ask_id: ask_id.clone(),
+                session_id: session_id.clone(),
+                questions: questions.clone(),
+                kind: "system-continue".to_string(),
+            }).await;
+        }
+        // Wait for the REST answer (broadcast by the answer endpoint). Check
+        // the DB first: an answer may already be recorded (reconnect race,
+        // supervisor restart) and broadcasts don't replay to late subscribers.
+        let mut decision: Option<bool> = None;
+        if let Ok(Some(row)) = db.ask_get(&ask_id).await {
+            if row.status == "answered" {
+                decision = Some(continue_answer_is_yes(
+                    &serde_json::from_str::<serde_json::Value>(&row.answers).unwrap_or_default(),
+                ));
+            }
+        }
+        if decision.is_none() {
+            let mut rx = zw_agent_embed::ask::subscribe_answers();
+            // Re-check after subscribing (answer may have landed in between).
+            if let Ok(Some(row)) = db.ask_get(&ask_id).await {
+                if row.status == "answered" {
+                    decision = Some(continue_answer_is_yes(
+                        &serde_json::from_str::<serde_json::Value>(&row.answers).unwrap_or_default(),
+                    ));
+                }
+            }
+            while decision.is_none() {
+                match tokio::time::timeout(
+                    std::time::Duration::from_secs(CONTINUE_ASK_TIMEOUT_SECS),
+                    rx.recv(),
+                ).await {
+                    Err(_) => break, // timeout
+                    Ok(Err(_)) => break, // broadcaster gone
+                    Ok(Ok((id, answers))) => {
+                        if id != ask_id {
+                            continue; // someone else's answer
+                        }
+                        decision = Some(continue_answer_is_yes(&answers));
+                        break;
                     }
-                    decision_continue = continue_answer_is_yes(&answers);
-                    break;
                 }
             }
         }
-        if !decision_continue {
+        if decision != Some(true) {
             let _ = db.ask_expire(&ask_id).await;
             return;
         }
         // The answer endpoint already marked the ask answered. Fresh turn id
-        // = fresh budget; same session = full history kept.
+        // = fresh budget; same session = full history kept. Resolve the live
+        // socket again here (it may have reset during the human's think time);
+        // with no live socket we still run buffered and resume catches up.
         let nanos = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map(|d| d.as_nanos())
             .unwrap_or(0);
         let new_turn = format!("cont-{nanos:x}");
-        let done_rx = launch_turn(ws_sender, db, session_id.clone(), CONTINUE_PROMPT.to_string(), CONTINUE_PROMPT.to_string(), new_turn).await;
+        let live = live_sender(&session_id).await;
+        let done_rx = launch_turn(live.as_ref(), db, session_id.clone(), CONTINUE_PROMPT.to_string(), CONTINUE_PROMPT.to_string(), new_turn).await;
         let completed = done_rx.await.unwrap_or(false);
         if completed {
             return;
@@ -853,6 +932,33 @@ pub async fn handle_ws_connection(
 
     let mut current_session_id = String::new();
     let mut whiteboard_forwarding_for = false;
+    // Every session id this connection serves (for live-sender tracking).
+    let mut known_sessions: Vec<String> = Vec::new();
+
+    // Server ping: proxies here reset idle sockets roughly every ~30s, which
+    // used to drop turns mid-ask with no live recovery. A 25s ping keeps NAT
+    // and proxy idle timers fresh; browsers answer Ping with Pong at the
+    // protocol level (invisible to JS). Ends with the connection.
+    let (ping_stop_tx, mut ping_stop_rx) = tokio::sync::oneshot::channel::<()>();
+    {
+        let ws_ping = ws_sender.clone();
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(std::time::Duration::from_secs(25));
+            // First tick immediate would spam; skip it.
+            interval.tick().await;
+            loop {
+                tokio::select! {
+                    _ = interval.tick() => {
+                        let mut sender = ws_ping.lock().await;
+                        if sender.send(Message::Ping(vec![].into())).await.is_err() {
+                            break;
+                        }
+                    }
+                    _ = &mut ping_stop_rx => break,
+                }
+            }
+        });
+    }
 
     // Forward inspect commands from MCP tool to browser tab.
     let ws_inspect = ws_sender.clone();
@@ -946,6 +1052,10 @@ pub async fn handle_ws_connection(
             let since = parsed.get("since").and_then(|v| v.as_i64()).unwrap_or(0);
             if !sid.is_empty() {
                 current_session_id = sid.clone();
+                remember_live_sender(&sid, &ws_sender).await;
+                if !known_sessions.contains(&sid) {
+                    known_sessions.push(sid.clone());
+                }
                 // Hybrid replay: memory first, then DB for anything not in memory
                 let mem = mem_replay(&sid, since).await;
                 let mut to_send = mem;
@@ -994,6 +1104,10 @@ pub async fn handle_ws_connection(
             }
             if !sid.is_empty() {
                 current_session_id = sid.clone();
+                remember_live_sender(&sid, &ws_sender).await;
+                if !known_sessions.contains(&sid) {
+                    known_sessions.push(sid.clone());
+                }
                 if let Some(handle) = whiteboard.clone() {
                     if let Err(e) = handle.ensure(&sid).await {
                         tracing::warn!("whiteboard ensure on sync failed: {}", e);
@@ -1087,6 +1201,10 @@ pub async fn handle_ws_connection(
         }
 
         current_session_id = session_id.clone();
+        remember_live_sender(&session_id, &ws_sender).await;
+        if !known_sessions.contains(&session_id) {
+            known_sessions.push(session_id.clone());
+        }
         if let Some(handle) = whiteboard.clone() {
             spawn_whiteboard_forwarding(&ws_sender, handle, &mut whiteboard_forwarding_for);
         }
@@ -1110,6 +1228,12 @@ pub async fn handle_ws_connection(
         start_turn(&ws_sender, &buffer_db, session_id, prompt, content, turn_id).await;
     }
 
+    // Connection over: stop pings, drop our live-sender registrations (only
+    // where still ours — a reconnect may have replaced them already).
+    let _ = ping_stop_tx.send(());
+    for sid in known_sessions {
+        forget_live_sender(&sid, &ws_sender).await;
+    }
     let mut sender = ws_sender.lock().await;
     let _ = sender.close().await;
 }

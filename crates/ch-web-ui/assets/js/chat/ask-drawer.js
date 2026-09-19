@@ -7,10 +7,14 @@ import { els } from './dom.js'
 import * as network from './network.js'
 import { state as authState } from './auth.js'
 
-let current = null // { ask_id, session_id, questions: [{id,question,objective,options,answer,custom}] }
+let current = null // { ask_id, session_id, kind, questions: [{id,question,objective,options,answer}] }
 let mode = 'edit' // 'edit' | 'review'
 let customCount = 0
 let pollTimer = null
+
+function isSystemAsk() {
+  return !!(current && (current.kind === 'system-continue' || String(current.ask_id || '').startsWith('continue-')))
+}
 
 function esc(s) {
   return String(s == null ? '' : s)
@@ -43,6 +47,8 @@ function setStatus(msg, isError) {
 
 function readForm() {
   // Pull current inputs back into state (so Review ↔ Back never loses edits).
+  // Answers live ONLY in the answer textareas; picking a pill fills its box.
+  // Nothing here ever posts to chat — submit() sends one REST payload.
   if (!current || !els.askBody) return
   const cards = els.askBody.querySelectorAll('[data-qid]')
   cards.forEach((card) => {
@@ -51,31 +57,37 @@ function readForm() {
     if (!q) return
     const qta = card.querySelector('textarea[data-q="text"]')
     if (qta) q.question = qta.value
-    const sel = card.querySelector('select[data-q="answer"]')
-    const custom = card.querySelector('input[data-q="custom"]')
     const ta = card.querySelector('textarea[data-q="answer"]')
-    if (sel && custom) {
-      q.answer = (sel.value === '__custom__') ? custom.value : sel.value
-    } else if (ta) {
-      q.answer = ta.value
-    }
+    if (ta) q.answer = ta.value
   })
 }
 
 function answerControl(q) {
+  // Option pills (radio-style) + one always-visible answer box.
+  // Pills fill the box; typing overrides. Single source of truth: the box.
+  let pills = ''
   if (q.options && q.options.length > 0) {
-    const opts = q.options.map((o) => '<option value="' + esc(o) + '"' + (q.answer === o ? ' selected' : '') + '>' + esc(o) + '</option>').join('')
-    const useCustom = q.answer && !q.options.includes(q.answer)
-    return '<select data-q="answer">' + opts +
-      '<option value="__custom__"' + (useCustom ? ' selected' : '') + '>Custom…</option></select>' +
-      '<input data-q="custom" type="text" placeholder="Or type your own…" value="' + esc(useCustom ? q.answer : '') + '"' + (useCustom ? '' : ' style="display:none"') + ' />'
+    pills = '<div class="ask-pills">' + q.options.map((o) => {
+      const sel = q.answer === o ? ' selected' : ''
+      return '<button type="button" class="ask-pill' + sel + '" data-q="pick" data-val="' + esc(o) + '">' + esc(o) + '</button>'
+    }).join('') + '</div>'
   }
-  return '<textarea data-q="answer" rows="2" placeholder="Your answer…">' + esc(q.answer || '') + '</textarea>'
+  return pills +
+    '<textarea data-q="answer" rows="2" placeholder="Type your answer…">' + esc(q.answer || '') + '</textarea>'
 }
 
 function renderEdit() {
   if (!els.askBody || !current) return
   els.askBody.innerHTML = ''
+  // System asks (budget resume) get their own header so they never read
+  // as a model question. Model asks keep the plain per-question cards.
+  if (isSystemAsk()) {
+    const banner = document.createElement('div')
+    banner.className = 'ask-system-banner'
+    banner.innerHTML = '<div class="ask-system-title">⏸️ Agent paused</div>' +
+      '<div class="ask-system-sub">Long turn, no final answer yet. Continue for another full budget, or stop here — the committed summary stays.</div>'
+    els.askBody.appendChild(banner)
+  }
   current.questions.forEach((q) => {
     const card = document.createElement('div')
     card.className = 'ask-card'
@@ -86,12 +98,17 @@ function renderEdit() {
       answerControl(q)
     els.askBody.appendChild(card)
   })
-  // Show/hide custom inputs under option selects.
-  els.askBody.querySelectorAll('select[data-q="answer"]').forEach((sel) => {
-    sel.addEventListener('change', () => {
-      const card = sel.closest('[data-qid]')
-      const custom = card ? card.querySelector('input[data-q="custom"]') : null
-      if (custom) custom.style.display = (sel.value === '__custom__') ? '' : 'none'
+  // Pills fill their card's answer box (single source of truth).
+  els.askBody.querySelectorAll('button[data-q="pick"]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const card = btn.closest('[data-qid]')
+      const box = card ? card.querySelector('textarea[data-q="answer"]') : null
+      if (box) {
+        box.value = btn.getAttribute('data-val') || ''
+        try { box.focus() } catch {}
+      }
+      const sibs = card ? card.querySelectorAll('button[data-q="pick"]') : []
+      sibs.forEach((s) => s.classList.toggle('selected', s === btn))
     })
   })
   els.askBackBtn.classList.add('hidden')
@@ -130,6 +147,7 @@ export function openWith(ask) {
   current = {
     ask_id: ask.ask_id,
     session_id: ask.session_id || authState.sessionId,
+    kind: ask.kind || 'model',
     questions: qs.map((q, i) => ({
       id: (q.id && String(q.id)) || ('q' + (i + 1)),
       question: q.question || '',
@@ -224,7 +242,7 @@ async function pollPending() {
           const first = list[0]
           let questions = []
           try { questions = JSON.parse(first.questions || '[]') } catch {}
-          openWith({ ask_id: first.id, session_id: first.session_id, questions })
+          openWith({ ask_id: first.id, session_id: first.session_id, questions, kind: first.kind || 'model' })
         }
         return
       } catch {}

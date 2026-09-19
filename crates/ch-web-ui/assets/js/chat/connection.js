@@ -236,6 +236,7 @@ function handleMessage(e) {
                 ask_id: data.ask_id || '',
                 session_id: data.session_id || authState.sessionId,
                 questions: data.questions || [],
+                kind: data.kind || 'model',
               })
             }
           }).catch(() => {})
@@ -425,7 +426,7 @@ export function connect() {
                   let qs = []
                   try { const raw = pend[0].questions; qs = typeof raw === 'string' ? JSON.parse(raw) : (Array.isArray(raw) ? raw : []) } catch { qs = [] }
                   // Only open if not already showing this ask
-                  try { if (!m.isOpen()) m.openWith({ ask_id: pend[0].id, session_id: pend[0].session_id || sid, questions: qs }) } catch {}
+                  try { if (!m.isOpen()) m.openWith({ ask_id: pend[0].id, session_id: pend[0].session_id || sid, questions: qs, kind: pend[0].kind || 'model' }) } catch {}
                 }
               }).catch(() => {})
             }

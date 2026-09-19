@@ -40,10 +40,13 @@ pub enum StreamEvent {
     Error { message: String },
     /// The native `ask_user` tool needs a human: right drawer opens,
     /// answers go back via REST (never the live socket).
+    /// `kind` is "model" for LLM-driven questions, "system-continue" for the
+    /// wrapper's own budget-resume prompt (same drawer, distinct header).
     AskRequest {
         ask_id: String,
         session_id: String,
         questions: serde_json::Value,
+        kind: String,
     },
 }
 

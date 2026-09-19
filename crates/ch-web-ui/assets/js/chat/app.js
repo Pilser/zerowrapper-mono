@@ -7172,6 +7172,9 @@ __export(exports_ask_drawer, {
   openWith: () => openWith,
   setOpen: () => setOpen
 });
+function isSystemAsk() {
+  return !!(current && (current.kind === "system-continue" || String(current.ask_id || "").startsWith("continue-")));
+}
 function esc(s) {
   return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
@@ -7209,28 +7212,31 @@ function readForm() {
     const qta = card.querySelector('textarea[data-q="text"]');
     if (qta)
       q.question = qta.value;
-    const sel = card.querySelector('select[data-q="answer"]');
-    const custom = card.querySelector('input[data-q="custom"]');
     const ta = card.querySelector('textarea[data-q="answer"]');
-    if (sel && custom) {
-      q.answer = sel.value === "__custom__" ? custom.value : sel.value;
-    } else if (ta) {
+    if (ta)
       q.answer = ta.value;
-    }
   });
 }
 function answerControl(q) {
+  let pills = "";
   if (q.options && q.options.length > 0) {
-    const opts = q.options.map((o) => '<option value="' + esc(o) + '"' + (q.answer === o ? " selected" : "") + ">" + esc(o) + "</option>").join("");
-    const useCustom = q.answer && !q.options.includes(q.answer);
-    return '<select data-q="answer">' + opts + '<option value="__custom__"' + (useCustom ? " selected" : "") + ">Custom…</option></select>" + '<input data-q="custom" type="text" placeholder="Or type your own…" value="' + esc(useCustom ? q.answer : "") + '"' + (useCustom ? "" : ' style="display:none"') + " />";
+    pills = '<div class="ask-pills">' + q.options.map((o) => {
+      const sel = q.answer === o ? " selected" : "";
+      return '<button type="button" class="ask-pill' + sel + '" data-q="pick" data-val="' + esc(o) + '">' + esc(o) + "</button>";
+    }).join("") + "</div>";
   }
-  return '<textarea data-q="answer" rows="2" placeholder="Your answer…">' + esc(q.answer || "") + "</textarea>";
+  return pills + '<textarea data-q="answer" rows="2" placeholder="Type your answer…">' + esc(q.answer || "") + "</textarea>";
 }
 function renderEdit() {
   if (!els.askBody || !current)
     return;
   els.askBody.innerHTML = "";
+  if (isSystemAsk()) {
+    const banner = document.createElement("div");
+    banner.className = "ask-system-banner";
+    banner.innerHTML = '<div class="ask-system-title">⏸️ Agent paused</div>' + '<div class="ask-system-sub">Long turn, no final answer yet. Continue for another full budget, or stop here — the committed summary stays.</div>';
+    els.askBody.appendChild(banner);
+  }
   current.questions.forEach((q) => {
     const card = document.createElement("div");
     card.className = "ask-card";
@@ -7238,12 +7244,18 @@ function renderEdit() {
     card.innerHTML = (q.objective ? '<div class="ask-objective">' + esc(q.objective) + "</div>" : "") + '<textarea data-q="text" rows="2">' + esc(q.question) + "</textarea>" + answerControl(q);
     els.askBody.appendChild(card);
   });
-  els.askBody.querySelectorAll('select[data-q="answer"]').forEach((sel) => {
-    sel.addEventListener("change", () => {
-      const card = sel.closest("[data-qid]");
-      const custom = card ? card.querySelector('input[data-q="custom"]') : null;
-      if (custom)
-        custom.style.display = sel.value === "__custom__" ? "" : "none";
+  els.askBody.querySelectorAll('button[data-q="pick"]').forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const card = btn.closest("[data-qid]");
+      const box2 = card ? card.querySelector('textarea[data-q="answer"]') : null;
+      if (box2) {
+        box2.value = btn.getAttribute("data-val") || "";
+        try {
+          box2.focus();
+        } catch {}
+      }
+      const sibs = card ? card.querySelectorAll('button[data-q="pick"]') : [];
+      sibs.forEach((s) => s.classList.toggle("selected", s === btn));
     });
   });
   els.askBackBtn.classList.add("hidden");
@@ -7280,6 +7292,7 @@ function openWith(ask) {
   current = {
     ask_id: ask.ask_id,
     session_id: ask.session_id || state2.sessionId,
+    kind: ask.kind || "model",
     questions: qs.map((q, i) => ({
       id: q.id && String(q.id) || "q" + (i + 1),
       question: q.question || "",
@@ -7385,7 +7398,7 @@ async function pollPending() {
           try {
             questions = JSON.parse(first.questions || "[]");
           } catch {}
-          openWith({ ask_id: first.id, session_id: first.session_id, questions });
+          openWith({ ask_id: first.id, session_id: first.session_id, questions, kind: first.kind || "model" });
         }
         return;
       } catch {}
@@ -8280,7 +8293,8 @@ function handleMessage(e) {
               m.openWith({
                 ask_id: data.ask_id || "",
                 session_id: data.session_id || state2.sessionId,
-                questions: data.questions || []
+                questions: data.questions || [],
+                kind: data.kind || "model"
               });
             }
           }).catch(() => {});
@@ -8476,7 +8490,7 @@ function connect2() {
                   }
                   try {
                     if (!m.isOpen())
-                      m.openWith({ ask_id: pend[0].id, session_id: pend[0].session_id || sid, questions: qs });
+                      m.openWith({ ask_id: pend[0].id, session_id: pend[0].session_id || sid, questions: qs, kind: pend[0].kind || "model" });
                   } catch {}
                 }
               }).catch(() => {});

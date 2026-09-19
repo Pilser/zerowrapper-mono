@@ -43,9 +43,20 @@ pub async fn pending(cx: &Cx) -> Result<Response> {
         .ask_pending_for_session(&sid)
         .await
         .unwrap_or_default();
+    let pending: Vec<serde_json::Value> = rows
+        .iter()
+        .map(|r| {
+            let kind = if r.id.starts_with("continue-") {
+                "system-continue"
+            } else {
+                "model"
+            };
+            serde_json::json!({"id": r.id, "session_id": r.session_id, "questions": serde_json::from_str::<serde_json::Value>(&r.questions).unwrap_or(serde_json::json!([])), "status": r.status, "kind": kind})
+        })
+        .collect();
     Ok(json(
         StatusCode::OK,
-        serde_json::json!({"ok": true, "pending": rows}),
+        serde_json::json!({"ok": true, "pending": pending}),
     ))
 }
 

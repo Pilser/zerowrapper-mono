@@ -1062,10 +1062,19 @@
 }
 .ask-card {
   border: 1px solid var(--color-border-weak);
-  border-radius: 10px; padding: 10px 12px;
+  border-radius: 14px; padding: 10px 12px;
   background: var(--color-bg-weak);
-  display: flex; flex-direction: column; gap: 6px;
+  display: flex; flex-direction: column; gap: 8px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.08);
 }
+.ask-system-banner {
+  border-radius: 14px; padding: 10px 12px;
+  background: linear-gradient(180deg, var(--color-bg-weak), var(--color-bg));
+  border: 1px solid var(--color-border);
+  box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+}
+.ask-system-title { font-size: 0.85rem; font-weight: 800; color: var(--color-text-strong); }
+.ask-system-sub { font-size: 0.75rem; color: var(--color-text); margin-top: 2px; line-height: 1.5; }
 .ask-objective { font-size: 0.7rem; color: var(--color-text-weak); }
 .ask-card textarea, .ask-card select, .ask-card input[type="text"] {
   width: 100%; box-sizing: border-box;
@@ -1073,6 +1082,26 @@
   border: 1px solid var(--color-border-weak);
   background: var(--color-bg); color: var(--color-text-strong);
   font-family: inherit;
+}
+.ask-card textarea[data-q="answer"] {
+  min-height: 64px;
+  border-width: 2px;
+  font-size: 0.85rem;
+}
+.ask-card textarea[data-q="answer"]::placeholder { color: var(--color-text-weak); opacity: 0.9; }
+.ask-pills { display: flex; flex-wrap: wrap; gap: 6px; }
+.ask-pill {
+  padding: 6px 14px; border-radius: 999px; cursor: pointer;
+  font-size: 0.78rem; font-weight: 600;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg); color: var(--color-text-strong);
+  transition: transform 0.12s ease, background 0.12s ease;
+}
+.ask-pill:hover { transform: translateY(-1px); }
+.ask-pill.selected {
+  background: var(--color-bg-interactive);
+  color: var(--color-text-inverted);
+  border-color: transparent;
 }
 .ask-review-q { font-size: 0.8rem; font-weight: 600; color: var(--color-text-strong); }
 .ask-review-a {

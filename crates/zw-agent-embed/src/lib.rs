@@ -257,6 +257,7 @@ pub async fn run_embedded(
                 ask_id: ev.ask_id,
                 session_id: ev.session_id,
                 questions: ev.questions,
+                kind: "model".to_string(),
             };
             if ask_tx_forward.send(se).await.is_err() {
                 break;
