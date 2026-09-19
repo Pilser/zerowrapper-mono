@@ -1,0 +1,128 @@
+FAILED TURN HISTORY LOSS — sess_hrwuwoirvh
+Date: 2026-09-19
+Tenant: ea8b1de2-8822-429a-83c7-1ea728a6d54b (VPS container data)
+
+SYMPTOM
+-------
+In the frontend, session sess_hrwuwoirvh shows only an error
+("error: PromptError: MaxTurnsError: reached max turns limit: 200"),
+the first conversation, and the last user message
+("now I remove other pages, so create 2nd page ...").
+The 227 tool steps the agent actually performed are invisible,
+and after a refresh even less remains.
+
+WHERE EACH PIECE OF DATA LIVES (agent vs wrapper)
+--------------------------------------------------
+1. Embedded agent session file (AGENT side, durable):
+   .../zerowrapper/zerostack/sessions/sess_hrwuwoirvh.json
+   457 messages: 2 user, 1 assistant (the "hi" turn reply),
+   227 tool_call + 227 tool_result (the failed turn).
+   Every message carries its turn id. The agent saves after every
+   tool event, so NOTHING is lost here. No agent change is needed
+   for retention.
+
+2. chat_history.json (AGENT side, raw prompt log only):
+   .../zerowrapper/zerostack/chat_history.json
+   Just the 9 raw user prompts. Not a transcript. Wrong source
+   for rendering history.
+
+3. chat_messages table (WRAPPER side, durable, what the frontend
+   renders on refresh): only 2 rows for this session —
+   the 2nd user prompt and one assistant row containing the raw
+   error transcript ("> <prompt>" + "error: PromptError:
+   MaxTurnsError..."). The 227 tool steps were never written here.
+   Turn 1 ("hi" + reply) was never written here either (it ran
+   before the wrapper cache existed).
+
+4. stream_buffer table (WRAPPER side, EPHEMERAL live-resume cache):
+   Held the live tool_call/tool_result deltas during the turn,
+   then the TTL sweeper deleted them (count is 0 now). This cache
+   exists so a refresh mid-turn can resume the live tail — it is
+   NOT durable history and must not be treated as such.
+
+ROOT CAUSE (verified, read-only)
+--------------------------------
+a) On AgentEvent::Done the engine appends an assistant message
+   (finish_turn, agent-reference/zerostack/src/engine/mod.rs:478).
+   On AgentEvent::Error it does NOT (drain_runner breaks at :451-456
+   and bails at :469-471). So a failed turn leaves no assistant row.
+
+b) run_agent_text catches the failure and returns Ok whose text is
+   the sink transcript "> <prompt>" + "error: ..." (:278-294,
+   :955-960). run_embedded sees no Done event, synthesizes one with
+   that text (crates/zw-agent-embed/src/lib.rs:155-164), and the
+   wrapper commits it as the assistant row
+   (crates/ch-web-ui/src/ws/handler.rs:294-304). That is the error
+   bubble you see — a disguised Done, not a real answer, with none
+   of the 227 tool steps.
+
+c) db_history (wrapper, handler.rs:156-167) prefers chat_messages
+   and never merges the engine file, so once turn 2 wrote rows,
+   turn 1 ("hi") became invisible on refresh. db_history ALREADY
+   EXISTS in the wrapper — the proposal is to fix it to union both
+   sources (dedupe by turn_id), not to create it.
+
+ERROR CLASSIFICATION
+--------------------
+MaxTurnsError is an AGENT-LOOP budget error (rig-agent run/mod.rs:1002:
+the model spent 200 turns calling tools without a final answer).
+It is NOT a provider API error (no 429/500/timeout/auth involved).
+
+Retry semantics:
+- Provider/API errors are transient. The engine already retries them
+  (cfg.retry, AgentEvent::Retrying clears the partial buffer) and the
+  persisted session makes any retry lossless.
+- MaxTurnsError is NOT transient. The agent already detects it (the
+  Error event + the bail), and a retry loses nothing technically
+  because the full session is saved — but re-running the same prompt
+  with the same 200-turn budget will most likely burn another 200
+  turns. The correct pattern is: persist a compact turn summary
+  (wrapper side, from the turn-stamped engine messages) so the last
+  content remains, then continue with a bounded wrap-up or the next
+  user prompt — not a blind retry.
+
+PROPOSED FIX (wrapper side, structured, no regex, no fork change)
+------------------------------------------------------------------
+1. Thread the "no Done seen" flag out of run_embedded (it already
+   tracks done_seen) to run_embedded_turn as a plain bool.
+2. When a turn ends without Done, re-lock the engine, collect that
+   turn_id's stamped messages, and commit a compact summary
+   (tool count, last tool + truncated output, any partial text)
+   as the assistant row instead of only the raw error transcript.
+3. Fix db_history to union engine-file turns with chat_messages
+   (dedupe by turn_id) so pre-cache turns reappear.
+
+LOOP ANALYSIS — sess_hrwuwoirvh turn 2 (not an identical-command loop)
+-----------------------------------------------------------------------
+218 tool calls / 218 results, 128 DISTINCT commands, 133 distinct
+outputs. The agent did real varied work (recall, wb list, create
+"Ping Counter" app, write page 2, ingest notes) but the back half
+degenerated into a verify-stall: inspect whiteboard-open 2 (14x),
+inspect check (20x), inspect whiteboard-prev (12x), sleep 2..30s
+polls — cycling open/check/sleep with equivalent successful
+outcomes and never producing a final answer. A detector that only
+matches identical (tool, args) would MISS this. Loop-vs-progress
+must compare RESULTS and state change, not commands: e.g. if the
+last N tool outputs add no novel information (same status/outcome,
+no new files/records/pages) and no assistant text is produced,
+declare stall, stop, and persist the turn summary.
+
+MAX-TURN BUDGETS (verified 2026-09-19)
+---------------------------------------
+Default 200 comes from cli.rs resolve_max_agent_turns
+(flag --max-agent-turns -> config max_agent_turns -> 200).
+The embedded engine builds Cli programmatically, so clap env
+attributes would not apply; instead zw-agent-embed new_engine
+reads explicit env overrides (config file / flag still win):
+  ZS_MAX_AGENT_TURNS  -> main run budget (default 200)
+  ZS_TASK_MAX_TURNS   -> subagent per-task budget (default 20)
+Set them in mono.env / container env; restart to apply to all
+sessions (live ENGINES keep the budget they were built with).
+Do NOT unlimit: the cap is the only loop-breaker, and the context
+window is the real ceiling. Raise generously for harness work and
+rely on the turn summary + stall handling for the rest.
+NOTE: subagents are registered but NOT initialized in embedded
+mode (subagents::init only runs in startup.rs init_features, which
+Engine::new never calls), so the task tool would panic if called.
+ZS_TASK_MAX_TURNS is wired into cfg for when init is connected;
+enabling subagents embedded is a separate follow-up.

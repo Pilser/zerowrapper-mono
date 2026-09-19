@@ -354,11 +354,31 @@ pub fn new_engine(
     // means every tool auto-allows, inside and outside the workspace. The
     // only human gate is the session-bound `ask_user` tool below, which
     // always surfaces in the frontend first.
-    let cli = Cli {
+    let mut cli = Cli {
         no_session: false,
         ..Default::default()
     };
-    let (cfg, _) = config::load();
+    let (mut cfg, _) = config::load();
+    // Env budget overrides (no config.toml edit needed): main-run turns and
+    // the subagent per-task budget. Explicit CLI flag / config file still win
+    // when set; env only fills the gap. This matters because the embedded
+    // engine never parses CLI args, so clap `env` attributes would not apply.
+    // ZS_TASK_MAX_TURNS feeds cfg.task_max_turns, the source subagent init
+    // reads (startup.rs) once subagents are wired for embedded use.
+    if cli.max_agent_turns.is_none() {
+        if let Ok(v) = std::env::var("ZS_MAX_AGENT_TURNS") {
+            if let Ok(n) = v.trim().parse::<usize>() {
+                cli.max_agent_turns = Some(n);
+            }
+        }
+    }
+    if cfg.task_max_turns.is_none() {
+        if let Ok(v) = std::env::var("ZS_TASK_MAX_TURNS") {
+            if let Ok(n) = v.trim().parse::<usize>() {
+                cfg.task_max_turns = Some(n);
+            }
+        }
+    }
     let provider_name = cli.resolve_provider(&cfg).to_string();
     let model = cli.resolve_model(&cfg).to_string();
     let quick_models = config::quick_models_map(&cfg);
