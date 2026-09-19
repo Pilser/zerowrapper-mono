@@ -552,6 +552,9 @@ fn spawn_live_forwarding(
 /// record, plus a supervisor that offers a structured continue/cancel ask
 /// when the turn ends without a final answer (unless cancelled or superseded
 /// by a newer prompt, which expires the pending system ask).
+/// NOTE: the supervisor path must never call back into `start_turn`
+/// (continue_flow uses launch_turn directly) — a start→supervisor→continue→start
+/// cycle through `tokio::spawn` bounds cannot be proven `Send`.
 async fn start_turn(
     ws_sender: &WsSender,
     db: &zw_db::DbPool,
@@ -568,6 +571,38 @@ async fn start_turn(
             }
         }
     }
+    let done_rx = launch_turn(ws_sender, db, session_id.clone(), prompt, raw, turn_id).await;
+    // Supervisor: nothing more on success; on an unfinished turn offer the
+    // human a structured continue/cancel instead of a dead end.
+    let sup_ws = ws_sender.clone();
+    let sup_db = db.clone();
+    tokio::spawn(async move {
+        let completed = done_rx.await.unwrap_or(false);
+        if completed {
+            return;
+        }
+        // Explicit user cancel is a decision, not a stall: no ask.
+        // (Single-use marker, consumed here.)
+        if CANCELLED.lock().await.remove(&session_id) {
+            return;
+        }
+        continue_flow(&sup_ws, &sup_db, session_id).await;
+    });
+}
+
+/// Launch one native turn: live forwarding channel, runner task, TASKS
+/// record. Returns the completion receiver (true = final answer produced).
+/// Leaf helper: never spawns a supervisor and never asks — callers supervise.
+/// (Kept separate from start_turn so the supervise→continue path stays
+/// acyclic for `Send`; see start_turn note.)
+async fn launch_turn(
+    ws_sender: &WsSender,
+    db: &zw_db::DbPool,
+    session_id: String,
+    prompt: String,
+    raw: String,
+    turn_id: String,
+) -> tokio::sync::oneshot::Receiver<bool> {
     let event_tx = spawn_live_forwarding(ws_sender, db, &session_id);
     let abort_slot: zw_agent_embed::engine::AbortSlot = Default::default();
     let (done_tx, done_rx) = tokio::sync::oneshot::channel::<bool>();
@@ -588,84 +623,87 @@ async fn start_turn(
         let _ = done_tx.send(completed);
         completed
     });
-    TASKS.lock().await.insert(session_id.clone(), (turn, abort_slot));
-    // Supervisor: nothing more on success; on an unfinished turn offer the
-    // human a structured continue/cancel instead of a dead end.
-    let sup_ws = ws_sender.clone();
-    let sup_db = db.clone();
-    tokio::spawn(async move {
-        let completed = done_rx.await.unwrap_or(false);
-        if completed {
-            return;
-        }
-        // Explicit user cancel is a decision, not a stall: no ask.
-        // (Single-use marker, consumed here.)
-        if CANCELLED.lock().await.remove(&session_id) {
-            return;
-        }
-        continue_flow(&sup_ws, &sup_db, session_id).await;
-    });
+    TASKS.lock().await.insert(session_id, (turn, abort_slot));
+    done_rx
 }
 
 /// Structured continue/cancel after an unfinished turn: durable ask row (the
 /// drawer picks it up via poll/reconnect) + one live ping so it opens now.
-/// Continue respawns a fresh-budget turn on the same session; anything else
+/// Continue respawns a fresh-budget turn on the same session (via launch_turn,
+/// never start_turn, to keep the supervise path acyclic); anything else
 /// (Stop/timeout/disconnect) expires the ask and the committed summary stands.
+/// Loops: a continued turn that also fails asks again (each round needs a
+/// human Continue); an explicit cancel or newer user prompt ends the loop
+/// (the prompt path expires pending system asks; cancel sets CANCELLED which
+/// the next supervisor consumes — a cancelled respawn simply never asks).
 async fn continue_flow(ws_sender: &WsSender, db: &zw_db::DbPool, session_id: String) {
-    let nanos = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_nanos())
-        .unwrap_or(0);
-    let ask_id = format!("continue-{nanos:x}");
-    if let Ok(pending) = db.ask_pending_for_session(&session_id).await {
-        if pending.iter().any(|r| r.id.starts_with("continue-")) {
-            return;
-        }
-    }
-    let questions = serde_json::json!([{
-        "id": "continue",
-        "question": "The agent worked a long turn with no final answer. Continue for another full budget?",
-        "objective": "Continue resets the turn counter on the same session (all history kept). Stop keeps the committed turn summary as-is.",
-        "options": ["Continue", "Stop"],
-    }]);
-    if db.ask_insert(&ask_id, &session_id, &questions.to_string()).await.is_err() {
-        return;
-    }
-    let tx = spawn_live_forwarding(ws_sender, db, &session_id);
-    let _ = tx.send(StreamEvent::AskRequest {
-        ask_id: ask_id.clone(),
-        session_id: session_id.clone(),
-        questions: questions.clone(),
-    }).await;
-    // Wait for the REST answer (broadcast by the answer endpoint).
-    let mut rx = zw_agent_embed::ask::subscribe_answers();
-    let mut decision_continue = false;
     loop {
-        match tokio::time::timeout(
-            std::time::Duration::from_secs(CONTINUE_ASK_TIMEOUT_SECS),
-            rx.recv(),
-        ).await {
-            Err(_) => break, // timeout
-            Ok(Err(_)) => break, // broadcaster gone
-            Ok(Ok((id, answers))) => {
-                if id != ask_id {
-                    continue; // someone else's answer
-                }
-                decision_continue = continue_answer_is_yes(&answers);
-                break;
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        let ask_id = format!("continue-{nanos:x}");
+        if let Ok(pending) = db.ask_pending_for_session(&session_id).await {
+            if pending.iter().any(|r| r.id.starts_with("continue-")) {
+                return;
             }
         }
-    }
-    if decision_continue {
+        let questions = serde_json::json!([{
+            "id": "continue",
+            "question": "The agent worked a long turn with no final answer. Continue for another full budget?",
+            "objective": "Continue resets the turn counter on the same session (all history kept). Stop keeps the committed turn summary as-is.",
+            "options": ["Continue", "Stop"],
+        }]);
+        if db.ask_insert(&ask_id, &session_id, &questions.to_string()).await.is_err() {
+            return;
+        }
+        let tx = spawn_live_forwarding(ws_sender, db, &session_id);
+        let _ = tx.send(StreamEvent::AskRequest {
+            ask_id: ask_id.clone(),
+            session_id: session_id.clone(),
+            questions: questions.clone(),
+        }).await;
+        // Wait for the REST answer (broadcast by the answer endpoint).
+        let mut rx = zw_agent_embed::ask::subscribe_answers();
+        let mut decision_continue = false;
+        loop {
+            match tokio::time::timeout(
+                std::time::Duration::from_secs(CONTINUE_ASK_TIMEOUT_SECS),
+                rx.recv(),
+            ).await {
+                Err(_) => break, // timeout
+                Ok(Err(_)) => break, // broadcaster gone
+                Ok(Ok((id, answers))) => {
+                    if id != ask_id {
+                        continue; // someone else's answer
+                    }
+                    decision_continue = continue_answer_is_yes(&answers);
+                    break;
+                }
+            }
+        }
+        if !decision_continue {
+            let _ = db.ask_expire(&ask_id).await;
+            return;
+        }
+        // The answer endpoint already marked the ask answered. Fresh turn id
+        // = fresh budget; same session = full history kept.
         let nanos = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map(|d| d.as_nanos())
             .unwrap_or(0);
         let new_turn = format!("cont-{nanos:x}");
-        // The answer endpoint already marked the ask answered.
-        start_turn(ws_sender, db, session_id, CONTINUE_PROMPT.to_string(), CONTINUE_PROMPT.to_string(), new_turn).await;
-    } else {
-        let _ = db.ask_expire(&ask_id).await;
+        let done_rx = launch_turn(ws_sender, db, session_id.clone(), CONTINUE_PROMPT.to_string(), CONTINUE_PROMPT.to_string(), new_turn).await;
+        let completed = done_rx.await.unwrap_or(false);
+        if completed {
+            return;
+        }
+        // Unfinished again (and not user-cancelled — a cancelled respawn
+        // leaves CANCELLED set, which we consume here to end the loop).
+        if CANCELLED.lock().await.remove(&session_id) {
+            return;
+        }
+        // Loop: ask again for the next round.
     }
 }
 
