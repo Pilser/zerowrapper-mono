@@ -12,7 +12,7 @@ edition = "2021"
 #   • `default-features = false` → drop the default TUI/CLI/loop extras
 #   • `rev` pins the fork commit (stall detector + subagent tool rename).
 zerostack = { git = "https://github.com/Pilser/zerostack.git",
-              rev = "436cb402bea51f49839b91efcba8c149bbccc9a9",
+              rev = "3632ca321687ebb7ec9eed535afffd135200cccc",
               features = ["acp", "subagents"],
               default-features = false }
 zw-core = { path = "../../zw-core" }
