@@ -7,9 +7,13 @@ edition = "2021"
 # Pilser fork (adds src/lib.rs + Engine::run_streaming so the headless
 # Engine is embeddable). CI fetches it from this URL — no local path.
 #   • `features = ["acp"]`  → keep the ACP protocol
+#   • `features = ["subagents"]` → subagent tool + task budget (wired in
+#     new_engine via subagents::init; without init the tool would panic)
 #   • `default-features = false` → drop the default TUI/CLI/loop extras
+#   • `rev` pins the fork commit (stall detector + subagent tool rename).
 zerostack = { git = "https://github.com/Pilser/zerostack.git",
-              features = ["acp"],
+              rev = "436cb402bea51f49839b91efcba8c149bbccc9a9",
+              features = ["acp", "subagents"],
               default-features = false }
 zw-core = { path = "../../zw-core" }
 zw-db = { path = "../../zw-db" }

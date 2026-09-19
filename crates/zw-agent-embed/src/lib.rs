@@ -358,20 +358,22 @@ pub fn new_engine(
         no_session: false,
         ..Default::default()
     };
-    let (cfg, _) = config::load();
-    // Env budget override (no config.toml edit needed). Explicit CLI flag /
-    // config file still wins when set; env only fills the gap. This matters
-    // because the embedded engine never parses CLI args, so a clap `env`
-    // attribute would not apply here.
-    // NOTE: ZS_TASK_MAX_TURNS is intentionally NOT read here yet:
-    // cfg.task_max_turns only exists with the `subagents` feature, which
-    // this crate does not enable, and enabling it without wiring
-    // subagents::init would register a task tool that panics when called.
-    // It returns as part of the proper subagent wiring (feature + init).
+    let (mut cfg, _) = config::load();
+    // Env budget overrides (no config.toml edit needed): main-run turns and
+    // the subagent per-task budget. Explicit CLI flag / config file still win
+    // when set; env only fills the gap. This matters because the embedded
+    // engine never parses CLI args, so a clap `env` attribute would not apply.
     if cli.max_agent_turns.is_none() {
         if let Ok(v) = std::env::var("ZS_MAX_AGENT_TURNS") {
             if let Ok(n) = v.trim().parse::<usize>() {
                 cli.max_agent_turns = Some(n);
+            }
+        }
+    }
+    if cfg.task_max_turns.is_none() {
+        if let Ok(v) = std::env::var("ZS_TASK_MAX_TURNS") {
+            if let Ok(n) = v.trim().parse::<usize>() {
+                cfg.task_max_turns = Some(n);
             }
         }
     }
@@ -397,6 +399,22 @@ pub fn new_engine(
         &cfg.custom_providers_map(),
         cfg.api_keys.as_ref(),
     )?;
+    // Subagent wiring for embedded use: the fork only calls subagents::init
+    // in its CLI startup path, so without this the registered `subagent`
+    // tool would panic when called. Values mirror startup.rs init_features.
+    // Process-global and idempotent (same config every engine), so calling
+    // it per engine creation is safe.
+    {
+        use zerostack::extras::subagents;
+        let task_max_turns = cfg.task_max_turns.unwrap_or(20);
+        subagents::init(
+            client.clone(),
+            model.clone(),
+            task_max_turns,
+            std::sync::Arc::new(cfg.clone()),
+            cli.resolve_tools(&cfg),
+        );
+    }
     // Session-bound ask tool: this engine's turns get their own instance
     // (holds sid + db), attached before first build. Global whiteboard
     // bridges arrive separately via the fork's factory registry.
