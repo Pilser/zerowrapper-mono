@@ -72,6 +72,69 @@ pub fn map_event(ev: AgentEvent, turn_id: &str) -> Option<StreamEvent> {
     }
 }
 
+/// Compact, structured summary of what a turn actually did, built from its
+/// turn-stamped engine messages. Used when a turn ends without a final
+/// answer (budget/stall/early stop) so durable history keeps the last
+/// content instead of nothing or a raw error transcript.
+/// Returns None when the turn left no trace (no tool calls, no partial text).
+pub fn summarize_turn(session: &zerostack::session::Session, turn_id: &str) -> Option<String> {
+    use zerostack::session::MessageRole;
+    fn trunc(s: &str, n: usize) -> String {
+        let t = s.trim();
+        if t.chars().count() <= n {
+            return t.to_string();
+        }
+        let mut out: String = t.chars().take(n).collect();
+        out.push('…');
+        out
+    }
+    let mut calls = 0usize;
+    let mut results = 0usize;
+    let mut last_call: Option<&str> = None;
+    let mut last_result: Option<&str> = None;
+    let mut partial = String::new();
+    for m in &session.messages {
+        if m.turn.as_deref() != Some(turn_id) {
+            continue;
+        }
+        match m.role {
+            MessageRole::ToolCall | MessageRole::SubagentToolCall => {
+                calls += 1;
+                if matches!(m.role, MessageRole::ToolCall) {
+                    last_call = Some(m.content.as_str());
+                }
+            }
+            MessageRole::ToolResult => {
+                results += 1;
+                last_result = Some(m.content.as_str());
+            }
+            MessageRole::Assistant => {
+                if !partial.is_empty() {
+                    partial.push('\n');
+                }
+                partial.push_str(m.content.as_str());
+            }
+            _ => {}
+        }
+    }
+    if calls == 0 && partial.trim().is_empty() {
+        return None;
+    }
+    let mut s = format!(
+        "Turn ended with no final answer after {calls} tool calls ({results} results)."
+    );
+    if let Some(c) = last_call {
+        s.push_str(&format!(" Last action: {}", trunc(c, 300)));
+        if let Some(r) = last_result {
+            s.push_str(&format!(" → {}", trunc(r, 300)));
+        }
+    }
+    if !partial.trim().is_empty() {
+        s.push_str(&format!(" Partial answer: {}", trunc(&partial, 500)));
+    }
+    Some(s)
+}
+
 /// Run one prompt on `engine`, forwarding the live structured stream into the
 /// same `event_tx` the ws buffer task already drains (resume/seq unchanged).
 ///
@@ -80,13 +143,19 @@ pub fn map_event(ev: AgentEvent, turn_id: &str) -> Option<StreamEvent> {
 /// internally (`Error` forwarded, transcript returned as `Ok`) or
 /// `run_streaming` itself failed, a closing `Done`/`Error` is synthesized
 /// here so the frontend always finalizes.
+///
+/// Returns `(output, completed)`: `completed` is false when no `Done` event
+/// was seen (budget/stall/early stop). In that case the raw error transcript
+/// is replaced with [`summarize_turn`] output when the turn left any trace,
+/// so both the live closing bubble and the committed history keep the last
+/// content instead of just `error: …`.
 pub async fn run_embedded(
     engine: &mut Engine,
     prompt: &str,
     event_tx: mpsc::Sender<StreamEvent>,
     turn_id: &str,
     abort_slot: ::zerostack::engine::AbortSlot,
-) -> anyhow::Result<RunOutput> {
+) -> anyhow::Result<(RunOutput, bool)> {
     let (agent_tx, mut agent_rx) = mpsc::channel::<AgentEvent>(512);
     // Per-turn ask notifier: the session-bound `ask_user` tool pushes here,
     // this task forwards into the event stream (buffered ⇒ drop-safe).
@@ -130,7 +199,7 @@ pub async fn run_embedded(
     // Arm true-cancel BEFORE the turn starts so the drain loop publishes
     // the runner's abort handle into our slot.
     engine.set_abort_slot(abort_slot);
-    let out = engine
+    let mut out = engine
         .run_streaming(prompt, agent_tx, Some(turn_id.to_string()))
         .await;
     // `agent_tx` moved into `run_streaming` and drops on return → the
@@ -142,7 +211,8 @@ pub async fn run_embedded(
     }
     let _ = ask_forward.await;
 
-    match &out {
+    let completed = done_seen.load(Ordering::Relaxed);
+    match &mut out {
         Ok(o) => {
             if let Some(u) = &o.usage {
                 tracing::info!(
@@ -152,7 +222,12 @@ pub async fn run_embedded(
                     "embedded turn complete"
                 );
             }
-            if !done_seen.load(Ordering::Relaxed) {
+            if !completed {
+                // No final answer: swap the raw error transcript for the
+                // structured turn summary when the turn left any trace.
+                if let Some(summary) = summarize_turn(engine.session(), turn_id) {
+                    o.text = summary;
+                }
                 // Engine-resolved turn (slash command, rolled-back error
                 // transcript, …): close it explicitly so the UI finalizes.
                 let _ = event_tx
@@ -171,7 +246,7 @@ pub async fn run_embedded(
                 .await;
         }
     }
-    out
+    out.map(|o| (o, completed))
 }
 
 /// Provider health for the status banner / `/health`, without burning API

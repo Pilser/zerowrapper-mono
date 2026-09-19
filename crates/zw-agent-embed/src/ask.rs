@@ -33,6 +33,12 @@ pub fn publish_answer(ask_id: &str, answers: serde_json::Value) {
     let _ = ASK_ANSWERS.send((ask_id.to_string(), answers));
 }
 
+/// Subscribe to answer broadcasts. The wrapper's continue/cancel supervisor
+/// uses this to wait for the human without polling the DB.
+pub fn subscribe_answers() -> tokio::sync::broadcast::Receiver<(String, serde_json::Value)> {
+    ASK_ANSWERS.subscribe()
+}
+
 /// Instant-open payload: AskRequest events for the turn's stream.
 #[derive(Debug, Clone)]
 pub struct AskEvent {

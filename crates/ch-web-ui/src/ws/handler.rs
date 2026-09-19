@@ -48,7 +48,8 @@ static ENGINES: LazyLock<
     >,
 > = LazyLock::new(|| tokio::sync::Mutex::new(HashMap::new()));
 
-// In-flight native turns: task handle + true-cancel slot per session.
+// In-flight native turns: task handle (resolves to true when the turn
+// produced a final answer) + true-cancel slot per session.
 // Cancel aborts the RUNNER (model stream + tool children die for real),
 // never our task: the turn closes gracefully, the engine survives with its
 // context, and only a pre-drain cancel falls back to aborting the task
@@ -59,12 +60,18 @@ static TASKS: LazyLock<
         HashMap<
             String,
             (
-                tokio::task::JoinHandle<()>,
+                tokio::task::JoinHandle<bool>,
                 zw_agent_embed::engine::AbortSlot,
             ),
         >,
     >,
 > = LazyLock::new(|| tokio::sync::Mutex::new(HashMap::new()));
+
+// Sessions the user explicitly cancelled: suppresses the structured
+// continue/cancel ask when the turn task resolves (a cancel is a decision,
+// not a stall). Entries are single-use (removed when consumed).
+static CANCELLED: LazyLock<tokio::sync::Mutex<std::collections::HashSet<String>>> =
+    LazyLock::new(|| tokio::sync::Mutex::new(std::collections::HashSet::new()));
 
 /// Live native sessions for the picker: id, display name, model/provider,
 /// message count, token totals, cost — plus `running` while a turn is in
@@ -150,20 +157,88 @@ pub async fn engine_history(session_id: &str) -> Vec<zw_agent_embed::HistoryMsg>
     zw_agent_embed::load_session_history(session_id).unwrap_or_default()
 }
 
-/// DB-backed history: committed rows from `chat_messages` plus session state.
-/// Used by HTTP history endpoint so refresh while `processing` never hides
-/// the committed transcript behind a locked engine.
+/// DB-backed history: committed rows from `chat_messages` UNION the
+/// agent-owned engine/file transcript, deduped by (role, turn_id).
+/// Engine order is chronological, so it drives the output: DB content wins
+/// for rows it has (same turn), engine-only turns (e.g. pre-cache history)
+/// reappear instead of being shadowed, and DB-only rows (e.g. a failed
+/// turn's committed summary, which the engine never stores as a message)
+/// are spliced right after their turn. Read-only; never writes.
 pub async fn db_history(db: &zw_db::DbPool, session_id: &str) -> Vec<zw_agent_embed::HistoryMsg> {
-    if let Ok(rows) = db.get_chat_messages(session_id, 500).await {
-        if !rows.is_empty() {
-            return rows
-                .into_iter()
-                .map(|r| zw_agent_embed::HistoryMsg { role: r.role, content: r.content, turn_id: r.turn_id })
-                .collect();
+    let engine_msgs = engine_history(session_id).await;
+    let db_rows = db.get_chat_messages(session_id, 500).await.unwrap_or_default();
+    if db_rows.is_empty() {
+        return engine_msgs;
+    }
+    use std::collections::{HashMap, HashSet};
+    // (role, turn_id) -> DB content. Empty turn_id keys are unusable for
+    // dedupe (pre-stamp rows); they pass through untouched.
+    let mut db_by_key: HashMap<(String, String), String> = HashMap::new();
+    for r in &db_rows {
+        if !r.turn_id.is_empty() {
+            db_by_key.insert((r.role.clone(), r.turn_id.clone()), r.content.clone());
         }
     }
-    // Fallback to agent-owned file / live engine.
-    engine_history(session_id).await
+    let mut out: Vec<zw_agent_embed::HistoryMsg> = Vec::new();
+    // last output index per turn, so DB-only rows splice after their turn.
+    let mut last_idx_of_turn: HashMap<String, usize> = HashMap::new();
+    let mut emitted: HashSet<(String, String)> = HashSet::new();
+    // (role, content) of everything emitted, so pre-stamp rows with an empty
+    // turn_id (which can't dedupe by key) don't render twice.
+    let mut emitted_content: HashSet<(String, String)> = HashSet::new();
+    for m in engine_msgs {
+        if m.role != "user" && m.role != "assistant" {
+            continue;
+        }
+        let key = (m.role.clone(), m.turn_id.clone());
+        let content = match db_by_key.get(&key) {
+            Some(c) => c.clone(),
+            None => m.content.clone(),
+        };
+        if !m.turn_id.is_empty() {
+            emitted.insert(key);
+            last_idx_of_turn.insert(m.turn_id.clone(), out.len());
+        }
+        emitted_content.insert((m.role.clone(), content.clone()));
+        out.push(zw_agent_embed::HistoryMsg {
+            role: m.role,
+            content,
+            turn_id: m.turn_id,
+        });
+    }
+    // DB-only rows (turns/roles the engine file doesn't carry): splice after
+    // their turn when known, else append. Keeps chronological order without
+    // needing timestamps on either side.
+    let mut trailing: Vec<zw_agent_embed::HistoryMsg> = Vec::new();
+    let mut splices: Vec<(usize, zw_agent_embed::HistoryMsg)> = Vec::new();
+    for r in db_rows {
+        if r.role != "user" && r.role != "assistant" {
+            continue;
+        }
+        let key = (r.role.clone(), r.turn_id.clone());
+        if !r.turn_id.is_empty() && emitted.contains(&key) {
+            continue;
+        }
+        if r.turn_id.is_empty() && emitted_content.contains(&(r.role.clone(), r.content.clone())) {
+            continue;
+        }
+        let msg = zw_agent_embed::HistoryMsg {
+            role: r.role.clone(),
+            content: r.content.clone(),
+            turn_id: r.turn_id.clone(),
+        };
+        match last_idx_of_turn.get(&r.turn_id) {
+            Some(&idx) => splices.push((idx, msg)),
+            None => trailing.push(msg),
+        }
+    }
+    // Insert splices back-to-front so indices stay valid.
+    splices.sort_by_key(|(idx, _)| std::cmp::Reverse(*idx));
+    for (idx, msg) in splices {
+        out.insert(idx + 1, msg);
+    }
+    out.extend(trailing);
+    out
 }
 
 /// Snapshot for the HTTP history API: committed history + smart status so the
@@ -196,7 +271,9 @@ pub async fn history_snapshot(
 }
 
 /// Drive one prompt through the native engine, emitting typed `StreamEvent`s
-/// (buffer/resume unchanged).
+/// (buffer/resume unchanged). Returns true when the turn produced a final
+/// answer (`Done` seen); false on budget/stall/error/cancel — the caller
+/// uses this to offer a structured continue/cancel ask.
 async fn run_embedded_turn(
     session_id: String,
     prompt: String,
@@ -205,7 +282,7 @@ async fn run_embedded_turn(
     turn_id: String,
     raw: String,
     abort_slot: zw_agent_embed::engine::AbortSlot,
-) {
+) -> bool {
     let _ = db.touch_session(&session_id).await;
     // B: mark processing BEFORE the engine mutex waits — even if this task
     // is queued behind a running turn, the DB already tells history callers
@@ -270,7 +347,7 @@ async fn run_embedded_turn(
                             message: format!("embedded engine init failed: {err:#}"),
                         })
                         .await;
-                    return;
+                    return false;
                 }
             }
         }
@@ -291,9 +368,13 @@ async fn run_embedded_turn(
     // Here we only keep our thread row fresh: title on first turn. B also
     // persists the committed transcript into `chat_messages` so history never
     // needs to `try_lock` a busy engine — it reads DB + replays stream_buffer.
-    let assistant_text: Option<String> = match &result {
-        Ok(out) if out.kind != zw_agent_embed::engine::RunKind::Ignored && !out.text.trim().is_empty() => Some(out.text.clone()),
-        _ => None,
+    // On a turn with no final answer, `run_embedded` already swapped the raw
+    // error transcript for the structured turn summary, so this insert keeps
+    // the last content (not just `error: …`).
+    let (assistant_text, completed): (Option<String>, bool) = match &result {
+        Ok((out, completed)) if out.kind != zw_agent_embed::engine::RunKind::Ignored && !out.text.trim().is_empty() => (Some(out.text.clone()), *completed),
+        Ok((_, completed)) => (None, *completed),
+        Err(_) => (None, false),
     };
     if let Some(t) = &assistant_text {
         // Guard duplicate done-insert for same turn (e.g. resumed retry).
@@ -302,7 +383,7 @@ async fn run_embedded_turn(
             let _ = db.insert_chat_message(&session_id, "assistant", t, &turn_id).await;
         }
     }
-    if let Ok(out) = &result {
+    if let Ok((out, _)) = &result {
         if out.kind != zw_agent_embed::engine::RunKind::Ignored && !out.text.trim().is_empty() {
             if let Some(t) = auto_title {
                 let _ = db.rename_session(&session_id, &t).await;
@@ -325,6 +406,7 @@ async fn run_embedded_turn(
             tasks.remove(&session_id);
         }
     }
+    completed
 }
 
 async fn mem_append(session_id: &str, event: serde_json::Value, seq: i64) {
@@ -421,6 +503,188 @@ fn spawn_whiteboard_forwarding(
     });
 }
 
+/// Shared WS sender handle for live per-turn forwarding tasks.
+type WsSender = Arc<tokio::sync::Mutex<futures_util::stream::SplitSink<WebSocket, Message>>>;
+
+/// How long a structured continue/cancel ask waits for the human before the
+/// turn simply ends (ask expired; the committed turn summary already kept
+/// the last content).
+const CONTINUE_ASK_TIMEOUT_SECS: u64 = 900;
+
+/// Continuation prompt for a user-approved resume: fresh turn id (fresh
+/// budget), same session (full history kept). Tells the model not to redo
+/// completed steps. Stored as the turn's user row so the resume is visible.
+const CONTINUE_PROMPT: &str = "Continue the previous task from exactly where it stopped. Do not repeat completed steps; drive it to a final answer.";
+
+/// Live forwarding channel: buffers every event (DB + memory, seq-tagged)
+/// then sends it on this connection. One per turn (plus one per
+/// continue-supervisor for its ask ping); each ends when its sender drops.
+fn spawn_live_forwarding(
+    ws_sender: &WsSender,
+    db: &zw_db::DbPool,
+    session_id: &str,
+) -> mpsc::Sender<StreamEvent> {
+    let (event_tx, mut event_rx) = mpsc::channel::<StreamEvent>(256);
+    let ws = ws_sender.clone();
+    let db_for_buffer = db.clone();
+    let sid_for_buffer = session_id.to_string();
+    tokio::spawn(async move {
+        while let Some(event) = event_rx.recv().await {
+            // Hybrid buffer: persist to DB + memory before sending live.
+            // This is the ephemeral replay buffer, NOT session message storage.
+            let to_send = if let Some(tagged) = buffer_event(&db_for_buffer, &sid_for_buffer, &event).await {
+                tagged
+            } else if let Ok(v) = serde_json::to_value(&event) {
+                v
+            } else {
+                continue;
+            };
+            let mut sender = ws.lock().await;
+            if sender.send(Message::Text(to_send.to_string().into())).await.is_err() {
+                break;
+            }
+        }
+    });
+    event_tx
+}
+
+/// Start one native turn and supervise it: live channel, runner task, TASKS
+/// record, plus a supervisor that offers a structured continue/cancel ask
+/// when the turn ends without a final answer (unless cancelled or superseded
+/// by a newer prompt, which expires the pending system ask).
+async fn start_turn(
+    ws_sender: &WsSender,
+    db: &zw_db::DbPool,
+    session_id: String,
+    prompt: String,
+    raw: String,
+    turn_id: String,
+) {
+    // A newer prompt supersedes any pending system continue ask.
+    if let Ok(pending) = db.ask_pending_for_session(&session_id).await {
+        for r in pending {
+            if r.id.starts_with("continue-") {
+                let _ = db.ask_expire(&r.id).await;
+            }
+        }
+    }
+    let event_tx = spawn_live_forwarding(ws_sender, db, &session_id);
+    let abort_slot: zw_agent_embed::engine::AbortSlot = Default::default();
+    let (done_tx, done_rx) = tokio::sync::oneshot::channel::<bool>();
+    let sid_tracked = session_id.clone();
+    let db_for_turn = db.clone();
+    let slot_tracked = abort_slot.clone();
+    let turn = tokio::spawn(async move {
+        let completed = run_embedded_turn(
+            sid_tracked,
+            prompt,
+            event_tx,
+            db_for_turn,
+            turn_id,
+            raw,
+            slot_tracked,
+        )
+        .await;
+        let _ = done_tx.send(completed);
+        completed
+    });
+    TASKS.lock().await.insert(session_id.clone(), (turn, abort_slot));
+    // Supervisor: nothing more on success; on an unfinished turn offer the
+    // human a structured continue/cancel instead of a dead end.
+    let sup_ws = ws_sender.clone();
+    let sup_db = db.clone();
+    tokio::spawn(async move {
+        let completed = done_rx.await.unwrap_or(false);
+        if completed {
+            return;
+        }
+        // Explicit user cancel is a decision, not a stall: no ask.
+        // (Single-use marker, consumed here.)
+        if CANCELLED.lock().await.remove(&session_id) {
+            return;
+        }
+        continue_flow(&sup_ws, &sup_db, session_id).await;
+    });
+}
+
+/// Structured continue/cancel after an unfinished turn: durable ask row (the
+/// drawer picks it up via poll/reconnect) + one live ping so it opens now.
+/// Continue respawns a fresh-budget turn on the same session; anything else
+/// (Stop/timeout/disconnect) expires the ask and the committed summary stands.
+async fn continue_flow(ws_sender: &WsSender, db: &zw_db::DbPool, session_id: String) {
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    let ask_id = format!("continue-{nanos:x}");
+    if let Ok(pending) = db.ask_pending_for_session(&session_id).await {
+        if pending.iter().any(|r| r.id.starts_with("continue-")) {
+            return;
+        }
+    }
+    let questions = serde_json::json!([{
+        "id": "continue",
+        "question": "The agent worked a long turn with no final answer. Continue for another full budget?",
+        "objective": "Continue resets the turn counter on the same session (all history kept). Stop keeps the committed turn summary as-is.",
+        "options": ["Continue", "Stop"],
+    }]);
+    if db.ask_insert(&ask_id, &session_id, &questions.to_string()).await.is_err() {
+        return;
+    }
+    let tx = spawn_live_forwarding(ws_sender, db, &session_id);
+    let _ = tx.send(StreamEvent::AskRequest {
+        ask_id: ask_id.clone(),
+        session_id: session_id.clone(),
+        questions: questions.clone(),
+    }).await;
+    // Wait for the REST answer (broadcast by the answer endpoint).
+    let mut rx = zw_agent_embed::ask::subscribe_answers();
+    let mut decision_continue = false;
+    loop {
+        match tokio::time::timeout(
+            std::time::Duration::from_secs(CONTINUE_ASK_TIMEOUT_SECS),
+            rx.recv(),
+        ).await {
+            Err(_) => break, // timeout
+            Ok(Err(_)) => break, // broadcaster gone
+            Ok(Ok((id, answers))) => {
+                if id != ask_id {
+                    continue; // someone else's answer
+                }
+                decision_continue = continue_answer_is_yes(&answers);
+                break;
+            }
+        }
+    }
+    if decision_continue {
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        let new_turn = format!("cont-{nanos:x}");
+        // The answer endpoint already marked the ask answered.
+        start_turn(ws_sender, db, session_id, CONTINUE_PROMPT.to_string(), CONTINUE_PROMPT.to_string(), new_turn).await;
+    } else {
+        let _ = db.ask_expire(&ask_id).await;
+    }
+}
+
+/// The drawer posts answers as [{id, question, answer}]; a Continue pick
+/// (or a free-text yes) resumes, anything else stops.
+fn continue_answer_is_yes(answers: &serde_json::Value) -> bool {
+    let arr = match answers.as_array() {
+        Some(a) => a,
+        None => return false,
+    };
+    for a in arr {
+        let s = a.get("answer").and_then(|v| v.as_str()).unwrap_or("").trim().to_lowercase();
+        if s.contains("continu") || s == "yes" || s == "y" {
+            return true;
+        }
+    }
+    false
+}
+
 pub async fn handle_ws_connection(
     socket: WebSocket,
     whiteboard: Option<zw_whiteboard::WhiteboardHandle>,
@@ -509,6 +773,14 @@ pub async fn handle_ws_connection(
                 // runner hasn't published yet (pre-drain) fall back to
                 // aborting the task itself.
                 let record = TASKS.lock().await.remove(sid);
+                // Mark explicit cancel ONLY when a turn was actually in flight:
+                // the supervisor consumes this single-use marker to suppress
+                // the continue/cancel ask (a cancel is a decision, not a
+                // stall). Marking with no turn running would wrongly suppress
+                // a future turn's ask.
+                if record.is_some() {
+                    CANCELLED.lock().await.insert(sid.to_string());
+                }
                 if let Some((h, slot)) = record {
                     // Runner abort first: model stream + tool children die,
                     // our task then closes the turn gracefully (record is
@@ -678,35 +950,10 @@ pub async fn handle_ws_connection(
         if let Some(handle) = whiteboard.clone() {
             spawn_whiteboard_forwarding(&ws_sender, handle, &mut whiteboard_forwarding_for);
         }
-        let (event_tx, mut event_rx) = mpsc::channel::<StreamEvent>(256);
-        let ws = ws_sender.clone();
-        let db_for_buffer = buffer_db.clone();
-        let sid_for_buffer = session_id.clone();
-
-        tokio::spawn(async move {
-            while let Some(event) = event_rx.recv().await {
-                // Hybrid buffer: persist to DB + memory before sending live.
-                // This is the ephemeral replay buffer, NOT session message storage.
-                let to_send = if let Some(tagged) = buffer_event(&db_for_buffer, &sid_for_buffer, &event).await {
-                    tagged
-                } else if let Ok(v) = serde_json::to_value(&event) {
-                    v
-                } else {
-                    continue;
-                };
-                let mut sender = ws.lock().await;
-                if sender.send(Message::Text(to_send.to_string().into())).await.is_err() {
-                    break;
-                }
-            }
-        });
 
         // Native path (no daemon, no switch): every prompt runs in-process.
         // Refresh/reconnect never cancels — the turn continues and the
         // stream resumes from the hybrid buffer.
-        let sid = session_id.clone();
-        let sid_tracked = sid.clone();
-        let db_for_turn = buffer_db.clone();
         // Client turn key (dedup across history + replay); server fallback.
         let turn_id = parsed
             .get("turn")
@@ -720,21 +967,7 @@ pub async fn handle_ws_connection(
                     .unwrap_or(0);
                 format!("srv-{nanos:x}")
             });
-        let abort_slot: zw_agent_embed::engine::AbortSlot = Default::default();
-        let slot_tracked = abort_slot.clone();
-        let turn = tokio::spawn(async move {
-            run_embedded_turn(
-                sid_tracked,
-                prompt,
-                event_tx,
-                db_for_turn,
-                turn_id,
-                content,
-                slot_tracked,
-            )
-            .await;
-        });
-        TASKS.lock().await.insert(sid, (turn, abort_slot));
+        start_turn(&ws_sender, &buffer_db, session_id, prompt, content, turn_id).await;
     }
 
     let mut sender = ws_sender.lock().await;
