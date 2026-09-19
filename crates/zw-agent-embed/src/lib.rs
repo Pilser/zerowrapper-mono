@@ -358,24 +358,20 @@ pub fn new_engine(
         no_session: false,
         ..Default::default()
     };
-    let (mut cfg, _) = config::load();
-    // Env budget overrides (no config.toml edit needed): main-run turns and
-    // the subagent per-task budget. Explicit CLI flag / config file still win
-    // when set; env only fills the gap. This matters because the embedded
-    // engine never parses CLI args, so clap `env` attributes would not apply.
-    // ZS_TASK_MAX_TURNS feeds cfg.task_max_turns, the source subagent init
-    // reads (startup.rs) once subagents are wired for embedded use.
+    let (cfg, _) = config::load();
+    // Env budget override (no config.toml edit needed). Explicit CLI flag /
+    // config file still wins when set; env only fills the gap. This matters
+    // because the embedded engine never parses CLI args, so a clap `env`
+    // attribute would not apply here.
+    // NOTE: ZS_TASK_MAX_TURNS is intentionally NOT read here yet:
+    // cfg.task_max_turns only exists with the `subagents` feature, which
+    // this crate does not enable, and enabling it without wiring
+    // subagents::init would register a task tool that panics when called.
+    // It returns as part of the proper subagent wiring (feature + init).
     if cli.max_agent_turns.is_none() {
         if let Ok(v) = std::env::var("ZS_MAX_AGENT_TURNS") {
             if let Ok(n) = v.trim().parse::<usize>() {
                 cli.max_agent_turns = Some(n);
-            }
-        }
-    }
-    if cfg.task_max_turns.is_none() {
-        if let Ok(v) = std::env::var("ZS_TASK_MAX_TURNS") {
-            if let Ok(n) = v.trim().parse::<usize>() {
-                cfg.task_max_turns = Some(n);
             }
         }
     }
