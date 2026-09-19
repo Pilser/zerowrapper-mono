@@ -589,7 +589,7 @@ pub fn load_tool_traces(
                 if let Some(ToolRecord::Result { call_id, .. }) = &m.tool {
                     if let Some(&idx) = pending.get(&(turn.clone(), *call_id)) {
                         if let Some(tool) = out.get_mut(&turn).and_then(|v| v.get_mut(idx)) {
-                            tool.output = Some(content);
+                            tool.output = Some(content.clone());
                             paired = true;
                         }
                     }
