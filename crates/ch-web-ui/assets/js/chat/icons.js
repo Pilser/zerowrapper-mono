@@ -12,9 +12,14 @@ const TOOL_ICONS = {
   subagent: '🤖',
   task: '🤖',
   inspect: '👁️',
+  check: '🧪',
+  test: '🧪',
   manage_whiteboard: '📌',
+  manage_materials: '📚',
   todo_write: '☑️',
   ask_user: '❓',
+  generate_file_urls: '🔗',
+  get_file_paths: '🔗',
   memory_write: '🧠',
   memory_read: '🧠',
   memory_edit: '🧠',
@@ -24,6 +29,9 @@ const TOOL_ICONS = {
 // CLI binary -> icon. Shell piles show [icon] binary · subcommand.
 const CLI_ICONS = {
   engram: '🧠',
+  hubengram: '🛰️',
+  portfolio: '💼',
+  hubportfolio: '🏢',
   git: '🌿',
   npm: '📦',
   bun: '🥟',
@@ -35,13 +43,48 @@ const CLI_ICONS = {
   ssh: '🔐',
   python: '🐍',
   python3: '🐍',
+  pip: '📦',
+  pytest: '🧪',
   node: '🟢',
+  zw: '⚡',
   ls: '📁',
   cat: '📄',
   grep: '🔍',
   find: '🗂️',
   sleep: '⏳',
   echo: '💬',
+}
+
+// Normalize a tool name: strip MCP `mcp__` namespace prefixes, lowercase.
+// Keeps matching robust when providers rename or namespace tools.
+function normName(name) {
+  let n = String(name || '').toLowerCase()
+  while (n.startsWith('mcp__')) n = n.slice(5)
+  return n
+}
+
+// Inspect sub-action: check/test runs get the test tube, navigation keeps
+// the eye. Reads structured args (action/kind/check/target/steps).
+function inspectIdentity(args) {
+  const vals = []
+  try {
+    for (const k of ['action', 'kind', 'check', 'target']) {
+      const v = args && args[k]
+      if (typeof v === 'string') vals.push(v.toLowerCase())
+    }
+    const steps = args && args.steps
+    if (Array.isArray(steps)) {
+      for (const s of steps) {
+        if (s && typeof s.action === 'string') vals.push(String(s.action).toLowerCase())
+      }
+    }
+  } catch {}
+  const joined = vals.join(' ')
+  if (/(^|[\s_-])(test|check|assert|verify)/.test(joined)) return { icon: '🧪', label: 'test' }
+  if (/whiteboard[-_ ](open|next|prev)/.test(joined)) return { icon: '👁️', label: 'whiteboard' }
+  if (/screenshot|snap/.test(joined)) return { icon: '📸', label: 'screenshot' }
+  if (/automation|e2e/.test(joined)) return { icon: '🎬', label: 'automation' }
+  return { icon: TOOL_ICONS.inspect, label: 'inspect' }
 }
 
 function splitArgs(cmd) {
@@ -115,7 +158,8 @@ export function parseCli(command) {
 // compact derived label. Returns {icon, label} — label is short words.
 export function pileIdentity(name, args, note) {
   const cleanNote = (note && String(note).trim()) || ''
-  if (name === 'bash' && args && typeof args.command === 'string') {
+  const n = normName(name)
+  if (n === 'bash' && args && typeof args.command === 'string') {
     const cli = parseCli(args.command)
     if (cli && cli.binary) {
       const icon = CLI_ICONS[cli.binary] || '⌨️'
@@ -124,6 +168,11 @@ export function pileIdentity(name, args, note) {
     }
     return { icon: TOOL_ICONS.bash, label: cleanNote || 'shell' }
   }
-  const icon = TOOL_ICONS[name] || '⚙️'
-  return { icon, label: cleanNote || name || 'action' }
+  if (n === 'inspect') {
+    const sub = inspectIdentity(args)
+    return { icon: sub.icon, label: cleanNote || sub.label }
+  }
+  const icon = TOOL_ICONS[n] || '⚙️'
+  const label = cleanNote || String(name || 'action')
+  return { icon, label }
 }

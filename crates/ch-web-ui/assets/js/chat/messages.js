@@ -4,6 +4,7 @@ import { USER_AVATAR, BOT_AVATAR, escapeHtml } from './constants.js'
 import { render as renderMarkdown } from './markdown.js'
 import { finalize } from './streaming.js'
 import { renderStaticTrace } from './activity.js'
+import { popIn } from './motion-fx.js'
 import { scrollToBottom, autoScroll } from './scroll.js'
 
 export { scrollToBottom }
@@ -94,6 +95,7 @@ export function addMessage(role, text, scroll = true) {
 
   const row = buildMessageRow(role, text)
   els.messages.appendChild(row)
+  try { popIn(row) } catch {}
   if (els.hint && els.hint.style.display !== 'none') els.hint.style.display = 'none'
   if (scroll) {
     autoScroll()

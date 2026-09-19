@@ -3,6 +3,7 @@ import { els } from './dom.js'
 import { BOT_AVATAR } from './constants.js'
 import { render as renderMarkdown } from './markdown.js'
 import { autoScroll } from './scroll.js'
+import { popIn } from './motion-fx.js'
 import * as activity from './activity.js'
 
 let el = null
@@ -25,6 +26,7 @@ function getEl() {
     el.className = 'msg-content chat-markdown'
     row.appendChild(el)
     els.messages.appendChild(row)
+    try { popIn(row) } catch {}
   }
   return el
 }

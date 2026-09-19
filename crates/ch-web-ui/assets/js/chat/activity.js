@@ -2,6 +2,8 @@ import { els } from './dom.js'
 import { autoScroll } from './scroll.js'
 import { createThinkPile, renderStaticThink } from './piles/think.js'
 import { createToolPile, renderStaticTool } from './piles/tool.js'
+import { pileIdentity } from './icons.js'
+import * as overlay from './overlay.js'
 
 // Turn pile: separated narrow sub-piles per turn — one slim thinking pile
 // per thinking burst, one pile per tool call as they arrive, mid-response
@@ -49,6 +51,7 @@ export function pushThought(text) {
     pileCount += 1
   }
   try { thinkOpen.append(text || '') } catch {}
+  try { overlay.status('💭', 'Thinking…') } catch {}
   autoScroll()
 }
 
@@ -65,6 +68,10 @@ export function pushToolCall(id, name, args) {
   b.appendChild(pile.row)
   pileCount += 1
   pending.push({ id: id || '', done: pile.done })
+  try {
+    const idn = pileIdentity(name, args, note)
+    overlay.status(idn.icon, idn.label + '…')
+  } catch {}
   autoScroll()
 }
 
@@ -74,6 +81,8 @@ export function pushToolResult(id, name, output) {
   const item = pending[idx]
   pending.splice(idx, 1)
   try { item.done(output || '') } catch {}
+  try { overlay.status('✅', 'Done') } catch {}
+  try { overlay.hideSoon(1200) } catch {}
   autoScroll()
 }
 
@@ -90,8 +99,10 @@ export function finishTurn() {
   if (!pileCount && box) {
     box.remove()
     box = null
+    try { overlay.hideNow() } catch {}
     return
   }
+  try { overlay.hideSoon(1500) } catch {}
 }
 
 export function resetTurn() {
