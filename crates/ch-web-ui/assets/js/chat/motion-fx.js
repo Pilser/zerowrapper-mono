@@ -2,7 +2,7 @@
 // shimmer, countdown bar. All no-ops when Motion is unavailable, and all
 // transform/opacity only (GPU-cheap, never layout). One place for motion
 // so piles/ stay about structure, not animation code.
-import { animate } from './motion.js'
+import { animate, inView } from './motion.js'
 
 function ok() {
   try {
@@ -12,17 +12,61 @@ function ok() {
   }
 }
 
-// Pop-in on mount: scale + fade, snappy spring-ish ease.
+// Pop-in on mount: spring scale + fade. `index` staggers cascades
+// (each pile lands just after the previous — lively feed feel).
 export function popIn(el, opts = {}) {
   if (!el || !ok()) return null
+  const index = Number.isFinite(opts.index) ? opts.index : 0
+  const delay = Math.min(Math.max(index, 0) * 0.06, 0.4)
   try {
     return animate(
       el,
-      { opacity: [0, 1], scale: [0.92, 1], y: [6, 0] },
-      { duration: 0.28, ease: 'circOut', ...(opts.options || {}) }
+      { opacity: [0, 1], scale: [0.9, 1], y: [10, 0] },
+      { type: 'spring', stiffness: 320, damping: 24, delay }
     )
   } catch {
-    return null
+    try {
+      return animate(
+        el,
+        { opacity: [0, 1], scale: [0.92, 1], y: [6, 0] },
+        { duration: 0.28, ease: 'circOut', delay }
+      )
+    } catch {
+      return null
+    }
+  }
+}
+
+// Reveal on scroll into view (history piles): fade+rise once, then done.
+// Falls back to immediate show when Motion/inView is unavailable so rows
+// never stay hidden.
+export function revealOnView(el, opts = {}) {
+  if (!el) return
+  const run = () => {
+    try {
+      popIn(el, opts)
+    } catch {}
+  }
+  try {
+    if (typeof inView === 'function') {
+      try {
+        el.style.opacity = '0'
+        inView(
+          el,
+          () => {
+            try {
+              el.style.opacity = ''
+              popIn(el, opts)
+            } catch {}
+          },
+          { once: true, margin: '-40px' }
+        )
+        return
+      } catch {}
+    }
+    run()
+  } catch {
+    run()
   }
 }
 

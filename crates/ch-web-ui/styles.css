@@ -314,7 +314,7 @@
     margin: 0 auto 4px;
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 8px;
   }
   .activity-row {
     border: 1px solid var(--color-border-weak);
@@ -420,7 +420,111 @@
   .cd-bar { height: 100%; width: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--color-status-running), var(--color-status-success)); transform-origin: left center; }
   .cd-label { font-family: var(--font-mono); font-size: 0.625rem; color: var(--color-text-weak); margin-left: auto; flex-shrink: 0; }
   .cd-label.cd-warm { color: var(--color-status-error); font-weight: 700; }
-  /* Live agent pill: fixed floating badge, glassy, auto-hides when idle. */
+  /* Floating turn piles v2: independent cards, high-contrast readable
+     text on the dark background, counts + previews visible without
+     expanding. Motion (motion-fx.js) drives transform/opacity; CSS only
+     shapes, depth, color. CSS variables below are only *used*, never
+     redefined. */
+  .think-card, .tool-card {
+    border-radius: 16px;
+    background: linear-gradient(180deg, var(--color-bg-weak), var(--color-bg));
+    box-shadow: 0 3px 12px rgba(0,0,0,0.10), 0 0 0 1px var(--color-border-weak);
+    overflow: hidden;
+    will-change: transform, opacity;
+  }
+  .think-card.active {
+    box-shadow: 0 4px 18px rgba(0,0,0,0.16), 0 0 0 1px var(--color-status-running);
+  }
+  .tool-card.active {
+    box-shadow: 0 4px 18px rgba(0,0,0,0.16), 0 0 0 1px var(--color-status-running);
+  }
+  .think-head, .tool-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 7px 12px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 0.75rem;
+    line-height: 1.45;
+    color: var(--color-text-strong);
+    text-align: left;
+  }
+  .think-icon, .tool-icon { font-size: 1.05rem; line-height: 1; flex-shrink: 0; display: inline-block; will-change: transform; }
+  .think-title, .tool-title { font-weight: 700; color: var(--color-text-strong); white-space: nowrap; }
+  .think-count, .tool-count {
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    font-weight: 700;
+    color: var(--color-bg);
+    background: var(--color-status-running);
+    border-radius: 999px;
+    padding: 1px 8px;
+    line-height: 1.6;
+    flex-shrink: 0;
+  }
+  .tool-card.done .tool-count { background: var(--color-status-success); }
+  .think-preview, .tool-sub {
+    color: var(--color-text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+    flex: 1;
+  }
+  .think-chev, .tool-chev { margin-left: auto; color: var(--color-text-weak); display: inline-flex; transition: transform 0.15s ease; flex-shrink: 0; }
+  .think-card.open .think-chev, .tool-card.open .tool-chev { transform: rotate(180deg); }
+  .think-body, .tool-body { display: none; padding: 2px 12px 10px; }
+  .think-card.open .think-body, .tool-card.open .tool-body { display: block; }
+  .think-body pre, .tool-args pre {
+    font-size: 0.75rem;
+    font-family: var(--font-mono);
+    line-height: 1.55;
+    margin: 0;
+    white-space: pre-wrap;
+    word-break: break-word;
+    color: var(--color-text);
+    max-height: 220px;
+    overflow-y: auto;
+    background: var(--color-bg);
+    border-radius: 8px;
+    padding: 8px 10px;
+  }
+  .tool-out { font-size: 0.75rem; color: var(--color-text); margin-top: 6px; }
+  .tool-body details { margin-top: 6px; }
+  .tool-body summary { font-size: 0.75rem; color: var(--color-text); cursor: pointer; }
+  /* Live agent feed: floating recent-action list above the pill. */
+  .agent-feed {
+    position: fixed;
+    right: 14px;
+    bottom: 150px;
+    z-index: 60;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-width: 240px;
+    pointer-events: none;
+  }
+  .agent-feed.hidden { display: none; }
+  .feed-item {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 5px 11px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--color-bg) 84%, transparent);
+    backdrop-filter: blur(8px);
+    border: 1px solid var(--color-border-weak);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.14);
+    font-size: 0.6875rem;
+    color: var(--color-text-strong);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    will-change: transform, opacity;
+  }
   .agent-pill {
     position: fixed;
     left: 50%;

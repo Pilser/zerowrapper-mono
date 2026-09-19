@@ -9,6 +9,8 @@ let pill = null
 let iconEl = null
 let textEl = null
 let hideTimer = null
+let feedBox = null
+const FEED_MAX = 8
 
 function ensure() {
   if (pill && pill.isConnected) return pill
@@ -64,5 +66,48 @@ export function hideNow() {
   try {
     if (hideTimer) { window.clearTimeout(hideTimer); hideTimer = null }
     if (pill) pill.classList.add('hidden')
+  } catch {}
+}
+
+function ensureFeed() {
+  if (feedBox && feedBox.isConnected) return feedBox
+  feedBox = document.createElement('div')
+  feedBox.className = 'agent-feed hidden'
+  document.body.appendChild(feedBox)
+  return feedBox
+}
+
+// Recent-action feed: latest action on top, older fade out past FEED_MAX.
+// Slide+fade entrance via Motion when available; plain append otherwise.
+export function feed(icon, text) {
+  try {
+    const box = ensureFeed()
+    const label = String(text == null ? '' : text).trim()
+    if (!label) return
+    box.classList.remove('hidden')
+    const item = document.createElement('div')
+    item.className = 'feed-item'
+    const ic = document.createElement('span')
+    ic.textContent = icon || '•'
+    const tx = document.createElement('span')
+    tx.textContent = label.length > 42 ? label.slice(0, 42) + '…' : label
+    item.appendChild(ic)
+    item.appendChild(tx)
+    box.prepend(item)
+    try {
+      if (typeof animate === 'function') {
+        animate(item, { opacity: [0, 1], x: [14, 0] }, { duration: 0.3, ease: 'circOut' })
+      }
+    } catch {}
+    while (box.children.length > FEED_MAX) {
+      try { box.removeChild(box.lastChild) } catch { break }
+    }
+    if (hideTimer) window.clearTimeout(hideTimer)
+    hideTimer = window.setTimeout(() => {
+      try {
+        if (pill) pill.classList.add('hidden')
+        if (feedBox) feedBox.classList.add('hidden')
+      } catch {}
+    }, 9000)
   } catch {}
 }

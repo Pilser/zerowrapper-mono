@@ -5409,10 +5409,42 @@ function ok() {
 function popIn(el, opts = {}) {
   if (!el || !ok())
     return null;
+  const index = Number.isFinite(opts.index) ? opts.index : 0;
+  const delay = Math.min(Math.max(index, 0) * 0.06, 0.4);
   try {
-    return import_motion.animate(el, { opacity: [0, 1], scale: [0.92, 1], y: [6, 0] }, { duration: 0.28, ease: "circOut", ...opts.options || {} });
+    return import_motion.animate(el, { opacity: [0, 1], scale: [0.9, 1], y: [10, 0] }, { type: "spring", stiffness: 320, damping: 24, delay });
   } catch {
-    return null;
+    try {
+      return import_motion.animate(el, { opacity: [0, 1], scale: [0.92, 1], y: [6, 0] }, { duration: 0.28, ease: "circOut", delay });
+    } catch {
+      return null;
+    }
+  }
+}
+function revealOnView(el, opts = {}) {
+  if (!el)
+    return;
+  const run = () => {
+    try {
+      popIn(el, opts);
+    } catch {}
+  };
+  try {
+    if (typeof import_motion.inView === "function") {
+      try {
+        el.style.opacity = "0";
+        import_motion.inView(el, () => {
+          try {
+            el.style.opacity = "";
+            popIn(el, opts);
+          } catch {}
+        }, { once: true, margin: "-40px" });
+        return;
+      } catch {}
+    }
+    run();
+  } catch {
+    run();
   }
 }
 function floatLoop(el, distance = 3, duration = 2.2) {
@@ -5487,59 +5519,51 @@ var init_motion_fx = __esm(() => {
 });
 
 // piles/think.js
-function previewWords(text, n = 48) {
+function previewWords(text, n = 56) {
   const t = String(text || "").replace(/\s+/g, " ").trim();
   if (t.length <= n)
     return t;
   return t.slice(0, n) + "…";
 }
-function makeHead() {
-  const head = document.createElement("button");
-  head.className = "activity-head";
-  head.type = "button";
-  head.innerHTML = '<span class="activity-dot"></span><span class="activity-label"></span><span class="activity-num">0</span><span class="activity-chev">' + CHEV + "</span>";
-  return head;
-}
 function createThinkPile(opts = {}) {
   const live = opts.live !== false;
-  const row = document.createElement("div");
-  row.className = "activity-row thinking active think-pile";
-  const head = makeHead();
-  const label = head.querySelector(".activity-label");
-  const num = head.querySelector(".activity-num");
-  const detail = document.createElement("div");
-  detail.className = "activity-detail";
+  const card = document.createElement("div");
+  card.className = "think-card running";
+  const head = document.createElement("button");
+  head.className = "think-head";
+  head.type = "button";
+  head.innerHTML = '<span class="think-icon">\uD83D\uDCAD</span><span class="think-title">Thinking</span><span class="think-count">0</span><span class="think-preview"></span><span class="think-chev">' + CHEV + "</span>";
+  const countEl = head.querySelector(".think-count");
+  const previewEl = head.querySelector(".think-preview");
+  const body = document.createElement("div");
+  body.className = "think-body";
   const pre = document.createElement("pre");
-  detail.appendChild(pre);
-  row.appendChild(head);
-  row.appendChild(detail);
+  body.appendChild(pre);
+  card.appendChild(head);
+  card.appendChild(body);
   head.addEventListener("click", () => {
-    row.classList.toggle("open");
-    if (row.classList.contains("open"))
-      row.dataset.pinned = "1";
-    else
-      delete row.dataset.pinned;
+    card.classList.toggle("open");
   });
   let count = 0;
   let full = "";
   let shimmerCtl = null;
   const paint = () => {
-    if (num)
-      num.textContent = count;
-    if (label)
-      label.textContent = "Thinking · " + count + (full ? " — " + previewWords(full) : "");
+    if (countEl)
+      countEl.textContent = count;
+    if (previewEl)
+      previewEl.textContent = full ? previewWords(full) : "";
   };
   paint();
   if (live) {
     try {
-      popIn(row);
+      popIn(card, { index: opts.index || 0 });
     } catch {}
     try {
-      shimmerCtl = shimmer(label);
+      shimmerCtl = shimmer(previewEl || card);
     } catch {}
   }
   return {
-    row,
+    row: card,
     append(text) {
       count += 1;
       if (text) {
@@ -5557,34 +5581,31 @@ function createThinkPile(opts = {}) {
       } catch {}
       shimmerCtl = null;
       try {
-        if (label)
-          label.style.opacity = "";
+        const target = previewEl || card;
+        if (target && target.style)
+          target.style.opacity = "";
       } catch {}
-      row.classList.remove("active");
-      if (label)
-        label.textContent = "Thought · " + count + (full ? " — " + previewWords(full) : "");
-      if (row.dataset.pinned !== "1")
-        row.classList.remove("open");
+      card.classList.remove("running");
+      if (countEl)
+        countEl.textContent = count;
     }
   };
 }
 function renderStaticThink(container2, text, count) {
   const pile = createThinkPile({ live: false });
-  if (text) {
+  const t = typeof text === "string" ? text : "";
+  if (t) {
     const pre = pile.row.querySelector("pre");
     if (pre)
-      pre.textContent = text;
+      pre.textContent = t;
+    const previewEl = pile.row.querySelector(".think-preview");
+    const countEl = pile.row.querySelector(".think-count");
+    const n = Number.isFinite(count) && count > 0 ? count : 1;
+    if (countEl)
+      countEl.textContent = n;
+    if (previewEl)
+      previewEl.textContent = previewWords(t);
   }
-  pile.settle();
-  try {
-    const num = pile.row.querySelector(".activity-num");
-    const label = pile.row.querySelector(".activity-label");
-    const n = Number.isFinite(count) && count > 0 ? count : text ? 1 : 0;
-    if (num)
-      num.textContent = n;
-    if (label)
-      label.textContent = "Thought · " + n + (text ? " — " + previewWords(text) : "");
-  } catch {}
   container2.appendChild(pile.row);
   return pile.row;
 }
@@ -5801,6 +5822,82 @@ var init_icons = __esm(() => {
   };
 });
 
+// notes.js
+function head(s, n = 64) {
+  const t = String(s == null ? "" : s).replace(/\s+/g, " ").trim();
+  if (t.length <= n)
+    return t;
+  return t.slice(0, n) + "…";
+}
+function str(v) {
+  return typeof v === "string" ? v : "";
+}
+function deriveNote(name, args) {
+  const a = args && typeof args === "object" ? args : {};
+  switch (String(name || "")) {
+    case "bash": {
+      const cmd = str(a.command);
+      if (!cmd.trim())
+        return "";
+      const cli = parseCli(cmd);
+      if (cli && cli.binary)
+        return head(cli.binary + (cli.subcommand ? " " + cli.subcommand : ""));
+      return head(cmd, 64);
+    }
+    case "read": {
+      let s = str(a.path);
+      if (a.offset != null || a.limit != null)
+        s += ` (lines ${a.offset || 1}–${a.limit ? (Number(a.offset) || 1) + Number(a.limit) - 1 : "…"})`;
+      return head(s, 72);
+    }
+    case "write":
+      return head(str(a.path) ? "write " + str(a.path) : "", 72);
+    case "edit":
+      return head(str(a.path) ? "edit " + str(a.path) : "", 72);
+    case "grep":
+      return head(str(a.pattern) + (str(a.path) ? " in " + str(a.path) : ""), 72);
+    case "find_files":
+    case "list_dir":
+      return head(str(a.pattern || a.path), 72);
+    case "subagent":
+    case "task": {
+      const ps = Array.isArray(a.prompts) ? a.prompts : [];
+      return head(str(ps[0]), 72);
+    }
+    case "inspect": {
+      const bits = [str(a.action), str(a.kind), str(a.check), str(a.target)].filter(Boolean);
+      return head(bits.join(" · ") || "inspect", 72);
+    }
+    case "ask_user": {
+      const qs = Array.isArray(a.questions) ? a.questions : [];
+      const q0 = qs[0];
+      return head(typeof q0 === "string" ? q0 : q0 && q0.question || "question", 72);
+    }
+    case "todo_write":
+      return "plan update";
+    case "manage_whiteboard":
+    case "manage_materials": {
+      const bits = Object.values(a).filter((v) => typeof v === "string" && v && v !== "note").slice(0, 2);
+      return head(bits.join(" · "), 72);
+    }
+    default:
+      return "";
+  }
+}
+function resolveNote(name, args, agentNote) {
+  const a = agentNote && String(agentNote).trim() || "";
+  if (a)
+    return a;
+  try {
+    return deriveNote(name, args);
+  } catch {
+    return "";
+  }
+}
+var init_notes = __esm(() => {
+  init_icons();
+});
+
 // piles/tool.js
 function argsText(args) {
   if (!args)
@@ -5811,93 +5908,108 @@ function argsText(args) {
     return String(args);
   }
 }
-function attachOutput(item, output) {
+function subForTool(name, args) {
+  try {
+    const a = args && typeof args === "object" ? args : null;
+    if (!a)
+      return "";
+    const s = (v) => typeof v === "string" ? v : "";
+    switch (String(name || "")) {
+      case "bash":
+        return head2(s(a.command), 90);
+      case "read":
+      case "write":
+      case "edit":
+        return head2(s(a.path), 90);
+      case "grep":
+      case "find_files":
+        return head2(s(a.pattern) + (s(a.path) ? " · " + s(a.path) : ""), 90);
+      case "subagent":
+      case "task": {
+        const ps = Array.isArray(a.prompts) ? a.prompts : [];
+        return head2(s(ps[0]), 90);
+      }
+      default:
+        return "";
+    }
+  } catch {
+    return "";
+  }
+}
+function head2(s, n) {
+  const t = String(s == null ? "" : s).replace(/\s+/g, " ").trim();
+  if (t.length <= n)
+    return t;
+  return t.slice(0, n) + "…";
+}
+function attachOutput(body, output) {
   if (!output)
     return;
-  let detail = item.querySelector(".action-detail");
-  if (!detail) {
-    detail = document.createElement("div");
-    detail.className = "action-detail hidden";
-    item.appendChild(detail);
-    const head = item.querySelector(".action-head");
-    if (head)
-      head.addEventListener("click", () => detail.classList.toggle("hidden"));
+  let out = body.querySelector(".tool-out");
+  if (!out) {
+    out = document.createElement("div");
+    out.className = "tool-out";
+    body.appendChild(out);
   }
-  if (output.length <= 80) {
-    const span = document.createElement("div");
-    span.className = "action-output";
-    span.textContent = output;
-    detail.appendChild(span);
-    detail.classList.remove("hidden");
+  if (output.length <= 120) {
+    out.textContent = output;
   } else {
     const det = document.createElement("details");
     const sum = document.createElement("summary");
-    sum.textContent = output.slice(0, 80) + "...";
+    sum.textContent = output.slice(0, 120) + "…";
     const pre = document.createElement("pre");
     pre.textContent = output;
     det.appendChild(sum);
     det.appendChild(pre);
-    detail.appendChild(det);
+    out.appendChild(det);
   }
 }
 function createToolPile({ name, args, note }, opts = {}) {
   const live = opts.live !== false;
-  const { icon, label } = pileIdentity(name, args, note);
-  const row = document.createElement("div");
-  row.className = "activity-row acting active tool-pile";
-  const head = document.createElement("button");
-  head.className = "activity-head";
-  head.type = "button";
-  head.innerHTML = '<span class="activity-dot"></span><span class="pile-icon"></span><span class="activity-label"></span><span class="activity-num"></span><span class="cd-label"></span><span class="activity-chev">' + CHEV2 + "</span>";
-  head.querySelector(".pile-icon").textContent = icon;
-  head.querySelector(".activity-label").textContent = label;
-  const iconEl = head.querySelector(".pile-icon");
-  const cdLabel = head.querySelector(".cd-label");
-  const detail = document.createElement("div");
-  detail.className = "activity-detail";
-  const list = document.createElement("div");
-  list.className = "action-list";
-  detail.appendChild(list);
-  row.appendChild(head);
-  row.appendChild(detail);
+  const index = opts.index || "";
+  const resolvedNote = resolveNote(name, args, note);
+  const { icon, label } = pileIdentity(name, args, resolvedNote || note);
+  const card = document.createElement("div");
+  card.className = "tool-card running";
+  const headBtn = document.createElement("button");
+  headBtn.className = "tool-head";
+  headBtn.type = "button";
+  headBtn.innerHTML = '<span class="tool-icon"></span><span class="tool-title"></span><span class="tool-count"></span><span class="tool-sub"></span><span class="cd-label"></span><span class="tool-chev">' + CHEV2 + "</span>";
+  headBtn.querySelector(".tool-icon").textContent = icon;
+  headBtn.querySelector(".tool-title").textContent = resolvedNote || label;
+  const countEl = headBtn.querySelector(".tool-count");
+  const subEl = headBtn.querySelector(".tool-sub");
+  const cdLabel = headBtn.querySelector(".cd-label");
+  if (countEl && index !== "")
+    countEl.textContent = "#" + index;
+  if (subEl)
+    subEl.textContent = subForTool(name, args);
+  const body = document.createElement("div");
+  body.className = "tool-body";
+  const argsPre = document.createElement("pre");
+  argsPre.className = "tool-args";
+  const aStr = argsText(args);
+  if (aStr) {
+    argsPre.textContent = aStr;
+    body.appendChild(argsPre);
+  }
+  card.appendChild(headBtn);
+  card.appendChild(body);
   const cdTrack = document.createElement("div");
   cdTrack.className = "cd-track hidden";
   const cdBar = document.createElement("div");
   cdBar.className = "cd-bar";
   cdTrack.appendChild(cdBar);
-  row.appendChild(cdTrack);
-  head.addEventListener("click", () => {
-    row.classList.toggle("open");
-    if (row.classList.contains("open"))
-      row.dataset.pinned = "1";
-    else
-      delete row.dataset.pinned;
+  card.appendChild(cdTrack);
+  headBtn.addEventListener("click", () => {
+    card.classList.toggle("open");
   });
-  const item = document.createElement("div");
-  item.className = "action-item running";
-  const itemHead = document.createElement("button");
-  itemHead.className = "action-head";
-  itemHead.type = "button";
-  itemHead.innerHTML = '<span class="action-status">◌</span><span class="action-name"></span>';
-  itemHead.querySelector(".action-name").textContent = name || "action";
-  item.appendChild(itemHead);
-  const aStr = argsText(args);
-  if (aStr) {
-    const aDetail = document.createElement("div");
-    aDetail.className = "action-detail hidden";
-    const pre = document.createElement("pre");
-    pre.textContent = aStr;
-    aDetail.appendChild(pre);
-    item.appendChild(aDetail);
-    itemHead.addEventListener("click", () => aDetail.classList.toggle("hidden"));
-  }
-  list.appendChild(item);
-  const num = head.querySelector(".activity-num");
+  const iconEl = headBtn.querySelector(".tool-icon");
   let stopFloat = () => {};
   let stopCd = () => {};
   if (live) {
     try {
-      popIn(row);
+      popIn(card, { index });
     } catch {}
     try {
       stopFloat = floatLoop(iconEl, 2.5, 2);
@@ -5911,7 +6023,7 @@ function createToolPile({ name, args, note }, opts = {}) {
     }
   }
   return {
-    row,
+    row: card,
     done(output) {
       try {
         stopFloat();
@@ -5922,30 +6034,24 @@ function createToolPile({ name, args, note }, opts = {}) {
       try {
         cdTrack.classList.add("hidden");
       } catch {}
-      const status = item.querySelector(".action-status");
-      if (status) {
-        status.className = "action-status done";
-        status.textContent = "✓";
-      }
-      item.classList.remove("running");
-      item.classList.add("done");
-      attachOutput(item, output || "");
-      if (num)
-        num.textContent = "✓";
-      row.classList.remove("active");
-      if (row.dataset.pinned !== "1")
-        row.classList.remove("open");
+      card.classList.remove("running");
+      card.classList.add("done");
+      attachOutput(body, output || "");
+      if (countEl)
+        countEl.textContent = "✓";
+      if (subEl && output)
+        subEl.textContent = head2(output, 90);
       if (live) {
         try {
-          bounce(status || row, 1.15);
+          bounce(card, 1.02);
         } catch {}
       }
     }
   };
 }
-function renderStaticTool(container2, tool) {
+function renderStaticTool(container2, tool, index = "") {
   const t = tool || {};
-  const pile = createToolPile({ name: t.name, args: t.args, note: t.note }, { live: false });
+  const pile = createToolPile({ name: t.name, args: t.args, note: t.note }, { live: false, index });
   pile.done(typeof t.output === "string" ? t.output : "");
   container2.appendChild(pile.row);
   return pile.row;
@@ -5953,6 +6059,7 @@ function renderStaticTool(container2, tool) {
 var CHEV2 = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>';
 var init_tool = __esm(() => {
   init_icons();
+  init_notes();
   init_motion_fx();
 });
 
@@ -6022,7 +6129,55 @@ function hideNow() {
       pill.classList.add("hidden");
   } catch {}
 }
-var import_motion2, pill = null, iconEl = null, textEl = null, hideTimer = null;
+function ensureFeed() {
+  if (feedBox && feedBox.isConnected)
+    return feedBox;
+  feedBox = document.createElement("div");
+  feedBox.className = "agent-feed hidden";
+  document.body.appendChild(feedBox);
+  return feedBox;
+}
+function feed(icon, text) {
+  try {
+    const box = ensureFeed();
+    const label = String(text == null ? "" : text).trim();
+    if (!label)
+      return;
+    box.classList.remove("hidden");
+    const item = document.createElement("div");
+    item.className = "feed-item";
+    const ic = document.createElement("span");
+    ic.textContent = icon || "•";
+    const tx2 = document.createElement("span");
+    tx2.textContent = label.length > 42 ? label.slice(0, 42) + "…" : label;
+    item.appendChild(ic);
+    item.appendChild(tx2);
+    box.prepend(item);
+    try {
+      if (typeof import_motion2.animate === "function") {
+        import_motion2.animate(item, { opacity: [0, 1], x: [14, 0] }, { duration: 0.3, ease: "circOut" });
+      }
+    } catch {}
+    while (box.children.length > FEED_MAX) {
+      try {
+        box.removeChild(box.lastChild);
+      } catch {
+        break;
+      }
+    }
+    if (hideTimer)
+      window.clearTimeout(hideTimer);
+    hideTimer = window.setTimeout(() => {
+      try {
+        if (pill)
+          pill.classList.add("hidden");
+        if (feedBox)
+          feedBox.classList.add("hidden");
+      } catch {}
+    }, 9000);
+  } catch {}
+}
+var import_motion2, pill = null, iconEl = null, textEl = null, hideTimer = null, feedBox = null, FEED_MAX = 8;
 var init_overlay = __esm(() => {
   import_motion2 = __toESM(require_motion(), 1);
 });
@@ -6040,6 +6195,7 @@ function ensureBox() {
     box.className = "turn-activity";
     thinkOpen = null;
     pileCount = 0;
+    toolSeq = 0;
     pending.length = 0;
     turnOpen = true;
     t.appendChild(box);
@@ -6059,9 +6215,12 @@ function pushThought(text) {
   if (!b)
     return;
   if (!thinkOpen || !thinkOpen.row.isConnected) {
-    thinkOpen = createThinkPile();
+    thinkOpen = createThinkPile({ index: pileCount });
     b.appendChild(thinkOpen.row);
     pileCount += 1;
+    try {
+      feed("\uD83D\uDCAD", "Thinking…");
+    } catch {}
   }
   try {
     thinkOpen.append(text || "");
@@ -6077,13 +6236,15 @@ function pushToolCall(id, name, args) {
     return;
   settleThink();
   const note = args && typeof args.note === "string" ? args.note : "";
-  const pile = createToolPile({ name, args, note });
+  toolSeq += 1;
+  const pile = createToolPile({ name, args, note }, { index: toolSeq });
   b.appendChild(pile.row);
   pileCount += 1;
   pending.push({ id: id || "", done: pile.done });
   try {
     const idn = pileIdentity(name, args, note);
     status(idn.icon, idn.label + "…");
+    feed(idn.icon, idn.label);
   } catch {}
   autoScroll();
 }
@@ -6124,6 +6285,10 @@ function finishTurn() {
     return;
   }
   try {
+    status("✅", "Done");
+    feed("✅", "Done");
+  } catch {}
+  try {
     hideSoon(1500);
   } catch {}
 }
@@ -6134,7 +6299,11 @@ function resetTurn() {
   turnOpen = false;
   thinkOpen = null;
   pileCount = 0;
+  toolSeq = 0;
   pending.length = 0;
+  try {
+    hideNow();
+  } catch {}
 }
 function renderStaticTrace(container2, trace) {
   if (!container2 || !trace)
@@ -6145,14 +6314,25 @@ function renderStaticTrace(container2, trace) {
     return null;
   const wrap = document.createElement("div");
   wrap.className = "turn-activity";
+  let idx = 0;
   if (thinking.trim()) {
     try {
-      renderStaticThink(wrap, thinking, trace.thought_count);
+      const row = renderStaticThink(wrap, thinking, trace.thought_count);
+      if (row) {
+        try {
+          revealOnView(row, { index: idx++ });
+        } catch {}
+      }
     } catch {}
   }
   for (const t of tools) {
     try {
-      renderStaticTool(wrap, t || {});
+      const row = renderStaticTool(wrap, t || {}, idx);
+      if (row) {
+        try {
+          revealOnView(row, { index: idx++ });
+        } catch {}
+      }
     } catch {}
   }
   if (!wrap.hasChildNodes())
@@ -6160,13 +6340,14 @@ function renderStaticTrace(container2, trace) {
   container2.appendChild(wrap);
   return wrap;
 }
-var box = null, turnOpen = false, thinkOpen = null, pileCount = 0, pending;
+var box = null, turnOpen = false, thinkOpen = null, pileCount = 0, toolSeq = 0, pending;
 var init_activity = __esm(() => {
   init_dom();
   init_scroll();
   init_think();
   init_tool();
   init_icons();
+  init_motion_fx();
   init_overlay();
   pending = [];
 });

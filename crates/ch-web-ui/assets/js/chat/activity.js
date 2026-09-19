@@ -3,6 +3,7 @@ import { autoScroll } from './scroll.js'
 import { createThinkPile, renderStaticThink } from './piles/think.js'
 import { createToolPile, renderStaticTool } from './piles/tool.js'
 import { pileIdentity } from './icons.js'
+import { revealOnView } from './motion-fx.js'
 import * as overlay from './overlay.js'
 
 // Turn pile: separated narrow sub-piles per turn — one slim thinking pile
@@ -14,6 +15,7 @@ let box = null
 let turnOpen = false
 let thinkOpen = null
 let pileCount = 0
+let toolSeq = 0
 const pending = []
 
 function target() {
@@ -28,6 +30,7 @@ function ensureBox() {
     box.className = 'turn-activity'
     thinkOpen = null
     pileCount = 0
+    toolSeq = 0
     pending.length = 0
     turnOpen = true
     t.appendChild(box)
@@ -46,9 +49,10 @@ export function pushThought(text) {
   const b = ensureBox()
   if (!b) return
   if (!thinkOpen || !thinkOpen.row.isConnected) {
-    thinkOpen = createThinkPile()
+    thinkOpen = createThinkPile({ index: pileCount })
     b.appendChild(thinkOpen.row)
     pileCount += 1
+    try { overlay.feed('💭', 'Thinking…') } catch {}
   }
   try { thinkOpen.append(text || '') } catch {}
   try { overlay.status('💭', 'Thinking…') } catch {}
@@ -64,13 +68,15 @@ export function pushToolCall(id, name, args) {
   // A tool call ends the current thinking burst (it gets its own pile next).
   settleThink()
   const note = args && typeof args.note === 'string' ? args.note : ''
-  const pile = createToolPile({ name, args, note })
+  toolSeq += 1
+  const pile = createToolPile({ name, args, note }, { index: toolSeq })
   b.appendChild(pile.row)
   pileCount += 1
   pending.push({ id: id || '', done: pile.done })
   try {
     const idn = pileIdentity(name, args, note)
     overlay.status(idn.icon, idn.label + '…')
+    overlay.feed(idn.icon, idn.label)
   } catch {}
   autoScroll()
 }
@@ -102,6 +108,10 @@ export function finishTurn() {
     try { overlay.hideNow() } catch {}
     return
   }
+  try {
+    overlay.status('✅', 'Done')
+    overlay.feed('✅', 'Done')
+  } catch {}
   try { overlay.hideSoon(1500) } catch {}
 }
 
@@ -111,7 +121,9 @@ export function resetTurn() {
   turnOpen = false
   thinkOpen = null
   pileCount = 0
+  toolSeq = 0
   pending.length = 0
+  try { overlay.hideNow() } catch {}
 }
 
 export function pendingCount() {
@@ -129,11 +141,18 @@ export function renderStaticTrace(container, trace) {
   if (!thinking.trim() && tools.length === 0) return null
   const wrap = document.createElement('div')
   wrap.className = 'turn-activity'
+  let idx = 0
   if (thinking.trim()) {
-    try { renderStaticThink(wrap, thinking, trace.thought_count) } catch {}
+    try {
+      const row = renderStaticThink(wrap, thinking, trace.thought_count)
+      if (row) { try { revealOnView(row, { index: idx++ }) } catch {} }
+    } catch {}
   }
   for (const t of tools) {
-    try { renderStaticTool(wrap, t || {}) } catch {}
+    try {
+      const row = renderStaticTool(wrap, t || {}, idx)
+      if (row) { try { revealOnView(row, { index: idx++ }) } catch {} }
+    } catch {}
   }
   if (!wrap.hasChildNodes()) return null
   container.appendChild(wrap)
