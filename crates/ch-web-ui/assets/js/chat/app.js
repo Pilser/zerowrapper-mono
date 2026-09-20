@@ -5410,9 +5410,12 @@ function popIn(el, opts = {}) {
   if (!el || !ok())
     return null;
   const index = Number.isFinite(opts.index) ? opts.index : 0;
-  const delay = Math.min(Math.max(index, 0) * 0.06, 0.4);
+  const baseDelay = Math.min(Math.max(index, 0) * 0.06, 0.4);
+  const jitter = Math.random() * 0.04 - 0.02;
+  const delay = Math.max(0, baseDelay + jitter);
+  const rot = Math.random() * 1.2 - 0.6;
   try {
-    return import_motion.animate(el, { opacity: [0, 1], scale: [0.9, 1], y: [10, 0] }, { type: "spring", stiffness: 320, damping: 24, delay });
+    return import_motion.animate(el, { opacity: [0, 1], scale: [0.9, 1], y: [10, 0], rotate: [rot, 0] }, { type: "spring", stiffness: 320, damping: 24, delay });
   } catch {
     try {
       return import_motion.animate(el, { opacity: [0, 1], scale: [0.92, 1], y: [6, 0] }, { duration: 0.28, ease: "circOut", delay });
@@ -5450,8 +5453,11 @@ function revealOnView(el, opts = {}) {
 function floatLoop(el, distance = 3, duration = 2.2) {
   if (!el || !ok())
     return () => {};
+  const d = distance + (Math.random() * 1.5 - 0.75);
+  const dur = duration + (Math.random() * 0.8 - 0.4);
+  const delay = Math.random() * 0.5;
   try {
-    const controls = import_motion.animate(el, { y: [0, -distance, 0] }, { duration, repeat: Infinity, ease: "easeInOut" });
+    const controls = import_motion.animate(el, { y: [0, -d, 0] }, { duration: dur, repeat: Infinity, ease: "easeInOut", delay });
     return () => {
       try {
         controls.stop();
@@ -5498,7 +5504,8 @@ function rippleLoop(container2) {
   const controls = [];
   try {
     rings.forEach((ring, i) => {
-      const c = import_motion.animate(ring, { transform: ["scale(0.25)", "scale(1)"], opacity: [0.9, 0] }, { duration: 1.6, repeat: Infinity, ease: "easeOut", delay: i * 0.35 });
+      const jitter = Math.random() * 0.15 - 0.075;
+      const c = import_motion.animate(ring, { transform: ["scale(0.25)", "scale(1)"], opacity: [0.9, 0] }, { duration: 1.6 + Math.random() * 0.3, repeat: Infinity, ease: "easeOut", delay: i * 0.35 + jitter });
       controls.push(c);
     });
   } catch {
@@ -9074,6 +9081,36 @@ function apply2(key) {
     });
   } catch {}
 }
+async function animatePickerChange(key, x, y) {
+  const doApply = () => apply2(key);
+  try {
+    const m = await Promise.resolve().then(() => __toESM(require_motion(), 1));
+    const av = m.animateView || m.default && m.default.animateView || typeof window !== "undefined" && window.Motion && window.Motion.animateView;
+    if (typeof av === "function" && typeof document.startViewTransition === "function") {
+      const update = () => doApply();
+      const vt = av(update, { duration: 0.4, ease: [0.28, 0.02, 0.1, 0.99] });
+      if (vt && typeof vt.new === "function") {
+        await vt.new({ clipPath: [`circle(0% at ${x}px ${y}px)`, `circle(150% at ${x}px ${y}px)`] }, { duration: 0.7, ease: "easeIn" });
+        return;
+      }
+      await vt.finished.catch(() => {});
+      return;
+    }
+  } catch {}
+  doApply();
+  try {
+    const chat = document.getElementById("chat-messages");
+    if (chat) {
+      chat.style.transition = "transform 0.25s ease";
+      chat.style.transform = "scale(0.99)";
+      setTimeout(() => {
+        try {
+          chat.style.transform = "";
+        } catch {}
+      }, 260);
+    }
+  } catch {}
+}
 function init6() {
   let current2 = "blue";
   try {
@@ -9094,11 +9131,13 @@ function init6() {
       btn.type = "button";
       btn.setAttribute("aria-label", a.label);
       btn.title = a.label;
-      btn.addEventListener("click", () => {
+      btn.addEventListener("click", (e) => {
         try {
           localStorage.setItem(STORE_KEY, a.key);
         } catch {}
-        apply2(a.key);
+        const x = e && typeof e.pageX === "number" ? e.pageX : window.innerWidth / 2;
+        const y = e && typeof e.pageY === "number" ? e.pageY : window.innerHeight / 2;
+        animatePickerChange(a.key, x, y);
       });
       li.appendChild(btn);
       ul.appendChild(li);

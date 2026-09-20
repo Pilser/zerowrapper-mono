@@ -22,6 +22,39 @@ function apply(key) {
   } catch {}
 }
 
+async function animatePickerChange(key, x, y) {
+  const doApply = () => apply(key)
+  // Try Motion's View Transition circular wipe; fallback to instant.
+  try {
+    const m = await import('./motion.js')
+    const av = m.animateView || (m.default && m.default.animateView) || (typeof window !== 'undefined' && window.Motion && window.Motion.animateView)
+    if (typeof av === 'function' && typeof document.startViewTransition === 'function') {
+      const update = () => doApply()
+      const vt = av(update, { duration: 0.4, ease: [0.28, 0.02, 0.1, 0.99] })
+      if (vt && typeof vt.new === 'function') {
+        await vt.new(
+          { clipPath: [`circle(0% at ${x}px ${y}px)`, `circle(150% at ${x}px ${y}px)`] },
+          { duration: 0.7, ease: 'easeIn' }
+        )
+        return
+      }
+      // Fallback if .new not available: just await view transition
+      await vt.finished.catch(() => {})
+      return
+    }
+  } catch {}
+  // Fallback: small pop on the chat backdrop + instant switch
+  doApply()
+  try {
+    const chat = document.getElementById('chat-messages')
+    if (chat) {
+      chat.style.transition = 'transform 0.25s ease'
+      chat.style.transform = 'scale(0.99)'
+      setTimeout(() => { try { chat.style.transform = '' } catch {} }, 260)
+    }
+  } catch {}
+}
+
 export function init() {
   let current = 'blue'
   try {
@@ -42,9 +75,11 @@ export function init() {
       btn.type = 'button'
       btn.setAttribute('aria-label', a.label)
       btn.title = a.label
-      btn.addEventListener('click', () => {
+      btn.addEventListener('click', (e) => {
         try { localStorage.setItem(STORE_KEY, a.key) } catch {}
-        apply(a.key)
+        const x = e && typeof e.pageX === 'number' ? e.pageX : window.innerWidth / 2
+        const y = e && typeof e.pageY === 'number' ? e.pageY : window.innerHeight / 2
+        animatePickerChange(a.key, x, y)
       })
       li.appendChild(btn)
       ul.appendChild(li)

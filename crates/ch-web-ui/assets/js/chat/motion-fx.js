@@ -12,16 +12,19 @@ function ok() {
   }
 }
 
-// Pop-in on mount: spring scale + fade. `index` staggers cascades
-// (each pile lands just after the previous — lively feed feel).
+// Pop-in on mount: spring scale + fade + tiny random rotate for playfulness.
+// `index` staggers cascades (each pile lands just after the previous).
 export function popIn(el, opts = {}) {
   if (!el || !ok()) return null
   const index = Number.isFinite(opts.index) ? opts.index : 0
-  const delay = Math.min(Math.max(index, 0) * 0.06, 0.4)
+  const baseDelay = Math.min(Math.max(index, 0) * 0.06, 0.4)
+  const jitter = (Math.random() * 0.04 - 0.02)
+  const delay = Math.max(0, baseDelay + jitter)
+  const rot = (Math.random() * 1.2 - 0.6)
   try {
     return animate(
       el,
-      { opacity: [0, 1], scale: [0.9, 1], y: [10, 0] },
+      { opacity: [0, 1], scale: [0.9, 1], y: [10, 0], rotate: [rot, 0] },
       { type: 'spring', stiffness: 320, damping: 24, delay }
     )
   } catch {
@@ -70,15 +73,19 @@ export function revealOnView(el, opts = {}) {
   }
 }
 
-// Gentle infinite float for icons (entertaining, low motion).
-// Returns a stop function.
+// Gentle infinite float for icons (entertaining, low motion) with
+// per-instance random distance/duration so a wall of piles never looks
+// synchronized. Returns a stop function.
 export function floatLoop(el, distance = 3, duration = 2.2) {
   if (!el || !ok()) return () => {}
+  const d = distance + (Math.random() * 1.5 - 0.75)
+  const dur = duration + (Math.random() * 0.8 - 0.4)
+  const delay = Math.random() * 0.5
   try {
     const controls = animate(
       el,
-      { y: [0, -distance, 0] },
-      { duration, repeat: Infinity, ease: 'easeInOut' }
+      { y: [0, -d, 0] },
+      { duration: dur, repeat: Infinity, ease: 'easeInOut', delay }
     )
     return () => {
       try { controls.stop() } catch {}
@@ -125,10 +132,11 @@ export function rippleLoop(container) {
   const controls = []
   try {
     rings.forEach((ring, i) => {
+      const jitter = Math.random() * 0.15 - 0.075
       const c = animate(
         ring,
         { transform: ['scale(0.25)', 'scale(1)'], opacity: [0.9, 0] },
-        { duration: 1.6, repeat: Infinity, ease: 'easeOut', delay: i * 0.35 }
+        { duration: 1.6 + Math.random() * 0.3, repeat: Infinity, ease: 'easeOut', delay: i * 0.35 + jitter }
       )
       controls.push(c)
     })
