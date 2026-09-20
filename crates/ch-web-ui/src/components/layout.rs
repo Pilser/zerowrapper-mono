@@ -7,6 +7,7 @@ use topcoat::asset::{asset, bundled_asset};
 use crate::context::AppContext;
 use crate::components::whiteboard_panel::whiteboard_panel;
 use crate::assets::STYLESHEET;
+use crate::assets::STYLEX_CSS;
 use crate::assets::MERMAID_JS;
 use crate::assets::MARKED_JS;
 use crate::assets::HIGHLIGHT_JS;
@@ -22,6 +23,15 @@ pub async fn root_layout(cx: &Cx, slot: Result) -> Result {
     // prefix like /srv/<board>/) resolves them against the document base
     // instead of the host root (served by the RootDispatchLayer via ?asset=).
     let css_url = format!("?asset={}", bundled_asset(cx, STYLESHEET).name());
+    // StyleX second sheet. ON: drawer (sessions) cut over to StyleX 2026-09-20.
+    // Tailwind first, StyleX second so StyleX wins without !important.
+    const USE_STYLEX: bool = true;
+    let stylex_url = format!("?asset={}", bundled_asset(cx, STYLEX_CSS).name());
+    let stylex_link = if USE_STYLEX {
+        format!(r#"<link rel="stylesheet" href="{stylex_url}">"#)
+    } else {
+        String::new()
+    };
     let app_js_url = format!("?asset={}", bundled_asset(cx, asset!("assets/js/chat/app.js")).name());
     let mermaid_url = format!("/_topcoat/assets/{}", bundled_asset(cx, MERMAID_JS).name());
     let marked_url = format!("/_topcoat/assets/{}", bundled_asset(cx, MARKED_JS).name());
@@ -54,6 +64,7 @@ pub async fn root_layout(cx: &Cx, slot: Result) -> Result {
                 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
                 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
                 <link rel="stylesheet" href=(css_url)>
+                { (Unescaped::new_unchecked(stylex_link)) }
                 <link rel="stylesheet" href=(katex_css_url)>
                 <script>{ (Unescaped::new_unchecked(r#"(function(){
                     var saved = localStorage.getItem('theme');

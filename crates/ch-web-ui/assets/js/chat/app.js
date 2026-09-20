@@ -8960,6 +8960,345 @@ init_file_upload();
 init_dom();
 init_auth();
 init_messages();
+
+// node_modules/@stylexjs/stylex/lib/es/stylex.mjs
+var styleq = {};
+var hasRequiredStyleq;
+function requireStyleq() {
+  if (hasRequiredStyleq)
+    return styleq;
+  hasRequiredStyleq = 1;
+  Object.defineProperty(styleq, "__esModule", {
+    value: true
+  });
+  styleq.styleq = undefined;
+  var cache = new WeakMap;
+  var compiledKey = "$$css";
+  function createStyleq(options) {
+    var disableCache;
+    var disableMix;
+    var transform;
+    if (options != null) {
+      disableCache = options.disableCache === true;
+      disableMix = options.disableMix === true;
+      transform = options.transform;
+    }
+    return function styleq2() {
+      var definedProperties = [];
+      var className = "";
+      var inlineStyle = null;
+      var debugString = "";
+      var nextCache = disableCache ? null : cache;
+      var styles = new Array(arguments.length);
+      for (var i = 0;i < arguments.length; i++) {
+        styles[i] = arguments[i];
+      }
+      while (styles.length > 0) {
+        var possibleStyle = styles.pop();
+        if (possibleStyle == null || possibleStyle === false) {
+          continue;
+        }
+        if (Array.isArray(possibleStyle)) {
+          for (var _i = 0;_i < possibleStyle.length; _i++) {
+            styles.push(possibleStyle[_i]);
+          }
+          continue;
+        }
+        var style = transform != null ? transform(possibleStyle) : possibleStyle;
+        if (style.$$css != null) {
+          var classNameChunk = "";
+          if (nextCache != null && nextCache.has(style)) {
+            var cacheEntry = nextCache.get(style);
+            if (cacheEntry != null) {
+              classNameChunk = cacheEntry[0];
+              debugString = cacheEntry[2];
+              definedProperties.push.apply(definedProperties, cacheEntry[1]);
+              nextCache = cacheEntry[3];
+            }
+          } else {
+            var definedPropertiesChunk = [];
+            for (var prop in style) {
+              var value = style[prop];
+              if (prop === compiledKey) {
+                var compiledKeyValue = style[prop];
+                if (compiledKeyValue !== true) {
+                  debugString = debugString ? compiledKeyValue + "; " + debugString : compiledKeyValue;
+                }
+                continue;
+              }
+              if (typeof value === "string" || value === null) {
+                if (!definedProperties.includes(prop)) {
+                  definedProperties.push(prop);
+                  if (nextCache != null) {
+                    definedPropertiesChunk.push(prop);
+                  }
+                  if (typeof value === "string") {
+                    classNameChunk += classNameChunk ? " " + value : value;
+                  }
+                }
+              } else {
+                console.error("styleq: ".concat(prop, " typeof ").concat(String(value), ' is not "string" or "null".'));
+              }
+            }
+            if (nextCache != null) {
+              var weakMap = new WeakMap;
+              nextCache.set(style, [classNameChunk, definedPropertiesChunk, debugString, weakMap]);
+              nextCache = weakMap;
+            }
+          }
+          if (classNameChunk) {
+            className = className ? classNameChunk + " " + className : classNameChunk;
+          }
+        } else {
+          if (disableMix) {
+            if (inlineStyle == null) {
+              inlineStyle = {};
+            }
+            inlineStyle = Object.assign({}, style, inlineStyle);
+          } else {
+            var subStyle = null;
+            for (var _prop in style) {
+              var _value = style[_prop];
+              if (_value !== undefined) {
+                if (!definedProperties.includes(_prop)) {
+                  if (_value != null) {
+                    if (inlineStyle == null) {
+                      inlineStyle = {};
+                    }
+                    if (subStyle == null) {
+                      subStyle = {};
+                    }
+                    subStyle[_prop] = _value;
+                  }
+                  definedProperties.push(_prop);
+                  nextCache = null;
+                }
+              }
+            }
+            if (subStyle != null) {
+              inlineStyle = Object.assign(subStyle, inlineStyle);
+            }
+          }
+        }
+      }
+      var styleProps = [className, inlineStyle, debugString];
+      return styleProps;
+    };
+  }
+  var styleq$1 = styleq.styleq = createStyleq();
+  styleq$1.factory = createStyleq;
+  return styleq;
+}
+var styleqExports = /* @__PURE__ */ requireStyleq();
+function props(...styles) {
+  const [className, style, dataStyleSrc] = styleqExports.styleq(styles);
+  const result = {};
+  if (className != null && className !== "") {
+    result.className = className;
+  }
+  if (style != null && Object.keys(style).length > 0) {
+    result.style = style;
+  }
+  if (dataStyleSrc != null && dataStyleSrc !== "") {
+    result["data-style-src"] = dataStyleSrc;
+  }
+  return result;
+}
+var env = Object.freeze({});
+
+// drawer.stylex.js
+var s = {
+  overlay: {
+    kVAEAm: "xixxii4",
+    kpwlN0: "x10a8y8t",
+    kWkggS: "xa44r0r",
+    kY2c9j: "x1aciyhk",
+    $$css: true
+  },
+  overlayHidden: {
+    k1xSpc: "x1s85apg",
+    $$css: true
+  },
+  panel: {
+    kVAEAm: "xixxii4",
+    k87sOh: "x13vifvy",
+    kbCHJM: "xu96u03",
+    kZKoxP: "xtdtrs8",
+    kzqmXN: "x13uh5dk",
+    kY2c9j: "x13mdkc",
+    k1xSpc: "x78zum5",
+    kXwgrk: "xdt5ytf",
+    kWkggS: "x4zv5z4",
+    kGVxlE: "x1s62sfi",
+    k1ekBW: "x11xpdln",
+    kIyJzY: "x1rvut6x",
+    kAMwcw: "xwji4o3",
+    $$css: true
+  },
+  panelClosed: {
+    k3aq6I: "x5fxwdf",
+    $$css: true
+  },
+  panelOpen: {
+    k3aq6I: "x1c071of",
+    $$css: true
+  },
+  header: {
+    k1xSpc: "x78zum5",
+    kGNEyG: "x6s0dn4",
+    kjj79g: "x1qughib",
+    kmVPX3: "xzw2spd",
+    $$css: true
+  },
+  title: {
+    kGuDYH: "xgommxb",
+    k63SB2: "x1xlr1w8",
+    kP9fke: "xtvhhri",
+    kb6lSQ: "x9pfba7",
+    kMwMTN: "x1hpp4kd",
+    $$css: true
+  },
+  closeBtn: {
+    k1xSpc: "x78zum5",
+    kGNEyG: "x6s0dn4",
+    kjj79g: "xl56j7k",
+    kzqmXN: "x1849jeq",
+    kZKoxP: "x1gnnpzl",
+    kaIpWk: "x1q4ynmn",
+    kkrTdU: "x1ypdohk",
+    kMv6JI: "xjb2p0i",
+    kWkggS: "x1w3zwpd",
+    kMwMTN: "xy6rsxr",
+    kGzVvX: "x1688wid",
+    kaVNsj: "x1rmuloz",
+    kDPRdz: "x1iih0q2",
+    $$css: true
+  },
+  actions: {
+    kmVPX3: "xk152dh",
+    $$css: true
+  },
+  newBtn: {
+    k1xSpc: "x78zum5",
+    kGNEyG: "x6s0dn4",
+    kjj79g: "xl56j7k",
+    kOIVth: "x167g77z",
+    kzqmXN: "xh8yej3",
+    kmVPX3: "x6yrr3s",
+    kaIpWk: "x4pepcl",
+    kkrTdU: "x1ypdohk",
+    kMv6JI: "xjb2p0i",
+    kGuDYH: "xym1t2f",
+    k63SB2: "x1s688f",
+    kKwaWg: "x1eo26m4",
+    kMwMTN: "xfungia",
+    kO95pf: "x3v1jnx",
+    $$css: true
+  },
+  label: {
+    kmVPX3: "x1vzzlyo",
+    kGuDYH: "x191ayms",
+    k63SB2: "x1xlr1w8",
+    kP9fke: "xtvhhri",
+    kb6lSQ: "x1dor1uw",
+    kMwMTN: "x1hpp4kd",
+    $$css: true
+  },
+  list: {
+    kUk6DE: "x98rzlu",
+    kAzted: "x2lwn1j",
+    kORKVm: "x1odjw0f",
+    kmVPX3: "x1kfpmg1",
+    k1xSpc: "x78zum5",
+    kXwgrk: "xdt5ytf",
+    kOIVth: "x1jnr06f",
+    $$css: true
+  },
+  item: {
+    k1xSpc: "x1lliihq",
+    kzqmXN: "xh8yej3",
+    k9WMMc: "xdpxx8g",
+    kkrTdU: "x1ypdohk",
+    kMv6JI: "xjb2p0i",
+    kmVPX3: "x6yrr3s",
+    kaIpWk: "x4pepcl",
+    kMzoRj: "xmkeg23",
+    ksu8eU: "x1y0btm7",
+    kVAM5u: "x9r1u3d",
+    kWkggS: "xjbqb8w",
+    kMwMTN: "xqfnruw",
+    k1ekBW: "xts7igz",
+    kIyJzY: "xx6bhzk",
+    kGzVvX: "x100i51q",
+    $$css: true
+  },
+  itemActive: {
+    kWkggS: "xkfhepb",
+    kVAM5u: "x7ahe48",
+    kGVxlE: "x1txfbru",
+    $$css: true
+  },
+  itemTitle: {
+    k1xSpc: "x1lliihq",
+    kGuDYH: "xym1t2f",
+    k63SB2: "x1s688f",
+    khDVqt: "xuxw1ft",
+    kVQacm: "xb3r6kr",
+    kg5iWk: "xlyipyv",
+    $$css: true
+  },
+  itemTitleActive: {
+    kMwMTN: "xcorkxk",
+    $$css: true
+  },
+  itemMeta: {
+    k1xSpc: "x1lliihq",
+    kGuDYH: "x191ayms",
+    keoZOQ: "x7r5mf7",
+    khDVqt: "xuxw1ft",
+    kVQacm: "xb3r6kr",
+    kg5iWk: "xlyipyv",
+    kMwMTN: "xy6rsxr",
+    $$css: true
+  },
+  empty: {
+    kGuDYH: "xgommxb",
+    k9WMMc: "x2b8uid",
+    kMwMTN: "xy6rsxr",
+    kmVPX3: "x1enw65i",
+    $$css: true
+  },
+  usage: {
+    kWkggS: "x1w3zwpd",
+    kmVPX3: "x1v56k37",
+    kGuDYH: "x1sfrptf",
+    kMwMTN: "xy6rsxr",
+    khDVqt: "xuxw1ft",
+    kVQacm: "xb3r6kr",
+    kg5iWk: "xlyipyv",
+    $$css: true
+  }
+};
+
+// drawer.js
+var cx = (...args) => props(...args).className || "";
+function paintShell(open2) {
+  if (els.drawerOverlay) {
+    els.drawerOverlay.className = (!open2 ? "hidden " : "") + cx(s.overlay, !open2 && s.overlayHidden);
+  }
+  if (els.drawer) {
+    els.drawer.className = (open2 ? "open " : "") + cx(s.panel, open2 ? s.panelOpen : s.panelClosed);
+  }
+}
+function paintStatic() {
+  const byId = (id) => document.getElementById(id);
+  const pairs = [["drawer-header", s.header], ["drawer-title", s.title], ["drawer-close-btn", s.closeBtn], ["drawer-actions", s.actions], ["drawer-new-btn", s.newBtn], ["drawer-sessions-label", s.label], ["drawer-list", s.list], ["drawer-usage", s.usage]];
+  for (const [id, style] of pairs) {
+    const el2 = byId(id);
+    if (el2)
+      el2.className = cx(style);
+  }
+}
 function fmtTokens(n) {
   n = Number(n) || 0;
   if (n >= 1000)
@@ -8978,8 +9317,8 @@ async function loadLive() {
         continue;
       const j = await r.json();
       const map = {};
-      for (const s of j.sessions || [])
-        map[s.id] = s;
+      for (const s2 of j.sessions || [])
+        map[s2.id] = s2;
       return map;
     } catch {}
   }
@@ -9001,6 +9340,7 @@ function setOpen2(open2) {
     els.drawer.setAttribute("aria-hidden", "true");
     els.drawerOverlay.classList.add("hidden");
   }
+  paintShell(open2);
 }
 function toggle() {
   setOpen2(!isOpen3());
@@ -9013,29 +9353,30 @@ async function renderList() {
   els.drawerList.innerHTML = "";
   if (!list || list.length === 0) {
     const d = document.createElement("div");
-    d.className = "drawer-empty";
+    d.className = cx(s.empty);
     d.textContent = "No chats yet — start a new one.";
     els.drawerList.appendChild(d);
   }
   const seen = new Set;
-  for (const s of list || []) {
-    const id = s.id || s.session_id;
+  for (const s2 of list || []) {
+    const id = s2.id || s2.session_id;
     if (!id || seen.has(id))
       continue;
     seen.add(id);
-    const title = s.title && s.title !== id ? s.title : id;
+    const title = s2.title && s2.title !== id ? s2.title : id;
     const lv = live[id];
     const btn = document.createElement("button");
     btn.type = "button";
-    btn.className = "drawer-item" + (id === state2.sessionId ? " active" : "");
+    const isActive = id === state2.sessionId;
+    btn.className = cx(s2.item, isActive && s2.itemActive);
     const t = document.createElement("span");
-    t.className = "drawer-item-title";
+    t.className = cx(s2.itemTitle, isActive && s2.itemTitleActive);
     t.textContent = title;
     t.title = title + `
 ` + id;
     btn.appendChild(t);
     const meta = document.createElement("span");
-    meta.className = "drawer-item-meta";
+    meta.className = cx(s2.itemMeta);
     meta.textContent = lv && lv.model ? lv.model + " · " + fmtTokens(lv.input_tokens) + " in / " + fmtTokens(lv.output_tokens) + " out · " + fmtCost(lv.cost) : id;
     btn.appendChild(meta);
     btn.addEventListener("click", () => switchSession(id));
@@ -9067,7 +9408,9 @@ async function switchSession(id) {
   state2.sessionId = id;
   saveToStorage();
   els.messages.innerHTML = "";
-  const { fetchHistory: fetchHistory2 } = await Promise.resolve().then(() => (init_messages(), exports_messages));
+  const {
+    fetchHistory: fetchHistory2
+  } = await Promise.resolve().then(() => (init_messages(), exports_messages));
   const whiteboard = await Promise.resolve().then(() => (init_whiteboard(), exports_whiteboard));
   disconnect2();
   connect2();
@@ -9104,6 +9447,8 @@ function init5() {
   try {
     setOnStateChange(refreshUsage);
   } catch {}
+  paintStatic();
+  paintShell(false);
   renderList();
 }
 
@@ -9258,8 +9603,8 @@ function init7() {
   init5();
   init3();
   init6();
-  on("stateChange", (s) => {
-    if (s === State.CONNECTED)
+  on("stateChange", (s2) => {
+    if (s2 === State.CONNECTED)
       syncCancelButton();
   });
   syncCancelButton();
@@ -9317,7 +9662,7 @@ async function syncCancelButton() {
         if (!r.ok)
           continue;
         const j = await r.json();
-        const hit = (j.sessions || []).find((s) => (s.id || s.session_id) === state2.sessionId);
+        const hit = (j.sessions || []).find((s2) => (s2.id || s2.session_id) === state2.sessionId);
         running = !!(hit && hit.running);
         break;
       } catch {}
@@ -9345,8 +9690,8 @@ async function refreshSessionList() {
         if (!r.ok)
           continue;
         const j = await r.json();
-        for (const s of j.sessions || [])
-          live[s.id] = s;
+        for (const s2 of j.sessions || [])
+          live[s2.id] = s2;
         break;
       } catch {}
     }
@@ -9355,8 +9700,8 @@ async function refreshSessionList() {
     return;
   els.sessionSelect.innerHTML = "";
   const seen = new Set;
-  for (const s of list) {
-    const id = s.id || s.session_id;
+  for (const s2 of list) {
+    const id = s2.id || s2.session_id;
     if (!id || seen.has(id))
       continue;
     seen.add(id);
@@ -9364,7 +9709,7 @@ async function refreshSessionList() {
     opt.value = id;
     const lv = live[id];
     const liveSuffix = lv && lv.model ? " · " + lv.model + (lv.cost ? " · $" + Number(lv.cost).toFixed(4) : "") : "";
-    opt.textContent = (s.title && s.title !== id ? s.title + " · " : "") + id + liveSuffix;
+    opt.textContent = (s2.title && s2.title !== id ? s2.title + " · " : "") + id + liveSuffix;
     if (id === state2.sessionId)
       opt.selected = true;
     els.sessionSelect.appendChild(opt);

@@ -64,18 +64,31 @@ jobs:
         id: ui-cache
         uses: actions/cache@v4
         with:
-          # The generated app.js is committed; skip the rebuild (and the
-          # downstream crate relink it triggers) when JS sources are unchanged.
-          path: crates/ch-web-ui/assets/js/chat/app.js
-          key: zw-ui-${{ hashFiles('crates/ch-web-ui/assets/js/chat/**', '!crates/ch-web-ui/assets/js/chat/app.js') }}
+          # The generated app.js + stylex.css are committed; skip the rebuild
+          # (and the downstream crate relink it triggers) when JS sources
+          # or the lockfile are unchanged.
+          path: |
+            crates/ch-web-ui/assets/js/chat/app.js
+            crates/ch-web-ui/assets/js/chat/stylex.css
+          key: zw-ui-${{ hashFiles('crates/ch-web-ui/assets/js/chat/**', '!crates/ch-web-ui/assets/js/chat/app.js', '!crates/ch-web-ui/assets/js/chat/stylex.css') }}
+
+      - name: Install JS deps
+        if: steps.ui-cache.outputs.cache-hit != 'true'
+        # First npm deps in the repo (StyleX). Frozen lockfile keeps CI on
+        # the exact versions proven locally.
+        run: |
+          cd crates/ch-web-ui/assets/js/chat
+          bun install --frozen-lockfile
 
       - name: Bundle frontend JS
         if: steps.ui-cache.outputs.cache-hit != 'true'
-        # app.js is served by the binary (layout.rs asset!) — rebuild from
-        # modules BEFORE cargo build so the binary embeds fresh frontend.
+        # app.js (+ stylex.css) are served by the binary (layout.rs assets!) —
+        # rebuild from modules BEFORE cargo build so the binary embeds fresh
+        # frontend. build.mjs mirrors the old CLI flags and adds the StyleX
+        # esbuild adapter (CLI `bun build` accepts no plugins).
         run: |
           cd crates/ch-web-ui/assets/js/chat
-          bun build app-entry.js --format esm --external marked --external highlight.js --external katex --external mermaid --outfile app.js
+          bun build.mjs
 
       # TEMP-DISABLED (disk): check/clippy/test each materialize GBs of
       # dev-profile artifacts and the 14 GB runner OOMs before release.

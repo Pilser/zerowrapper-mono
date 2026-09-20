@@ -1,0 +1,9 @@
+{
+  "name": "zw-chat-ui",
+  "private": true,
+  "type": "module",
+  "devDependencies": {
+    "@stylexjs/stylex": "latest",
+    "@stylexjs/unplugin": "latest"
+  }
+}

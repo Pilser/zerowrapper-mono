@@ -1,0 +1,319 @@
+@layer priority1 {
+  .x10a8y8t {
+    inset: 0;
+  }
+
+  .x1kfpmg1 {
+    padding: 0 10px 10px;
+  }
+
+  .x6yrr3s {
+    padding: 10px 12px;
+  }
+
+  .x1vzzlyo {
+    padding: 10px 16px 6px;
+  }
+
+  .x1v56k37 {
+    padding: 12px 16px 16px;
+  }
+
+  .xk152dh {
+    padding: 12px 16px 8px;
+  }
+
+  .x1enw65i {
+    padding: 16px 12px;
+  }
+
+  .xzw2spd {
+    padding: 16px 16px 12px;
+  }
+}
+
+@layer priority2 {
+  .x9r1u3d {
+    border-color: #0000;
+  }
+
+  .x7ahe48 {
+    border-color: var(--color-bg-interactive);
+  }
+
+  .x1q4ynmn {
+    border-radius: 10px;
+  }
+
+  .x4pepcl {
+    border-radius: 12px;
+  }
+
+  .x1y0btm7 {
+    border-style: solid;
+  }
+
+  .xmkeg23 {
+    border-width: 1px;
+  }
+
+  .x98rzlu {
+    flex: 1;
+  }
+
+  .x1jnr06f {
+    gap: 4px;
+  }
+
+  .x167g77z {
+    gap: 8px;
+  }
+
+  .xb3r6kr {
+    overflow: hidden;
+  }
+
+  .x1rmuloz:hover {
+    border-color: var(--color-bg-interactive);
+  }
+}
+
+@layer priority3 {
+  .x6s0dn4 {
+    align-items: center;
+  }
+
+  .xa44r0r {
+    background-color: #00000073;
+  }
+
+  .xjbqb8w {
+    background-color: #0000;
+  }
+
+  .xkfhepb {
+    background-color: var(--color-accent-lighter);
+  }
+
+  .x1w3zwpd {
+    background-color: var(--color-bg-weak);
+  }
+
+  .x4zv5z4 {
+    background-color: var(--color-bg);
+  }
+
+  .x1eo26m4 {
+    background-image: linear-gradient(135deg,var(--color-bg-interactive),var(--color-accent-darker));
+  }
+
+  .x1s62sfi {
+    box-shadow: 12px 0 32px #00000038;
+  }
+
+  .x1txfbru {
+    box-shadow: inset 3px 0 0 var(--color-bg-interactive);
+  }
+
+  .xfungia {
+    color: #fff;
+  }
+
+  .xcorkxk {
+    color: var(--color-accent-darker);
+  }
+
+  .x1hpp4kd {
+    color: var(--color-bg-interactive);
+  }
+
+  .xqfnruw {
+    color: var(--color-text-strong);
+  }
+
+  .xy6rsxr {
+    color: var(--color-text-weak);
+  }
+
+  .x1ypdohk {
+    cursor: pointer;
+  }
+
+  .x1lliihq {
+    display: block;
+  }
+
+  .x78zum5 {
+    display: flex;
+  }
+
+  .x1s85apg {
+    display: none;
+  }
+
+  .xdt5ytf {
+    flex-direction: column;
+  }
+
+  .xjb2p0i {
+    font-family: inherit;
+  }
+
+  .x191ayms {
+    font-size: .68rem;
+  }
+
+  .x1sfrptf {
+    font-size: .7rem;
+  }
+
+  .xym1t2f {
+    font-size: .82rem;
+  }
+
+  .xgommxb {
+    font-size: .8rem;
+  }
+
+  .x1s688f {
+    font-weight: 600;
+  }
+
+  .x1xlr1w8 {
+    font-weight: 700;
+  }
+
+  .xl56j7k {
+    justify-content: center;
+  }
+
+  .x1qughib {
+    justify-content: space-between;
+  }
+
+  .x9pfba7 {
+    letter-spacing: .08em;
+  }
+
+  .x1dor1uw {
+    letter-spacing: .1em;
+  }
+
+  .xixxii4 {
+    position: fixed;
+  }
+
+  .x2b8uid {
+    text-align: center;
+  }
+
+  .xdpxx8g {
+    text-align: left;
+  }
+
+  .xlyipyv {
+    text-overflow: ellipsis;
+  }
+
+  .xtvhhri {
+    text-transform: uppercase;
+  }
+
+  .x1c071of {
+    transform: none;
+  }
+
+  .x5fxwdf {
+    transform: translateX(-105%);
+  }
+
+  .xx6bhzk {
+    transition-duration: .15s;
+  }
+
+  .x1rvut6x {
+    transition-duration: .25s;
+  }
+
+  .xts7igz {
+    transition-property: background-color, border-color;
+  }
+
+  .x11xpdln {
+    transition-property: transform;
+  }
+
+  .xwji4o3 {
+    transition-timing-function: ease;
+  }
+
+  .xuxw1ft {
+    white-space: nowrap;
+  }
+
+  .x1aciyhk {
+    z-index: 60;
+  }
+
+  .x13mdkc {
+    z-index: 61;
+  }
+
+  .x1688wid:hover {
+    background-color: var(--color-bg-interactive);
+  }
+
+  .x100i51q:hover {
+    background-color: var(--color-bg-weak);
+  }
+
+  .x1iih0q2:hover {
+    color: #fff;
+  }
+
+  .x3v1jnx:hover {
+    filter: brightness(1.08);
+  }
+}
+
+@layer priority4 {
+  .xtdtrs8 {
+    height: 100dvh;
+  }
+
+  .x1gnnpzl {
+    height: 30px;
+  }
+
+  .xu96u03 {
+    left: 0;
+  }
+
+  .x7r5mf7 {
+    margin-top: 3px;
+  }
+
+  .x2lwn1j {
+    min-height: 0;
+  }
+
+  .x1odjw0f {
+    overflow-y: auto;
+  }
+
+  .x13vifvy {
+    top: 0;
+  }
+
+  .xh8yej3 {
+    width: 100%;
+  }
+
+  .x1849jeq {
+    width: 30px;
+  }
+
+  .x13uh5dk {
+    width: min(340px, 88vw);
+  }
+}
