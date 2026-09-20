@@ -576,18 +576,26 @@
   }
   /* Dotted chat backdrop (uses accent so picker visibly changes it) +
      streaming tint shift — what triggers ripple also triggers this. */
-  #chat-messages {
+  /* Full-bleed dotted backdrop — covers entire viewport, not just the
+     centered column. Body holds the dots; #chat-messages stays transparent
+     so they show through edge-to-edge on every device. Streaming tint
+     lives on body so the whole background glows, not just the middle. */
+  body {
     background-image: radial-gradient(circle, color-mix(in srgb, var(--color-bg-interactive) 38%, transparent) 1.7px, transparent 1.9px);
     background-size: 22px 22px;
-    border-radius: 12px;
+    background-attachment: fixed;
     transition: background-color 0.6s ease, background-image 0.6s ease;
   }
-  #chat-messages.streaming {
+  body.streaming {
     background-color: color-mix(in srgb, var(--color-bg-interactive) 14%, transparent);
     background-image: radial-gradient(circle, var(--color-bg-interactive) 2.2px, transparent 2.4px);
     animation: dots-stream-pulse 1.6s ease-in-out infinite;
   }
   @keyframes dots-stream-pulse { 0%,100% { filter: brightness(1); } 50% { filter: brightness(1.25); } }
+  #chat-messages {
+    background: transparent;
+    border-radius: 12px;
+  }
   /* Corner accent picker: collapsed dot, expands on tap. */
   #accent-picker {
     position: fixed; top: 12px; right: 12px; z-index: 70;

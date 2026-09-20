@@ -6263,12 +6263,16 @@ function target() {
 function setStreamingTint(on2) {
   try {
     const t = target();
-    if (!t)
-      return;
+    if (t) {
+      if (on2)
+        t.classList.add("streaming");
+      else
+        t.classList.remove("streaming");
+    }
     if (on2)
-      t.classList.add("streaming");
+      document.body.classList.add("streaming");
     else
-      t.classList.remove("streaming");
+      document.body.classList.remove("streaming");
   } catch {}
 }
 function ensureBox() {

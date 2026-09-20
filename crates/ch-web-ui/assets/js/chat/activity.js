@@ -25,9 +25,12 @@ function target() {
 function setStreamingTint(on) {
   try {
     const t = target()
-    if (!t) return
-    if (on) t.classList.add('streaming')
-    else t.classList.remove('streaming')
+    if (t) {
+      if (on) t.classList.add('streaming')
+      else t.classList.remove('streaming')
+    }
+    if (on) document.body.classList.add('streaming')
+    else document.body.classList.remove('streaming')
   } catch {}
 }
 
