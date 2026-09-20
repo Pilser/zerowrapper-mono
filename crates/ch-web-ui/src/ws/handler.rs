@@ -153,6 +153,22 @@ pub async fn agent_session_list() -> Vec<serde_json::Value> {
             }
         })
         .collect();
+    // Merge on-disk sessions (history without a live engine) so the drawer
+    // can show detail for any selected session, not just running ones.
+    let live_ids: Vec<String> = out
+        .iter()
+        .filter_map(|v| v.get("id").and_then(|x| x.as_str()).map(str::to_string))
+        .collect();
+    for meta in zw_agent_embed::recent_sessions_meta(100) {
+        let dup = meta
+            .get("id")
+            .and_then(|x| x.as_str())
+            .map(|id| live_ids.iter().any(|l| l == id))
+            .unwrap_or(true);
+        if !dup {
+            out.push(meta);
+        }
+    }
     // `updated_at` is RFC3339: lexicographic order == chronological.
     // (`serde_json::Value` has no `Ord`; compare as strings.)
     out.sort_by(|a, b| {

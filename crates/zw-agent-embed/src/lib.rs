@@ -625,6 +625,46 @@ pub fn tools_to_trace_json(tools: &[TracedTool]) -> String {
     .to_capped_json()
 }
 
+/// Session metadata for the drawer, shaped like a live `agent_sessions`
+/// entry. Reads the on-disk session file, so it also works for history
+/// sessions that have no live engine.
+pub fn session_meta(session_id: &str) -> Option<serde_json::Value> {
+    let s = zerostack::session::storage::load_session(session_id).ok()??;
+    Some(session_meta_json(&s))
+}
+
+/// Recent on-disk sessions, newest first, same shape as [`session_meta`].
+pub fn recent_sessions_meta(limit: usize) -> Vec<serde_json::Value> {
+    zerostack::session::storage::find_recent_sessions(limit)
+        .unwrap_or_default()
+        .iter()
+        .map(session_meta_json)
+        .collect()
+}
+
+fn session_meta_json(s: &zerostack::session::Session) -> serde_json::Value {
+    serde_json::json!({
+        "id": s.id.to_string(),
+        "name": s.name.to_string(),
+        "model": s.model.to_string(),
+        "provider": s.provider.to_string(),
+        "messages": s.messages.len(),
+        "input_tokens": s.total_input_tokens,
+        "output_tokens": s.total_output_tokens,
+        "cached_input_tokens": s.total_cached_input_tokens,
+        "cache_creation_input_tokens": s.total_cache_creation_input_tokens,
+        "cost": s.total_cost,
+        "estimated_tokens": s.total_estimated_tokens,
+        "calibrated_tokens": s.calibrated_tokens,
+        "calibrated_msg_count": s.calibrated_msg_count,
+        "context_window": s.context_window,
+        "created_at": s.created_at.to_string(),
+        "updated_at": s.updated_at.to_string(),
+        "working_dir": s.working_dir.to_string(),
+        "running": false,
+    })
+}
+
 /// History from the agent's session file (post-restart, pre-first-message).
 /// Returns `None` when this session was never persisted.
 pub fn load_session_history(session_id: &str) -> Option<Vec<HistoryMsg>> {
