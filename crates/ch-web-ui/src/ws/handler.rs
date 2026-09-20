@@ -131,8 +131,16 @@ pub async fn agent_session_list() -> Vec<serde_json::Value> {
                         "messages": s.messages.len(),
                         "input_tokens": s.total_input_tokens,
                         "output_tokens": s.total_output_tokens,
+                        "cached_input_tokens": s.total_cached_input_tokens,
+                        "cache_creation_input_tokens": s.total_cache_creation_input_tokens,
                         "cost": s.total_cost,
+                        "estimated_tokens": s.total_estimated_tokens,
+                        "calibrated_tokens": s.calibrated_tokens,
+                        "calibrated_msg_count": s.calibrated_msg_count,
+                        "context_window": s.context_window,
+                        "created_at": s.created_at.to_string(),
                         "updated_at": s.updated_at.to_string(),
+                        "working_dir": s.working_dir.to_string(),
                         "running": running,
                     })
                 }

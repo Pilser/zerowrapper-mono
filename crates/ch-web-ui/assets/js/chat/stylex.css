@@ -41,12 +41,12 @@
     padding: 10px 12px;
   }
 
-  .xu0w33h {
-    padding: 10px 16px 14px;
-  }
-
   .x7z7khe {
     padding: 10px;
+  }
+
+  .x1v56k37 {
+    padding: 12px 16px 16px;
   }
 
   .x1iwkndl {
@@ -55,6 +55,10 @@
 
   .xwvmjul {
     padding: 14px 16px 10px;
+  }
+
+  .x7bhtc1 {
+    padding: 1px 7px;
   }
 
   .xl7t7w5 {
@@ -93,6 +97,10 @@
     padding: 6px 8px;
   }
 
+  .x2lkgqm {
+    padding: 7px 10px;
+  }
+
   .xhrpmxf {
     padding: 7px 12px;
   }
@@ -103,6 +111,10 @@
 
   .x153ncpu {
     padding: 8px 12px;
+  }
+
+  .x123tcd6 {
+    padding: 8px 16px 2px;
   }
 
   .x1olomkg {
@@ -191,12 +203,24 @@
     flex: 1;
   }
 
+  .x883omv {
+    gap: 10px;
+  }
+
+  .x1v2ro7d {
+    gap: 12px;
+  }
+
   .x1af02g3 {
     gap: 14px;
   }
 
   .x195vfkc {
     gap: 2px;
+  }
+
+  .x1nejdyq {
+    gap: 5px;
   }
 
   .x17d4w8g {
@@ -225,6 +249,10 @@
 }
 
 @layer priority4 {
+  .x1pha0wt {
+    align-items: baseline;
+  }
+
   .x6s0dn4 {
     align-items: center;
   }
@@ -341,6 +369,10 @@
     background-color: var(--xi0j218);
   }
 
+  .x1l2c5m2 {
+    background-color: var(--xortcnl);
+  }
+
   .x6eb63x {
     background-color: var(--xwmb7oe);
   }
@@ -433,6 +465,14 @@
     color: var(--x1gstrvw);
   }
 
+  .x2b4slt {
+    color: var(--x1i771ot);
+  }
+
+  .xk67k7n {
+    color: var(--x6ftne2);
+  }
+
   .x1xw57gy {
     color: var(--x9b152b);
   }
@@ -455,6 +495,10 @@
 
   .xzuqxi3 {
     cursor: zoom-out;
+  }
+
+  .xzyj77d {
+    direction: rtl;
   }
 
   .x1lliihq {
@@ -497,8 +541,16 @@
     font-family: var(--xu598bd);
   }
 
+  .x1gy93pe {
+    font-size: .58rem;
+  }
+
   .x2ohwh0 {
     font-size: .625rem;
+  }
+
+  .x9cxo5s {
+    font-size: .62rem;
   }
 
   .x12lo8hy {
@@ -583,6 +635,10 @@
 
   .x1dgsrnt {
     letter-spacing: .06em;
+  }
+
+  .x9pfba7 {
+    letter-spacing: .08em;
   }
 
   .xfrs9s4 {
@@ -671,6 +727,10 @@
 
   .xdpxx8g {
     text-align: left;
+  }
+
+  .x1hr2gdg {
+    text-align: right;
   }
 
   .xlyipyv {
@@ -931,6 +991,10 @@
     height: 56px;
   }
 
+  .xols6we {
+    height: 6px;
+  }
+
   .xdk7pt {
     height: 8px;
   }
@@ -969,6 +1033,10 @@
 
   .x1983irj {
     max-height: 220px;
+  }
+
+  .xghzxso {
+    max-height: 46vh;
   }
 
   .xqui1pq {

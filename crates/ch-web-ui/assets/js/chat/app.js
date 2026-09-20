@@ -10431,12 +10431,147 @@ var d = {
     kEafiO: "x178xt8z",
     kPef9Z: "x13fuv20",
     kLZC3w: "x1uasxvk",
-    kmVPX3: "xu0w33h",
-    kGuDYH: "x1iuv88s",
-    kMwMTN: "xh1wwo8",
-    khDVqt: "xuxw1ft",
+    kmVPX3: "x1v56k37",
+    kskxy: "xghzxso",
+    kORKVm: "x1odjw0f",
+    k1xSpc: "x78zum5",
+    kXwgrk: "xdt5ytf",
+    kOIVth: "x1v2ro7d",
+    $$css: true
+  },
+  detailSection: {
+    k1xSpc: "x78zum5",
+    kXwgrk: "xdt5ytf",
+    kOIVth: "x1nejdyq",
+    $$css: true
+  },
+  detailTitle: {
+    kGuDYH: "x9cxo5s",
+    k63SB2: "x1xlr1w8",
+    kP9fke: "xtvhhri",
+    kb6lSQ: "x9pfba7",
+    kMwMTN: "xk67k7n",
+    $$css: true
+  },
+  detailHead: {
+    k1xSpc: "x78zum5",
+    kGNEyG: "x6s0dn4",
+    kjj79g: "x1qughib",
+    kOIVth: "x167g77z",
+    $$css: true
+  },
+  detailModel: {
+    kGuDYH: "xp1qmoa",
+    k63SB2: "x1s688f",
+    kMwMTN: "x1wp7847",
     kVQacm: "xb3r6kr",
     kg5iWk: "xlyipyv",
+    khDVqt: "xuxw1ft",
+    $$css: true
+  },
+  badge: {
+    k1xSpc: "x3nfvp2",
+    kGNEyG: "x6s0dn4",
+    kmuXW: "x2lah0s",
+    kmVPX3: "x7bhtc1",
+    kaIpWk: "x1e6avla",
+    kGuDYH: "x1gy93pe",
+    k63SB2: "x1xlr1w8",
+    kP9fke: "xtvhhri",
+    kb6lSQ: "x1dgsrnt",
+    $$css: true
+  },
+  badgeRunning: {
+    kWkggS: "x1kl6yg8",
+    kMwMTN: "x2b4slt",
+    $$css: true
+  },
+  badgeIdle: {
+    kWkggS: "x7b40fa",
+    kMwMTN: "xh1wwo8",
+    $$css: true
+  },
+  detailRow: {
+    k1xSpc: "x78zum5",
+    kGNEyG: "x1pha0wt",
+    kjj79g: "x1qughib",
+    kOIVth: "x883omv",
+    kGuDYH: "x1iuv88s",
+    $$css: true
+  },
+  detailLabel: {
+    kMwMTN: "xh1wwo8",
+    kmuXW: "x2lah0s",
+    $$css: true
+  },
+  detailNum: {
+    kMwMTN: "x1wp7847",
+    kMv6JI: "xnhzrae",
+    kGuDYH: "x1sfrptf",
+    k9WMMc: "x1hr2gdg",
+    kVQacm: "xb3r6kr",
+    kg5iWk: "xlyipyv",
+    khDVqt: "xuxw1ft",
+    $$css: true
+  },
+  bar: {
+    kZKoxP: "xols6we",
+    kaIpWk: "x1e6avla",
+    kWkggS: "x7b40fa",
+    kVQacm: "xb3r6kr",
+    $$css: true
+  },
+  barFill: {
+    kZKoxP: "x5yr21d",
+    kaIpWk: "x1e6avla",
+    kWkggS: "x57rt1s",
+    $$css: true
+  },
+  barFillWarn: {
+    kWkggS: "x1l2c5m2",
+    $$css: true
+  },
+  dirText: {
+    kGuDYH: "x191ayms",
+    kMwMTN: "xh1wwo8",
+    kMv6JI: "xnhzrae",
+    kVQacm: "xb3r6kr",
+    kg5iWk: "xlyipyv",
+    khDVqt: "xuxw1ft",
+    ksoyAI: "xzyj77d",
+    k9WMMc: "xdpxx8g",
+    $$css: true
+  },
+  extrasActions: {
+    k1xSpc: "x78zum5",
+    kOIVth: "x167g77z",
+    kmVPX3: "x123tcd6",
+    $$css: true
+  },
+  actionBtn: {
+    kUk6DE: "x98rzlu",
+    k1xSpc: "x78zum5",
+    kGNEyG: "x6s0dn4",
+    kjj79g: "xl56j7k",
+    kOIVth: "x17d4w8g",
+    kmVPX3: "x2lkgqm",
+    kaIpWk: "x1q4ynmn",
+    kkrTdU: "x1ypdohk",
+    kMv6JI: "xjb2p0i",
+    kGuDYH: "x1iuv88s",
+    k63SB2: "x1s688f",
+    kMzoRj: "xmkeg23",
+    ksu8eU: "x1y0btm7",
+    kVAM5u: "x1d54n62",
+    kWkggS: "x7b40fa",
+    kMwMTN: "x1wp7847",
+    kGzVvX: "xes8ofb",
+    $$css: true
+  },
+  actionIcon: {
+    k1xSpc: "x3nfvp2",
+    kGNEyG: "x6s0dn4",
+    kmuXW: "x2lah0s",
     $$css: true
   }
 };
@@ -10544,16 +10679,136 @@ async function renderList() {
   }
   renderUsage(live);
 }
+function fmtNum(n) {
+  return Number(n || 0).toLocaleString("en-US");
+}
+function fmtWhen(iso) {
+  if (!iso)
+    return "—";
+  try {
+    const d2 = new Date(iso);
+    if (isNaN(d2.getTime()))
+      return String(iso);
+    return d2.toLocaleString(undefined, {
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit"
+    });
+  } catch {
+    return String(iso);
+  }
+}
 function renderUsage(live) {
   if (!els.drawerUsage)
     return;
   const id = state2.sessionId;
   const lv = (live || {})[id];
-  if (lv && lv.model) {
-    els.drawerUsage.textContent = lv.model + " · " + (lv.messages || 0) + " msgs · " + fmtTokens(lv.input_tokens) + " in / " + fmtTokens(lv.output_tokens) + " out · " + fmtCost(lv.cost);
-  } else {
-    els.drawerUsage.textContent = "Usage appears here once this chat runs.";
+  els.drawerUsage.innerHTML = "";
+  if (!lv || !lv.model) {
+    const d2 = document.createElement("div");
+    d2.className = cx13(d.empty);
+    d2.textContent = "Usage appears here once this chat runs.";
+    els.drawerUsage.appendChild(d2);
+    return;
   }
+  const section = (title) => {
+    const s = document.createElement("div");
+    s.className = cx13(d.detailSection);
+    if (title) {
+      const h = document.createElement("div");
+      h.className = cx13(d.detailTitle);
+      h.textContent = title;
+      s.appendChild(h);
+    }
+    els.drawerUsage.appendChild(s);
+    return s;
+  };
+  const row = (parent, label, value) => {
+    const r = document.createElement("div");
+    r.className = cx13(d.detailRow);
+    const l = document.createElement("span");
+    l.className = cx13(d.detailLabel);
+    l.textContent = label;
+    const v = document.createElement("span");
+    v.className = cx13(d.detailNum);
+    v.textContent = value;
+    v.title = value;
+    r.appendChild(l);
+    r.appendChild(v);
+    parent.appendChild(r);
+    return r;
+  };
+  const head3 = section("");
+  const headRow = document.createElement("div");
+  headRow.className = cx13(d.detailHead);
+  const model = document.createElement("span");
+  model.className = cx13(d.detailModel);
+  model.textContent = lv.model + (lv.provider ? " · " + lv.provider : "");
+  model.title = model.textContent;
+  const badge = document.createElement("span");
+  badge.className = cx13(d.badge, lv.running ? d.badgeRunning : d.badgeIdle);
+  badge.textContent = lv.running ? "running" : "idle";
+  headRow.appendChild(model);
+  headRow.appendChild(badge);
+  head3.appendChild(headRow);
+  const used = lv.calibrated_tokens || lv.estimated_tokens || 0;
+  const win = lv.context_window || 0;
+  const pct = win > 0 ? Math.min(100, Math.round(used / win * 100)) : 0;
+  const ctx = section("Context");
+  const bar = document.createElement("div");
+  bar.className = cx13(d.bar);
+  const fill = document.createElement("div");
+  fill.className = cx13(d.barFill, pct >= 90 && d.barFillWarn);
+  fill.style.width = pct + "%";
+  bar.appendChild(fill);
+  ctx.appendChild(bar);
+  row(ctx, "Used", fmtNum(used) + " / " + fmtNum(win) + " (" + pct + "%)");
+  row(ctx, "Messages", fmtNum(lv.messages));
+  const tok = section("Tokens");
+  row(tok, "Input", fmtNum(lv.input_tokens));
+  row(tok, "Output", fmtNum(lv.output_tokens));
+  row(tok, "Cached", fmtNum(lv.cached_input_tokens));
+  row(section("Cost"), "Total", "$" + Number(lv.cost || 0).toFixed(4));
+  const time = section("Timeline");
+  row(time, "Created", fmtWhen(lv.created_at));
+  row(time, "Updated", fmtWhen(lv.updated_at));
+  if (lv.working_dir) {
+    const wd = section("Working dir");
+    const d2 = document.createElement("div");
+    d2.className = cx13(d.dirText);
+    d2.textContent = lv.working_dir;
+    d2.title = lv.working_dir;
+    wd.appendChild(d2);
+  }
+}
+function buildExtras() {
+  const extras = document.getElementById("drawer-extras");
+  if (!extras || extras.dataset.built)
+    return;
+  extras.dataset.built = "1";
+  extras.className = cx13(d.extrasActions);
+  const dl = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>';
+  const ul = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>';
+  const mk = (label, title, svg2, event) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = cx13(d.actionBtn);
+    b.title = title;
+    b.innerHTML = '<span class="' + cx13(d.actionIcon) + '">' + svg2 + "</span><span>" + label + "</span>";
+    b.addEventListener("click", () => {
+      try {
+        document.dispatchEvent(new CustomEvent(event, {
+          detail: {
+            session_id: state2.sessionId
+          }
+        }));
+      } catch {}
+    });
+    extras.appendChild(b);
+  };
+  mk("Export", "Export session JSON", dl, "zw:session-export");
+  mk("Import", "Import session JSON", ul, "zw:session-import");
 }
 async function refreshUsage() {
   if (!isOpen3())
@@ -10609,6 +10864,7 @@ function init6() {
   } catch {}
   paintStatic();
   paintShell(false);
+  buildExtras();
   renderList();
 }
 

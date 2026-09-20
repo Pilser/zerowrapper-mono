@@ -131,18 +131,147 @@ export async function renderList() {
   renderUsage(live)
 }
 
+function fmtNum(n) {
+  return Number(n || 0).toLocaleString('en-US')
+}
+
+function fmtWhen(iso) {
+  if (!iso) return '—'
+  try {
+    const d = new Date(iso)
+    if (isNaN(d.getTime())) return String(iso)
+    return d.toLocaleString(undefined, {
+      month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+    })
+  } catch {
+    return String(iso)
+  }
+}
+
+// Detailed panel for the ACTIVE session: model/provider, context-window use,
+// token totals, cost, created/updated, working dir. Data comes from
+// ?api=agent_sessions (extended in ws/handler.rs).
 function renderUsage(live) {
   if (!els.drawerUsage) return
   const id = auth.state.sessionId
   const lv = (live || {})[id]
-  if (lv && lv.model) {
-    els.drawerUsage.textContent =
-      lv.model + ' · ' + (lv.messages || 0) + ' msgs · ' +
-      fmtTokens(lv.input_tokens) + ' in / ' + fmtTokens(lv.output_tokens) +
-      ' out · ' + fmtCost(lv.cost)
-  } else {
-    els.drawerUsage.textContent = 'Usage appears here once this chat runs.'
+  els.drawerUsage.innerHTML = ''
+  if (!lv || !lv.model) {
+    const d = document.createElement('div')
+    d.className = cx(dw.empty)
+    d.textContent = 'Usage appears here once this chat runs.'
+    els.drawerUsage.appendChild(d)
+    return
   }
+  const section = (title) => {
+    const s = document.createElement('div')
+    s.className = cx(dw.detailSection)
+    if (title) {
+      const h = document.createElement('div')
+      h.className = cx(dw.detailTitle)
+      h.textContent = title
+      s.appendChild(h)
+    }
+    els.drawerUsage.appendChild(s)
+    return s
+  }
+  const row = (parent, label, value) => {
+    const r = document.createElement('div')
+    r.className = cx(dw.detailRow)
+    const l = document.createElement('span')
+    l.className = cx(dw.detailLabel)
+    l.textContent = label
+    const v = document.createElement('span')
+    v.className = cx(dw.detailNum)
+    v.textContent = value
+    v.title = value
+    r.appendChild(l)
+    r.appendChild(v)
+    parent.appendChild(r)
+    return r
+  }
+
+  // Model + live status
+  const head = section('')
+  const headRow = document.createElement('div')
+  headRow.className = cx(dw.detailHead)
+  const model = document.createElement('span')
+  model.className = cx(dw.detailModel)
+  model.textContent = lv.model + (lv.provider ? ' · ' + lv.provider : '')
+  model.title = model.textContent
+  const badge = document.createElement('span')
+  badge.className = cx(dw.badge, lv.running ? dw.badgeRunning : dw.badgeIdle)
+  badge.textContent = lv.running ? 'running' : 'idle'
+  headRow.appendChild(model)
+  headRow.appendChild(badge)
+  head.appendChild(headRow)
+
+  // Context window usage
+  const used = lv.calibrated_tokens || lv.estimated_tokens || 0
+  const win = lv.context_window || 0
+  const pct = win > 0 ? Math.min(100, Math.round((used / win) * 100)) : 0
+  const ctx = section('Context')
+  const bar = document.createElement('div')
+  bar.className = cx(dw.bar)
+  const fill = document.createElement('div')
+  fill.className = cx(dw.barFill, pct >= 90 && dw.barFillWarn)
+  fill.style.width = pct + '%'
+  bar.appendChild(fill)
+  ctx.appendChild(bar)
+  row(ctx, 'Used', fmtNum(used) + ' / ' + fmtNum(win) + ' (' + pct + '%)')
+  row(ctx, 'Messages', fmtNum(lv.messages))
+
+  // Token totals
+  const tok = section('Tokens')
+  row(tok, 'Input', fmtNum(lv.input_tokens))
+  row(tok, 'Output', fmtNum(lv.output_tokens))
+  row(tok, 'Cached', fmtNum(lv.cached_input_tokens))
+
+  // Cost
+  row(section('Cost'), 'Total', '$' + Number(lv.cost || 0).toFixed(4))
+
+  // Timeline
+  const time = section('Timeline')
+  row(time, 'Created', fmtWhen(lv.created_at))
+  row(time, 'Updated', fmtWhen(lv.updated_at))
+
+  // Working dir
+  if (lv.working_dir) {
+    const wd = section('Working dir')
+    const d = document.createElement('div')
+    d.className = cx(dw.dirText)
+    d.textContent = lv.working_dir
+    d.title = lv.working_dir
+    wd.appendChild(d)
+  }
+}
+
+// Export / Import buttons in #drawer-extras (Rust-rendered empty div).
+// PLACEHOLDER wiring points: buttons dispatch `zw:session-export` /
+// `zw:session-import` CustomEvents carrying the active session id. Wire real
+// behaviour by listening for those events (no-op until then).
+function buildExtras() {
+  const extras = document.getElementById('drawer-extras')
+  if (!extras || extras.dataset.built) return
+  extras.dataset.built = '1'
+  extras.className = cx(dw.extrasActions)
+  const dl = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>'
+  const ul = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>'
+  const mk = (label, title, svg, event) => {
+    const b = document.createElement('button')
+    b.type = 'button'
+    b.className = cx(dw.actionBtn)
+    b.title = title
+    b.innerHTML = '<span class="' + cx(dw.actionIcon) + '">' + svg + '</span><span>' + label + '</span>'
+    b.addEventListener('click', () => {
+      try {
+        document.dispatchEvent(new CustomEvent(event, { detail: { session_id: auth.state.sessionId } }))
+      } catch {}
+    })
+    extras.appendChild(b)
+  }
+  mk('Export', 'Export session JSON', dl, 'zw:session-export')
+  mk('Import', 'Import session JSON', ul, 'zw:session-import')
 }
 
 export async function refreshUsage() {
@@ -193,5 +322,6 @@ export function init() {
   try { connection.setOnStateChange(refreshUsage) } catch {}
   paintStatic()
   paintShell(false)
+  buildExtras()
   renderList()
 }
