@@ -70,7 +70,7 @@ pub async fn root_layout(cx: &Cx, slot: Result) -> Result {
                     }
                 })();"#)) }</script>
             </head>
-            <body class="flex flex-col" style="font-family: var(--font-sans); color: var(--color-text); background: var(--color-bg); height: 100dvh; overflow: hidden;">
+            <body class="app-body flex flex-col" style="height: 100dvh; overflow: hidden;">
                 <main class="flex-1 flex flex-col min-h-0">
                     (slot?)
                 </main>

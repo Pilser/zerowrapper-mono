@@ -6232,6 +6232,22 @@ function feed(icon, text) {
         import_motion2.animate(item, { opacity: [0, 1], x: [14, 0] }, { duration: 0.3, ease: "circOut" });
       }
     } catch {}
+    setTimeout(() => {
+      try {
+        if (!item.isConnected)
+          return;
+        item.style.transition = "opacity 0.4s ease, transform 0.4s ease";
+        item.style.opacity = "0";
+        item.style.transform = "translateX(12px)";
+        setTimeout(() => {
+          try {
+            item.remove();
+            if (!box.hasChildNodes())
+              box.classList.add("hidden");
+          } catch {}
+        }, 420);
+      } catch {}
+    }, 4000);
     while (box.children.length > FEED_MAX) {
       try {
         box.removeChild(box.lastChild);

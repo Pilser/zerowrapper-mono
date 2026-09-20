@@ -77,8 +77,9 @@ function ensureFeed() {
   return feedBox
 }
 
-// Recent-action feed: latest action on top, older fade out past FEED_MAX.
-// Slide+fade entrance via Motion when available; plain append otherwise.
+// Recent-action feed: latest action on top, auto-dismiss each item after
+// a few seconds so it never covers the final response. Slide+fade entrance
+// via Motion when available; plain append otherwise.
 export function feed(icon, text) {
   try {
     const box = ensureFeed()
@@ -99,6 +100,16 @@ export function feed(icon, text) {
         animate(item, { opacity: [0, 1], x: [14, 0] }, { duration: 0.3, ease: 'circOut' })
       }
     } catch {}
+    // Auto-dismiss this item after 4s (history keeps everything)
+    setTimeout(() => {
+      try {
+        if (!item.isConnected) return
+        item.style.transition = 'opacity 0.4s ease, transform 0.4s ease'
+        item.style.opacity = '0'
+        item.style.transform = 'translateX(12px)'
+        setTimeout(() => { try { item.remove(); if (!box.hasChildNodes()) box.classList.add('hidden') } catch {} }, 420)
+      } catch {}
+    }, 4000)
     while (box.children.length > FEED_MAX) {
       try { box.removeChild(box.lastChild) } catch { break }
     }
