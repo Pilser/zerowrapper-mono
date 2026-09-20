@@ -5,6 +5,9 @@
 #
 # ENABLED 2026-09-04: wild 0.10.0 installed at ~/.cargo/bin/wild
 # (+ ld.wild symlink), clang 19 present.
+[net]
+git-fetch-with-cli = true
+
 [target.x86_64-unknown-linux-gnu]
 linker = "clang"
 rustflags = ["-C", "link-arg=-fuse-ld=wild"]
