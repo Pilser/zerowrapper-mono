@@ -40,4 +40,16 @@ export const t = stylex.defineVars({
     '0 4px 18px rgba(0,0,0,0.16), 0 0 0 1px var(--color-status-running)',
   cdBarBg:
     'linear-gradient(90deg, var(--color-status-running), var(--color-status-success))',
+  // Background layer (dots + streaming tint) and accent picker.
+  dotsBg:
+    'radial-gradient(circle, color-mix(in srgb, var(--color-bg-interactive) 38%, transparent) 1.7px, transparent 1.9px)',
+  dotsStreamBg:
+    'radial-gradient(circle, var(--color-bg-interactive) 2.2px, transparent 2.4px)',
+  streamTint:
+    'color-mix(in srgb, var(--color-bg-interactive) 14%, var(--color-bg))',
+  pickerBg: 'color-mix(in srgb, var(--color-bg) 84%, transparent)',
+  pickerShadow: '0 2px 10px rgba(0,0,0,0.10)',
+  pillBg: 'color-mix(in srgb, var(--color-bg) 82%, transparent)',
+  feedItemShadow: '0 4px 16px rgba(0,0,0,0.14)',
+  pillShadow: '0 6px 24px rgba(0,0,0,0.16)',
 });

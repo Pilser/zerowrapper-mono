@@ -6,6 +6,10 @@ import { finalize } from './streaming.js'
 import { renderStaticTrace } from './activity.js'
 import { popIn } from './motion-fx.js'
 import { scrollToBottom, autoScroll } from './scroll.js'
+import * as stylex from '@stylexjs/stylex'
+import { m, rowClass, avatarClass, contentClass } from './messages.stylex.js'
+
+const cx = (...args) => (stylex.props(...args).className || '')
 
 export { scrollToBottom }
 
@@ -42,7 +46,7 @@ function renderTextWithAttachments(text) {
     fileList.className = 'msg-attachments'
     attachments.forEach((a) => {
       const chip = document.createElement('span')
-      chip.className = 'attachment-chip'
+      chip.className = 'attachment-chip ' + cx(m.chip)
       chip.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg> ' + escapeHtml(a.filename || a.name || 'file')
       fileList.appendChild(chip)
     })
@@ -50,7 +54,7 @@ function renderTextWithAttachments(text) {
   }
   if (msgText) {
     const p = document.createElement('p')
-    p.style.margin = attachments ? '6px 0 0' : '0'
+    p.className = cx(attachments ? m.textTop : m.textPlain)
     p.textContent = msgText
     div.appendChild(p)
   }
@@ -59,31 +63,31 @@ function renderTextWithAttachments(text) {
 
 function buildMessageRow(role, text, turn) {
   const row = document.createElement('div')
-  row.className = 'message-row ' + role
+  row.className = rowClass(role)
   row.dataset.role = role
   if (turn) row.dataset.turn = turn
 
   if (role === 'error') {
     const content = document.createElement('div')
-    content.className = 'msg-content'
+    content.className = contentClass('error', false)
     content.textContent = text
     row.appendChild(content)
   } else if (role === 'user') {
     const avatar = document.createElement('div')
-    avatar.className = 'msg-avatar'
+    avatar.className = avatarClass('user')
     avatar.innerHTML = USER_AVATAR
     row.appendChild(avatar)
     const content = document.createElement('div')
-    content.className = 'msg-content'
+    content.className = contentClass('user', false)
     content.appendChild(renderTextWithAttachments(text))
     row.appendChild(content)
   } else {
     const avatar = document.createElement('div')
-    avatar.className = 'msg-avatar'
+    avatar.className = avatarClass('assistant')
     avatar.innerHTML = BOT_AVATAR
     row.appendChild(avatar)
     const content = document.createElement('div')
-    content.className = 'msg-content chat-markdown'
+    content.className = contentClass('assistant', true)
     renderMarkdown(content, marked.parse(text || ''))
     row.appendChild(content)
   }

@@ -5,6 +5,11 @@ import { createToolPile, renderStaticTool } from './piles/tool.js'
 import { pileIdentity } from './icons.js'
 import { revealOnView } from './motion-fx.js'
 import * as overlay from './overlay.js'
+import * as bg from './bg.js'
+import * as stylex from '@stylexjs/stylex'
+import { a } from './activity.stylex.js'
+
+const cx = (...args) => (stylex.props(...args).className || '')
 
 // Turn pile: separated narrow sub-piles per turn — one slim thinking pile
 // per thinking burst, one pile per tool call as they arrive, mid-response
@@ -23,15 +28,9 @@ function target() {
 }
 
 function setStreamingTint(on) {
-  try {
-    const t = target()
-    if (t) {
-      if (on) t.classList.add('streaming')
-      else t.classList.remove('streaming')
-    }
-    if (on) document.body.classList.add('streaming')
-    else document.body.classList.remove('streaming')
-  } catch {}
+  // Streaming glow lives on the StyleX #bg-dots layer (bg.js), never on
+  // body — a body filter would break fixed positioning of page chrome.
+  try { bg.setStreaming(on) } catch {}
 }
 
 function ensureBox() {
@@ -39,7 +38,7 @@ function ensureBox() {
   if (!t) return null
   if (!box || !box.isConnected || !turnOpen) {
     box = document.createElement('div')
-    box.className = 'turn-activity'
+    box.className = cx(a.turnActivity)
     thinkOpen = null
     pileCount = 0
     toolSeq = 0
@@ -156,7 +155,7 @@ export function renderStaticTrace(container, trace) {
   const tools = Array.isArray(trace.tools) ? trace.tools : []
   if (!thinking.trim() && tools.length === 0) return null
   const wrap = document.createElement('div')
-  wrap.className = 'turn-activity'
+  wrap.className = cx(a.turnActivity)
   let idx = 0
   if (thinking.trim()) {
     try {

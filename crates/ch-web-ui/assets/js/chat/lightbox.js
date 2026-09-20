@@ -1,3 +1,8 @@
+import * as stylex from '@stylexjs/stylex'
+import { lb } from './lightbox.stylex.js'
+
+const cx = (...args) => (stylex.props(...args).className || '')
+
 let lightbox = null
 let loadingEl = null
 let images = []
@@ -8,10 +13,22 @@ function ensureLightbox() {
   if (!lightbox) {
     lightbox = document.createElement('div')
     lightbox.id = 'lightbox'
-    lightbox.innerHTML = '<button class="lb-close">&times;</button><button class="lb-prev">&#10094;</button><button class="lb-next">&#10095;</button>'
+    lightbox.className = cx(lb.box, lb.boxClosed)
+    const closeBtn = document.createElement('button')
+    closeBtn.className = 'lb-close ' + cx(lb.close)
+    closeBtn.innerHTML = '&times;'
+    const prevBtn = document.createElement('button')
+    prevBtn.className = 'lb-prev ' + cx(lb.navBtn, lb.prev, lb.navShown)
+    prevBtn.innerHTML = '&#10094;'
+    const nextBtn = document.createElement('button')
+    nextBtn.className = 'lb-next ' + cx(lb.navBtn, lb.next, lb.navShown)
+    nextBtn.innerHTML = '&#10095;'
     loadingEl = document.createElement('div')
-    loadingEl.className = 'lb-loading'
+    loadingEl.className = 'lb-loading ' + cx(lb.loading)
     loadingEl.textContent = 'Loading...'
+    lightbox.appendChild(closeBtn)
+    lightbox.appendChild(prevBtn)
+    lightbox.appendChild(nextBtn)
     lightbox.appendChild(loadingEl)
     document.body.appendChild(lightbox)
     lightbox.addEventListener('click', (e) => {
@@ -39,7 +56,7 @@ function ensureLightbox() {
 
 function close() {
   if (lightbox) {
-    lightbox.classList.remove('active')
+    lightbox.className = cx(lb.box, lb.boxClosed)
     document.body.style.overflow = ''
     const img = lightbox.querySelector('img')
     if (img) { img.onload = null; img.onerror = null }
@@ -55,25 +72,25 @@ function navigate(dir) {
 }
 
 function loadImage(src) {
-  const lb = ensureLightbox()
-  let img = lb.querySelector('img')
+  const lbEl = ensureLightbox()
+  let img = lbEl.querySelector('img')
   if (!img) {
     img = document.createElement('img')
-    lb.appendChild(img)
+    lbEl.appendChild(img)
   }
-  img.style.display = 'none'
+  img.className = cx(lb.img, lb.imgHidden)
   img.onload = null
   img.onerror = null
-  if (loadingEl) loadingEl.style.display = 'block'
+  if (loadingEl) loadingEl.className = 'lb-loading ' + cx(lb.loading, lb.loadingShown)
   img.onload = () => {
-    img.style.display = 'block'
-    if (loadingEl) loadingEl.style.display = 'none'
+    img.className = cx(lb.img, lb.imgShown)
+    if (loadingEl) loadingEl.className = 'lb-loading ' + cx(lb.loading, lb.loadingHidden)
   }
   img.onerror = () => {
     if (loadingEl) loadingEl.textContent = 'Failed to load image'
     setTimeout(() => { if (loadingEl) loadingEl.textContent = 'Loading...' }, 2000)
   }
-  lb.classList.add('active')
+  lbEl.className = cx(lb.box, lb.boxOpen)
   document.body.style.overflow = 'hidden'
   img.src = src
 }
@@ -82,8 +99,8 @@ function updateNavButtons() {
   if (!lightbox) return
   const prev = lightbox.querySelector('.lb-prev')
   const next = lightbox.querySelector('.lb-next')
-  if (prev) prev.style.display = currentIndex <= 0 ? 'none' : 'flex'
-  if (next) next.style.display = currentIndex >= images.length - 1 ? 'none' : 'flex'
+  if (prev) prev.className = 'lb-prev ' + cx(lb.navBtn, lb.prev, currentIndex <= 0 ? lb.navHidden : lb.navShown)
+  if (next) next.className = 'lb-next ' + cx(lb.navBtn, lb.next, currentIndex >= images.length - 1 ? lb.navHidden : lb.navShown)
 }
 
 export function init(messagesEl) {

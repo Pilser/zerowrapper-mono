@@ -7,6 +7,41 @@ import { els } from './dom.js'
 import * as auth from './auth.js'
 import * as connection from './connection.js'
 import { fetchHistory } from './messages.js'
+import * as stylex from '@stylexjs/stylex'
+import { d as dw } from './drawer.stylex.js'
+
+const cx = (...args) => (stylex.props(...args).className || '')
+
+// Shell (Rust-rendered with IDs as hooks) gets its visuals from StyleX.
+// `open`/`hidden` markers stay for isOpen()/first paint only.
+function paintShell(open) {
+  if (els.drawerOverlay) {
+    els.drawerOverlay.className =
+      (!open ? 'hidden ' : '') + cx(dw.overlay, !open && dw.overlayHidden)
+  }
+  if (els.drawer) {
+    // Keep the `open` marker: isOpen() reads classList.contains('open').
+    els.drawer.className =
+      (open ? 'open ' : '') + cx(dw.panel, open ? dw.panelOpen : dw.panelClosed)
+  }
+}
+
+function paintStatic() {
+  const pairs = [
+    ['drawer-header', dw.header],
+    ['drawer-title', dw.title],
+    ['drawer-close-btn', dw.closeBtn],
+    ['drawer-actions', dw.actions],
+    ['drawer-new-btn', dw.newBtn],
+    ['drawer-sessions-label', dw.label],
+    ['drawer-list', dw.list],
+    ['drawer-usage', dw.usage],
+  ]
+  for (const [id, style] of pairs) {
+    const el = document.getElementById(id)
+    if (el) el.className = cx(style)
+  }
+}
 
 function fmtTokens(n) {
   n = Number(n) || 0
@@ -50,6 +85,7 @@ export function setOpen(open) {
     els.drawer.setAttribute('aria-hidden', 'true')
     els.drawerOverlay.classList.add('hidden')
   }
+  paintShell(open)
 }
 
 export function toggle() {
@@ -62,10 +98,10 @@ export async function renderList() {
   const live = await loadLive()
   els.drawerList.innerHTML = ''
   if (!list || list.length === 0) {
-    const d = document.createElement('div')
-    d.className = 'drawer-empty'
-    d.textContent = 'No chats yet — start a new one.'
-    els.drawerList.appendChild(d)
+    const empty = document.createElement('div')
+    empty.className = cx(dw.empty)
+    empty.textContent = 'No chats yet — start a new one.'
+    els.drawerList.appendChild(empty)
   }
   const seen = new Set()
   for (const s of (list || [])) {
@@ -76,14 +112,15 @@ export async function renderList() {
     const lv = live[id]
     const btn = document.createElement('button')
     btn.type = 'button'
-    btn.className = 'drawer-item' + (id === auth.state.sessionId ? ' active' : '')
+    const isActive = id === auth.state.sessionId
+    btn.className = cx(dw.item, isActive && dw.itemActive)
     const t = document.createElement('span')
-    t.className = 'drawer-item-title'
+    t.className = cx(dw.itemTitle)
     t.textContent = title
     t.title = title + '\n' + id
     btn.appendChild(t)
     const meta = document.createElement('span')
-    meta.className = 'drawer-item-meta'
+    meta.className = cx(dw.itemMeta)
     meta.textContent = lv && lv.model
       ? lv.model + ' · ' + fmtTokens(lv.input_tokens) + ' in / ' + fmtTokens(lv.output_tokens) + ' out · ' + fmtCost(lv.cost)
       : id
@@ -154,5 +191,7 @@ export function init() {
   })
   // Refresh the usage footer when a turn finalizes.
   try { connection.setOnStateChange(refreshUsage) } catch {}
+  paintStatic()
+  paintShell(false)
   renderList()
 }

@@ -5,6 +5,10 @@
 import { els } from './dom.js'
 import * as network from './network.js'
 import { state as authState } from './auth.js'
+import * as stylex from '@stylexjs/stylex'
+import { ak } from './ask.stylex.js'
+
+const cx = (...args) => (stylex.props(...args).className || '')
 
 let current = null // { ask_id, session_id, kind, questions: [{id,question,objective,options,answer}] }
 let wizardIndex = 0
@@ -62,19 +66,19 @@ function saveCurrentCard() {
 function answerControl(q) {
   let pills = ''
   if (q.options && q.options.length > 0) {
-    pills = '<div class="ask-pills">' + q.options.map((o) => {
-      const sel = q.answer === o ? ' selected' : ''
-      return '<button type="button" class="ask-pill' + sel + '" data-q="pick" data-val="' + esc(o) + '">' + esc(o) + '</button>'
+    pills = '<div class="' + cx(ak.pills) + '">' + q.options.map((o) => {
+      const sel = q.answer === o
+      return '<button type="button" class="' + cx(ak.pillBase, sel ? ak.pillSelected : ak.pillIdle) + '" data-q="pick" data-val="' + esc(o) + '">' + esc(o) + '</button>'
     }).join('') + '</div>'
   }
-  return pills + '<textarea data-q="answer" rows="3" placeholder="Type your answer…">' + esc(q.answer || '') + '</textarea>'
+  return pills + '<textarea class="' + cx(ak.textarea, ak.answer) + '" data-q="answer" rows="3" placeholder="Type your answer…">' + esc(q.answer || '') + '</textarea>'
 }
 
 function renderWizard() {
   if (!els.askBody || !current) return
   const total = current.questions.length
   if (total === 0) {
-    els.askBody.innerHTML = '<div class="ask-empty">No questions</div>'
+    els.askBody.innerHTML = '<div class="' + cx(ak.banner) + '">No questions</div>'
     return
   }
   // Clamp index
@@ -87,32 +91,33 @@ function renderWizard() {
   // Dots
   let dots = ''
   if (total > 1) {
-    dots = '<div class="ask-dots">' + current.questions.map((_, i) => {
-      const active = i === wizardIndex ? ' active' : ''
-      const answered = current.questions[i].answer && current.questions[i].answer.trim() ? ' answered' : ''
-      return '<button type="button" class="ask-dot' + active + answered + '" data-dot="' + i + '" aria-label="Question ' + (i+1) + '"></button>'
+    dots = '<div class="' + cx(ak.dots) + '">' + current.questions.map((_, i) => {
+      const isActive = i === wizardIndex
+      const isAnswered = !!(current.questions[i].answer && current.questions[i].answer.trim())
+      const st = isActive ? ak.dotActive : (isAnswered ? ak.dotAnswered : ak.dotIdle)
+      return '<button type="button" class="' + cx(ak.dotBase, st) + '" data-dot="' + i + '" aria-label="Question ' + (i+1) + '"></button>'
     }).join('') + '</div>'
   }
 
   // Header
   let header = ''
   if (isSystemAsk()) {
-    header = '<div class="ask-system-banner"><div class="ask-system-title">⏸️ Agent paused</div><div class="ask-system-sub">Long turn, no final answer yet. Continue for another full budget, or stop here — the committed summary stays.</div></div>'
+    header = '<div class="' + cx(ak.systemBanner) + '"><div class="' + cx(ak.systemTitle) + '">⏸️ Agent paused</div><div class="' + cx(ak.systemSub) + '">Long turn, no final answer yet. Continue for another full budget, or stop here — the committed summary stays.</div></div>'
   } else if (pendingQueue.length > 1) {
-    header = '<div class="ask-queue-banner">' + pendingQueue.length + ' pending asks — viewing ' + (wizardIndex+1) + '/' + total + ' of current</div>'
+    header = '<div class="' + cx(ak.banner) + '">' + pendingQueue.length + ' pending asks — viewing ' + (wizardIndex+1) + '/' + total + ' of current</div>'
   } else if (total > 1) {
-    header = '<div class="ask-wizard-header">Question ' + (wizardIndex+1) + ' of ' + total + dots + '</div>'
+    header = '<div class="' + cx(ak.wizardHeader) + '">Question ' + (wizardIndex+1) + ' of ' + total + dots + '</div>'
   } else {
     header = dots
   }
 
   const card = document.createElement('div')
-  card.className = 'ask-card ask-wizard-card'
+  card.className = cx(ak.card, ak.wizardCard)
   card.setAttribute('data-qid', q.id)
   card.innerHTML = header +
-    (q.objective ? '<div class="ask-objective">' + esc(q.objective) + '</div>' : '') +
-    '<label class="ask-q-label">Question</label><textarea data-q="text" rows="2">' + esc(q.question) + '</textarea>' +
-    '<label class="ask-a-label">Your answer</label>' + answerControl(q)
+    (q.objective ? '<div class="' + cx(ak.objective) + '">' + esc(q.objective) + '</div>' : '') +
+    '<label class="' + cx(ak.qLabel) + '">Question</label><textarea class="' + cx(ak.textarea) + '" data-q="text" rows="2">' + esc(q.question) + '</textarea>' +
+    '<label class="' + cx(ak.qLabel) + '">Your answer</label>' + answerControl(q)
 
   els.askBody.innerHTML = ''
   if (total > 1 && !isSystemAsk() && pendingQueue.length <= 1) {
@@ -131,7 +136,9 @@ function renderWizard() {
         // Update state immediately for dots
         saveCurrentCard()
         // Update pill selection
-        card.querySelectorAll('button[data-q="pick"]').forEach((s) => s.classList.toggle('selected', s === btn))
+        card.querySelectorAll('button[data-q="pick"]').forEach((s) => {
+          s.className = cx(ak.pillBase, s === btn ? ak.pillSelected : ak.pillIdle)
+        })
         updateWizardNav()
       }
     })
@@ -149,10 +156,10 @@ function renderWizard() {
 
   // Nav buttons
   const nav = document.createElement('div')
-  nav.className = 'ask-wizard-nav'
-  nav.innerHTML = '<button type="button" class="ask-nav-btn" data-nav="back"' + (isFirst ? ' disabled' : '') + '>← Back</button>' +
-    '<span class="ask-nav-count">' + (wizardIndex+1) + ' / ' + total + '</span>' +
-    '<button type="button" class="ask-nav-btn primary" data-nav="next">' + (isLast ? 'Review →' : 'Next →') + '</button>'
+  nav.className = cx(ak.wizardNav)
+  nav.innerHTML = '<button type="button" class="' + cx(ak.navBase, ak.navIdle) + '" data-nav="back"' + (isFirst ? ' disabled' : '') + '>← Back</button>' +
+    '<span class="' + cx(ak.navCount) + '">' + (wizardIndex+1) + ' / ' + total + '</span>' +
+    '<button type="button" class="' + cx(ak.navBase, ak.navPrimary) + '" data-nav="next">' + (isLast ? 'Review →' : 'Next →') + '</button>'
   els.askBody.appendChild(nav)
 
   nav.querySelectorAll('button[data-nav]').forEach((btn) => {
@@ -197,8 +204,9 @@ function updateWizardNav() {
   if (!current || !els.askBody) return
   els.askBody.querySelectorAll('button[data-dot]').forEach((dot, i) => {
     const q = current.questions[i]
-    if (q && q.answer && q.answer.trim()) dot.classList.add('answered')
-    else dot.classList.remove('answered')
+    const answered = !!(q && q.answer && q.answer.trim())
+    const st = i === wizardIndex ? ak.dotActive : (answered ? ak.dotAnswered : ak.dotIdle)
+    dot.className = cx(ak.dotBase, st)
   })
 }
 
@@ -208,14 +216,14 @@ function renderReview() {
   els.askBody.innerHTML = ''
   current.questions.forEach((q) => {
     const card = document.createElement('div')
-    card.className = 'ask-card ask-review-card'
+    card.className = cx(ak.card)
     card.setAttribute('data-qid', q.id)
     const shownQ = (q.question || '').trim() || '(empty question)'
     const shownA = (q.answer || '').trim() || '— no answer —'
     card.innerHTML =
-      '<div class="ask-review-q">' + esc(shownQ) + '</div>' +
-      (q.objective ? '<div class="ask-objective">' + esc(q.objective) + '</div>' : '') +
-      '<div class="ask-review-a">' + esc(shownA) + '</div>'
+      '<div class="' + cx(ak.reviewQ) + '">' + esc(shownQ) + '</div>' +
+      (q.objective ? '<div class="' + cx(ak.objective) + '">' + esc(q.objective) + '</div>' : '') +
+      '<div class="' + cx(ak.reviewA) + '">' + esc(shownA) + '</div>'
     els.askBody.appendChild(card)
   })
   els.askBackBtn.classList.remove('hidden')

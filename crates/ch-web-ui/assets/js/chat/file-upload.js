@@ -1,3 +1,8 @@
+import * as stylex from '@stylexjs/stylex'
+import { m } from './messages.stylex.js'
+
+const cx = (...args) => (stylex.props(...args).className || '')
+
 export const uploadState = {
   pending: [],
 }
@@ -22,17 +27,23 @@ export async function uploadFile(file) {
 
 export function createAttachmentChip(fileInfo) {
   const chip = document.createElement('div')
-  chip.className = 'attachment-chip'
-  chip.style.cssText = 'display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 6px; border: 1px solid var(--color-border-weak); background: var(--color-bg-weak); font-size: 0.75rem; margin-bottom: 4px;'
-  chip.innerHTML = `
-    <span style="color: var(--color-text-strong);">${fileInfo.filename}</span>
-    <span style="color: var(--color-text-weak); font-size: 0.625rem;">${formatSize(fileInfo.size)}</span>
-    <button class="remove-attachment" style="background: none; border: none; cursor: pointer; color: var(--color-status-error); font-size: 0.875rem; padding: 0; line-height: 1;">&times;</button>
-  `
-  chip.querySelector('.remove-attachment').addEventListener('click', () => {
+  chip.className = 'attachment-chip ' + cx(m.chip)
+  const name = document.createElement('span')
+  name.className = cx(m.chipName)
+  name.textContent = fileInfo.filename
+  const size = document.createElement('span')
+  size.className = cx(m.chipSize)
+  size.textContent = formatSize(fileInfo.size)
+  const btn = document.createElement('button')
+  btn.className = 'remove-attachment ' + cx(m.removeBtn)
+  btn.innerHTML = '&times;'
+  btn.addEventListener('click', () => {
     chip.remove()
     uploadState.pending = uploadState.pending.filter(a => a.path !== fileInfo.path)
   })
+  chip.appendChild(name)
+  chip.appendChild(size)
+  chip.appendChild(btn)
   return chip
 }
 

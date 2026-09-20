@@ -1,0 +1,83 @@
+// Mermaid zoom modal (#mermaid-modal). Faithful 1:1 port. Marker classes
+// mm-close / mm-btn / mm-stage / mm-canvas are kept as query hooks
+// (mermaid-modal.js reads them). `active` stays a state marker for isOpen().
+import * as stylex from '@stylexjs/stylex';
+import { t } from './tokens.stylex.js';
+
+export const mm = stylex.create({
+  modal: {
+    position: 'fixed',
+    inset: 0,
+    zIndex: 9999,
+    backgroundColor: 'rgba(0,0,0,0.85)',
+    transitionProperty: 'opacity',
+    transitionDuration: '0.25s',
+  },
+  modalClosed: { opacity: 0, pointerEvents: 'none' },
+  modalOpen: { opacity: 1, pointerEvents: 'auto' },
+  stage: {
+    width: '100%',
+    height: '100%',
+    overflow: 'hidden',
+    cursor: 'grab',
+    touchAction: 'none',
+    ':active': { cursor: 'grabbing' },
+  },
+  canvas: {
+    transformOrigin: '0 0',
+    willChange: 'transform',
+  },
+  canvasSvg: {
+    display: 'block',
+    maxWidth: 'none',
+    maxHeight: 'none',
+    overflow: 'visible',
+    backgroundColor: t.bgWeak,
+    boxShadow: '0 4px 24px rgba(0,0,0,0.5)',
+  },
+  close: {
+    position: 'absolute',
+    top: '16px',
+    right: '16px',
+    width: '36px',
+    height: '36px',
+    borderRadius: '50%',
+    borderStyle: 'none',
+    backgroundColor: t.bgInteractiveWeak,
+    color: '#fff',
+    fontSize: '1.25rem',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    transitionProperty: 'background-color',
+    transitionDuration: '0.2s',
+    zIndex: 2,
+    ':hover': { backgroundColor: t.bgInteractive },
+  },
+  controls: {
+    position: 'absolute',
+    bottom: '24px',
+    left: '50%',
+    transform: 'translateX(-50%)',
+    display: 'flex',
+    gap: '8px',
+    zIndex: 2,
+  },
+  btn: {
+    width: '36px',
+    height: '36px',
+    borderRadius: '50%',
+    borderStyle: 'none',
+    backgroundColor: t.bgInteractiveWeak,
+    color: '#fff',
+    fontSize: '1.15rem',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    transitionProperty: 'background-color',
+    transitionDuration: '0.2s',
+    ':hover': { backgroundColor: t.bgInteractive },
+  },
+});

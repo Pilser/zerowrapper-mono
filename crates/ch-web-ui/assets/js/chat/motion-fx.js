@@ -123,12 +123,10 @@ export function rippleLoop(container) {
   if (!container) return () => {}
   const rings = Array.from(container.querySelectorAll('.ripple'))
   if (rings.length === 0) return () => {}
-  if (!ok()) {
-    try { container.classList.add('ripple-css') } catch {}
-    return () => {
-      try { container.classList.remove('ripple-css') } catch {}
-    }
-  }
+  // motion.js is a static import (always bundled), so `ok()` is always true
+  // and the old `.ripple-container.ripple-css` CSS fallback was dead code —
+  // removed. Bail out quietly if Motion is somehow missing.
+  if (!ok()) return () => {}
   const controls = []
   try {
     rings.forEach((ring, i) => {

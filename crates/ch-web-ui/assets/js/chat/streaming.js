@@ -5,6 +5,11 @@ import { render as renderMarkdown } from './markdown.js'
 import { autoScroll } from './scroll.js'
 import { popIn, rippleLoop } from './motion-fx.js'
 import * as activity from './activity.js'
+import { rowClass, avatarClass, contentClass } from './messages.stylex.js'
+import * as stylex from '@stylexjs/stylex'
+import { a } from './activity.stylex.js'
+
+const cx = (...args) => (stylex.props(...args).className || '')
 
 let el = null
 let content = ''
@@ -17,13 +22,13 @@ export function setOnFinalize(cb) { onFinalize = cb }
 function getEl() {
   if (!el) {
     const row = document.createElement('div')
-    row.className = 'message-row assistant'
+    row.className = rowClass('assistant')
     const avatar = document.createElement('div')
-    avatar.className = 'msg-avatar'
+    avatar.className = avatarClass('assistant')
     avatar.innerHTML = BOT_AVATAR
     row.appendChild(avatar)
     el = document.createElement('div')
-    el.className = 'msg-content chat-markdown'
+    el.className = contentClass('assistant', true)
     row.appendChild(el)
     els.messages.appendChild(row)
     try { popIn(row) } catch {}
@@ -88,7 +93,7 @@ export function finalize() {
   const target = el
   const trimmed = content.trim()
   if (trimmed) {
-    target.className = 'msg-content chat-markdown'
+    target.className = contentClass('assistant', true)
     renderMarkdown(target, marked.parse(trimmed))
   }
   el = null
@@ -107,7 +112,7 @@ export function flush() {
   const target = el
   const trimmed = content.trim()
   if (trimmed) {
-    target.className = 'msg-content chat-markdown'
+    target.className = contentClass('assistant', true)
     renderMarkdown(target, marked.parse(trimmed))
   }
   el = null
@@ -174,8 +179,21 @@ function ensureRipple() {
   try { if (stopRippleLoop) stopRippleLoop() } catch {}
   stopRippleLoop = null
   rippleNode = document.createElement('div')
-  rippleNode.className = 'stream-ripple'
-  rippleNode.innerHTML = '<div class="ripple-container"><div class="ripple"></div><div class="ripple"></div><div class="ripple"></div></div>'
+  rippleNode.className = cx(a.streamRipple)
+  const container = document.createElement('div')
+  // Keep the `ripple-container` / `ripple` markers: motion-fx's
+  // querySelectorAll('.ripple') needs them.
+  container.className = 'ripple-container ' + cx(a.rippleContainer)
+  for (let i = 0; i < 3; i++) {
+    const rp = document.createElement('div')
+    rp.className = 'ripple ' + cx(a.ripple)
+    container.appendChild(rp)
+  }
+  const text = document.createElement('span')
+  text.className = cx(a.rippleText)
+  text.textContent = 'Agent working…'
+  rippleNode.appendChild(container)
+  rippleNode.appendChild(text)
   return rippleNode
 }
 

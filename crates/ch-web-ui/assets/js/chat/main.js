@@ -10,6 +10,7 @@ import { uploadFile, createAttachmentChip, uploadState } from './file-upload.js'
 import * as drawer from './drawer.js'
 import * as askDrawer from './ask-drawer.js'
 import * as themePicker from './theme-picker.js'
+import * as bg from './bg.js'
 
 function logPendingResources() {
   const entries = performance.getEntriesByType('resource')
@@ -25,6 +26,7 @@ function logPendingResources() {
 
 export function init() {
   dom.init()
+  bg.init()
   logPendingResources()
   setTimeout(logPendingResources, 3000)
 

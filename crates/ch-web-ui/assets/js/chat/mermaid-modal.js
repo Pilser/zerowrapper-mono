@@ -1,3 +1,8 @@
+import * as stylex from '@stylexjs/stylex'
+import { mm } from './mermaid.stylex.js'
+
+const cx = (...args) => (stylex.props(...args).className || '')
+
 let modal = null
 let stage = null
 let canvas = null
@@ -19,17 +24,35 @@ function ensure() {
   if (modal) return
   modal = document.createElement('div')
   modal.id = 'mermaid-modal'
-  modal.innerHTML =
-    '<button class="mm-close" title="Close">&times;</button>' +
-    '<div class="mm-controls">' +
-    '<button class="mm-btn" data-zoom="out" title="Zoom out">&minus;</button>' +
-    '<button class="mm-btn" data-zoom="in" title="Zoom in">+</button>' +
-    '<button class="mm-btn" data-zoom="reset" title="Reset view">&#10227;</button>' +
-    '</div>' +
-    '<div class="mm-stage"><div class="mm-canvas"></div></div>'
+  modal.className = cx(mm.modal, mm.modalClosed)
+  const closeBtn = document.createElement('button')
+  closeBtn.className = 'mm-close ' + cx(mm.close)
+  closeBtn.title = 'Close'
+  closeBtn.innerHTML = '&times;'
+  const controls = document.createElement('div')
+  controls.className = 'mm-controls ' + cx(mm.controls)
+  const mkBtn = (zoom, title, html) => {
+    const b = document.createElement('button')
+    b.className = 'mm-btn ' + cx(mm.btn)
+    b.dataset.zoom = zoom
+    b.title = title
+    b.innerHTML = html
+    return b
+  }
+  controls.appendChild(mkBtn('out', 'Zoom out', '&minus;'))
+  controls.appendChild(mkBtn('in', 'Zoom in', '+'))
+  controls.appendChild(mkBtn('reset', 'Reset view', '&#10227;'))
+  const stageEl = document.createElement('div')
+  stageEl.className = 'mm-stage ' + cx(mm.stage)
+  const canvasEl = document.createElement('div')
+  canvasEl.className = 'mm-canvas ' + cx(mm.canvas)
+  stageEl.appendChild(canvasEl)
+  modal.appendChild(closeBtn)
+  modal.appendChild(controls)
+  modal.appendChild(stageEl)
   document.body.appendChild(modal)
-  stage = modal.querySelector('.mm-stage')
-  canvas = modal.querySelector('.mm-canvas')
+  stage = stageEl
+  canvas = canvasEl
   modal.querySelector('.mm-close').addEventListener('click', close)
   modal.addEventListener('click', (e) => { if (e.target === modal) close() })
   modal.querySelectorAll('.mm-btn').forEach((btn) => {
@@ -113,13 +136,11 @@ export function open(svg) {
   ensure()
   const clone = svg.cloneNode(true)
   clone.removeAttribute('style')
-  clone.style.maxWidth = 'none'
-  clone.style.maxHeight = 'none'
-  clone.style.overflow = 'visible'
+  clone.className = cx(mm.canvasSvg)
   canvas.innerHTML = ''
   canvas.appendChild(clone)
   canvas.style.transform = ''
-  modal.classList.add('active')
+  modal.className = 'active ' + cx(mm.modal, mm.modalOpen)
   document.body.style.overflow = 'hidden'
   const rect = clone.getBoundingClientRect()
   diagramW = rect.width || stage.clientWidth
@@ -130,7 +151,7 @@ export function open(svg) {
 
 export function close() {
   if (!modal) return
-  modal.classList.remove('active')
+  modal.className = cx(mm.modal, mm.modalClosed)
   document.body.style.overflow = ''
 }
 

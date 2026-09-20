@@ -4,6 +4,10 @@
 // message DOM, all failures swallowed. Motion animates; plain CSS fallback
 // keeps it readable with Motion absent.
 import { animate } from './motion.js'
+import * as stylex from '@stylexjs/stylex'
+import { ov } from './overlay.stylex.js'
+
+const cx = (...args) => (stylex.props(...args).className || '')
 
 let pill = null
 let iconEl = null
@@ -16,9 +20,9 @@ function ensure() {
   if (pill && pill.isConnected) return pill
   pill = document.createElement('div')
   pill.id = 'agent-pill'
-  pill.className = 'agent-pill hidden'
+  pill.className = cx(ov.pill, ov.pillHidden)
   iconEl = document.createElement('span')
-  iconEl.className = 'agent-pill-icon'
+  iconEl.className = cx(ov.icon)
   textEl = document.createElement('span')
   textEl.className = 'agent-pill-text'
   pill.appendChild(iconEl)
@@ -30,7 +34,7 @@ function ensure() {
 function show() {
   try {
     const p = ensure()
-    p.classList.remove('hidden')
+    p.className = cx(ov.pill)
     if (hideTimer) { window.clearTimeout(hideTimer); hideTimer = null }
   } catch {}
 }
@@ -57,7 +61,7 @@ export function hideSoon(ms = 1600) {
   try {
     if (hideTimer) window.clearTimeout(hideTimer)
     hideTimer = window.setTimeout(() => {
-      try { if (pill) pill.classList.add('hidden') } catch {}
+      try { if (pill) pill.className = cx(ov.pill, ov.pillHidden) } catch {}
     }, ms)
   } catch {}
 }
@@ -65,14 +69,14 @@ export function hideSoon(ms = 1600) {
 export function hideNow() {
   try {
     if (hideTimer) { window.clearTimeout(hideTimer); hideTimer = null }
-    if (pill) pill.classList.add('hidden')
+    if (pill) pill.className = cx(ov.pill, ov.pillHidden)
   } catch {}
 }
 
 function ensureFeed() {
   if (feedBox && feedBox.isConnected) return feedBox
   feedBox = document.createElement('div')
-  feedBox.className = 'agent-feed hidden'
+  feedBox.className = cx(ov.feed, ov.feedHidden)
   document.body.appendChild(feedBox)
   return feedBox
 }
@@ -85,9 +89,9 @@ export function feed(icon, text) {
     const box = ensureFeed()
     const label = String(text == null ? '' : text).trim()
     if (!label) return
-    box.classList.remove('hidden')
+    box.className = cx(ov.feed)
     const item = document.createElement('div')
-    item.className = 'feed-item'
+    item.className = cx(ov.item)
     const ic = document.createElement('span')
     ic.textContent = icon || '•'
     const tx = document.createElement('span')
@@ -107,7 +111,7 @@ export function feed(icon, text) {
         item.style.transition = 'opacity 0.4s ease, transform 0.4s ease'
         item.style.opacity = '0'
         item.style.transform = 'translateX(12px)'
-        setTimeout(() => { try { item.remove(); if (!box.hasChildNodes()) box.classList.add('hidden') } catch {} }, 420)
+        setTimeout(() => { try { item.remove(); if (!box.hasChildNodes()) box.className = cx(ov.feed, ov.feedHidden) } catch {} }, 420)
       } catch {}
     }, 4000)
     while (box.children.length > FEED_MAX) {
@@ -116,8 +120,8 @@ export function feed(icon, text) {
     if (hideTimer) window.clearTimeout(hideTimer)
     hideTimer = window.setTimeout(() => {
       try {
-        if (pill) pill.classList.add('hidden')
-        if (feedBox) feedBox.classList.add('hidden')
+        if (pill) pill.className = cx(ov.pill, ov.pillHidden)
+        if (feedBox) feedBox.className = cx(ov.feed, ov.feedHidden)
       } catch {}
     }, 9000)
   } catch {}

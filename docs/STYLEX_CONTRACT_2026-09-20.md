@@ -8,11 +8,18 @@
 
 | Area | Owner | Status |
 |---|---|---|
-| Session drawer (`#side-drawer`, items) | Old sheet (reverted 2026-09-20) → StyleX faithful next | Revert verified: `drawer.js`/`styles.css`/`app.js` byte-identical to pre-cutover |
-| Piles (`think-card`, `tool-card`, `cd-*`) | **StyleX** (`piles/piles.stylex.js` + `tokens.stylex.js`) | DONE 2026-09-20 — faithful, old rules deleted, `USE_STYLEX=true` |
-| Agent feed + pill (`overlay.js`) | Old sheet → `feed.stylex.js` faithful next | — |
-| Theme picker, activity rows, lightbox, mermaid modal | Old sheet → own `.stylex.js` each | — |
-| Rust shell layout (`chat_section`, `layout`, whiteboard frame) | Tailwind utilities ONLY (`flex`, `gap`, spacing) | Never colors/borders/shadows |
+| Session drawer (`#side-drawer`, items) | **StyleX** (`drawer.stylex.js`, faithful 1:1) | DONE 2026-09-20 — old `#drawer-*`/`.drawer-item*` rules deleted |
+| Piles (`think-card`, `tool-card`, `cd-*`) | **StyleX** (`piles/piles.stylex.js` + `tokens.stylex.js`) | DONE 2026-09-20 — faithful, old rules deleted |
+| Background: dots + streaming tint + glow | **StyleX** (`bg.stylex.js`, JS `#bg-dots` layer) | DONE 2026-09-20 — replaces `body::before`/`body.streaming`/`@keyframes dots-stream-pulse`; glow filter isolated to the layer (no body filter → fixed-position chrome safe) |
+| Accent picker + accent effect | **StyleX** (`theme-picker.stylex.js`); effect via JS `--color-bg-interactive` | DONE 2026-09-20 — replaces `#accent-picker`/`.ap-*`/`.collapsed`/`.selected` + `[data-accent]` (which was silently losing to unlayered `:root`/`[data-theme]` in `@layer base`) |
+| Agent feed + status pill | **StyleX** (`overlay.stylex.js`) | DONE 2026-09-20 — replaces `.agent-feed`/`.feed-item`/`.agent-pill*` |
+| Message rows/avatars/content + attachment chips | **StyleX** (`messages.stylex.js`) | DONE 2026-09-20 — avatar SVG size moved to constants; `.msg-content`/`.chat-markdown` markers kept |
+| Turn-activity container + stream ripple | **StyleX** (`activity.stylex.js`) | DONE 2026-09-20 — dead `.activity-*`/`.action-*` deleted; `::after` text is now a real span |
+| Lightbox + mermaid zoom modal | **StyleX** (`lightbox.stylex.js`, `mermaid.stylex.js`) | DONE 2026-09-20 |
+| Ask-drawer CARDS (wizard/review/pills/dots/nav) | **StyleX** (`ask.stylex.js`) | DONE 2026-09-20 — textareas got explicit classes; shell `#ask-*` stays (Rust) |
+| Whiteboard pins (`whiteboard-pin-card`/`pin-name`/`pin-meta`) | Old sheet | REMAINING — mixed: shared with the pre-bundled `public-wb.js` artifact + descendant selectors on inner `img/iframe/pre/a` |
+| Whiteboard arrows (`.whiteboard-arrow`) | Old sheet | BOUNDARY — rendered by Rust (`whiteboard_panel.rs`); cannot StyleX |
+| Rust shell layout (`chat_section`, `layout`, whiteboard frame) | Tailwind utilities ONLY | Never colors/borders/shadows |
 | Rust inline `style=` (`chat_section`, `whiteboard_panel #snap`, `public_wb`) | Move to owner (StyleX JS-paint or Tailwind) per element | `#snap` double-styled, must pick one (§4) |
 | Markdown/typography/hljs, `body`, keyframes, tokens, `@media` page rules | Global sheet (stays permanently) | StyleX has no descendant selectors |
 
@@ -33,6 +40,21 @@ StyleX is strict about cross-module tokens. Findings, in order of discovery:
 3. **Indirection keeps styles.css as the single value source.** Because `--x<hash>` is defined as `var(--color-bg)`, and `[data-theme="dark"]` redefines `--color-bg`, dark mode keeps working through late-bound CSS var resolution. No value duplication, no `createTheme` needed.
 4. **Never interpolate tokens with `${}`.** Template fragments get hashed into undefined props (`var(--xdfod0m)` with no definition). Composite values (gradients, shadows) must be single literal strings referenced whole.
 5. StyleX normalizes colors: `rgba(0,0,0,0.10)` → `#0000001a`, `rgba(0,0,0,0.16)` → `#00000029` (equivalent; not a drift).
+
+## 2a-bis. Same-property conflicts (CRITICAL, verified 2026-09-20)
+
+When two applied classes set the **same property** with different values, StyleX does NOT honor `props()` argument order — the winner is decided by **value sort order in the generated stylesheet** (effectively lexicographic). Verified: `opacity:0` vs `opacity:1` → `1` wins; `display:block` vs `none` → `none` wins; `transform:none` vs `translateX(-105%)` → `translateX` wins.
+
+Consequence: a base value + a state variant is **unsafe**. Example bug caught: drawer base `transform: translateX(-105%)` + `.open { transform: none }` → base always won → drawer never opened.
+
+**Rule: state styles must be mutually exclusive variants with no conflicting base.** Pattern:
+```js
+base:   { /* shared, NO conflicting property */ },
+stateA: { transform: 'translateX(-105%)' },
+stateB: { transform: 'none' },
+// cx(base, open ? stateB : stateA)  — never cx(baseWithValue, override)
+```
+Applied to: drawer panel open/closed, bg dots/streaming, lightbox/modal open/closed, feed/pill/dot/pill/nav visibility, message user/assistant variants.
 
 ## 2b. Piles cutover (2026-09-20)
 

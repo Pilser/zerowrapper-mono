@@ -83,12 +83,6 @@
     text-underline-offset: 2px;
     text-decoration-thickness: 1px;
   }
-  #bg-canvas {
-    position: fixed;
-    inset: 0;
-    z-index: -1;
-    pointer-events: none;
-  }
   .btn-loading {
     opacity: 0.7;
     cursor: wait;
@@ -119,22 +113,8 @@
     #page-root { border: none !important; }
   }
 
-  #chat-messages > .message-row { display: flex; flex-direction: column; margin-bottom: 16px; animation: msg-slide-in 0.2s ease-out; }
-  /* Centered reading column for assistant replies (text itself stays
-     left-aligned so headings/lists/paragraphs keep their hierarchy). */
-  #chat-messages > .message-row.assistant .msg-content { max-width: 64rem; }
-  @keyframes msg-slide-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-  #chat-messages > .message-row.user { align-items: flex-end; }
-  #chat-messages > .message-row.assistant { align-items: center; }
-  #chat-messages > .message-row .msg-avatar { width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-bottom: 4px; }
-  #chat-messages > .message-row.user .msg-avatar { background: var(--color-bg-interactive); border: 1px solid var(--color-border-weak); }
-  #chat-messages > .message-row.assistant .msg-avatar { background: var(--color-bg-weak); border: 1px solid var(--color-border-weak); }
-  #chat-messages > .message-row .msg-avatar svg { width: 12px; height: 12px; }
-  #chat-messages > .message-row.user .msg-avatar svg { stroke: var(--color-text-inverted); }
-  #chat-messages > .message-row.assistant .msg-avatar svg { stroke: var(--color-text-weak); }
-  #chat-messages > .message-row .msg-content { padding: 12px 16px; font-size: 0.875rem; line-height: 1.75; word-wrap: break-word; border-radius: 10px; width: 100%; box-sizing: border-box; }
-  #chat-messages > .message-row.user .msg-content { border: 1px solid var(--color-border-weak); color: var(--color-text-inverted); font-weight: 450; background: var(--color-bg-interactive); border-bottom-right-radius: 4px; max-width: 75%; width: auto; }
-  #chat-messages > .message-row.assistant .msg-content { border: 1px solid var(--color-border-weak); color: var(--color-text); background: var(--color-bg); border-bottom-left-radius: 4px; }
+  /* Message rows + avatars + content: MOVED to StyleX (messages.stylex.js).
+     Avatar SVG size moved to the constants (width/height attrs). */
   .chat-markdown p { margin-bottom: 0.75rem; line-height: 1.75; }
   .chat-markdown p:last-child { margin-bottom: 0; }
   .chat-markdown ul, .chat-markdown ol { margin: 0.5rem 0; padding-left: 1.5rem; line-height: 1.75; }
@@ -304,104 +284,8 @@
   .thinking-block summary::before { content: none; }
   .thinking-block summary .think-icon { width: 0.75rem; height: 0.75rem; flex-shrink: 0; color: var(--color-bg-interactive); display: inline-block; }
   .thinking-block pre { font-size: 0.6875rem; color: var(--color-text-weak); background: var(--color-bg-weak); padding: 6px 10px; border-radius: 4px; margin: 4px 0 0; white-space: pre-wrap; word-break: break-word; max-height: 120px; overflow-y: auto; }
-  /* Turn activity fold: one stacked Thinking + Actions row per assistant
-     turn. Rows stay open with live counts while streaming, then settle to a
-     quiet receipt. A manual toggle always wins (pinned open). */
-  .turn-activity {
-    box-sizing: border-box;
-    width: 100%;
-    max-width: 64rem;
-    margin: 0 auto 4px;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-  .activity-row {
-    border: 1px solid var(--color-border-weak);
-    border-radius: 10px;
-    background: var(--color-bg-weak);
-    overflow: hidden;
-  }
-  .activity-head {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    width: 100%;
-    padding: 4px 10px;
-    background: none;
-    border: none;
-    cursor: pointer;
-    font-size: 0.6875rem;
-    line-height: 1.4;
-    color: var(--color-text);
-  }
-  .activity-row:not(.active) .activity-head { color: var(--color-text-weak); }
-  .activity-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--color-status-success); flex-shrink: 0; }
-  .activity-row.active .activity-dot { background: var(--color-status-running); animation: activity-pulse 1.2s ease-in-out infinite; }
-  @keyframes activity-pulse { 50% { opacity: 0.3; } }
-  .activity-label { font-weight: 600; }
-  .activity-num {
-    font-family: var(--font-mono);
-    font-size: 0.625rem;
-    color: var(--color-text-weak);
-    border: 1px solid var(--color-border-weak);
-    border-radius: 999px;
-    padding: 0 6px;
-    line-height: 1.5;
-  }
-  .activity-chev { margin-left: auto; color: var(--color-text-weak); display: inline-flex; transition: transform 0.15s ease; }
-  .activity-row.open .activity-chev { transform: rotate(180deg); }
-  .activity-detail { display: none; padding: 2px 10px 8px; }
-  .activity-row.open .activity-detail { display: block; }
-  .activity-detail pre {
-    font-size: 0.6875rem;
-    font-family: var(--font-mono);
-    line-height: 1.5;
-    margin: 0;
-    white-space: pre-wrap;
-    word-break: break-word;
-    color: var(--color-text-weak);
-    max-height: 160px;
-    overflow-y: auto;
-    background: var(--color-bg);
-    border-radius: 6px;
-    padding: 6px 8px;
-  }
-  .action-list { display: flex; flex-direction: column; gap: 2px; }
-  .action-item { border-radius: 6px; }
-  .action-head {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    width: 100%;
-    padding: 2px 4px;
-    background: none;
-    border: none;
-    cursor: pointer;
-    font-size: 0.6875rem;
-    color: var(--color-text);
-    text-align: left;
-  }
-  .action-status { font-size: 0.625rem; color: var(--color-status-running); width: 12px; flex-shrink: 0; }
-  .action-status.done { color: var(--color-status-success); }
-  .action-name { font-family: var(--font-mono); }
-  .action-item.done .action-name { color: var(--color-text-weak); }
-  .action-detail { padding: 2px 4px 4px 22px; }
-  .action-detail pre {
-    font-size: 0.6875rem;
-    font-family: var(--font-mono);
-    line-height: 1.5;
-    margin: 0;
-    white-space: pre-wrap;
-    word-break: break-word;
-    color: var(--color-text-weak);
-    background: var(--color-bg);
-    border-radius: 4px;
-    padding: 4px 8px;
-  }
-  .action-output { font-size: 0.6875rem; color: var(--color-text-weak); margin-top: 3px; }
-  .action-detail details { margin-top: 3px; }
-  .action-detail summary { font-size: 0.6875rem; color: var(--color-text-weak); cursor: pointer; }
+  /* Turn-activity container MOVED to StyleX (activity.stylex.js).
+     Dead .activity-* / .action-* rules (zero JS/Rust refs) deleted. */
   /* ---- Floating piles: CUT OVER to StyleX 2026-09-20 ----
      Faithful translation in piles/piles.stylex.js (tokens across modules
      verified). v1 dead rules deleted earlier; v2 + cd-* moved 1:1.
@@ -409,142 +293,19 @@
      matched nothing), state markers open/running/done/hidden/cd-warm kept
      as JS hooks with StyleX variants. */
   /* (v2 card rules lived here — moved 1:1 to piles/piles.stylex.js) */
-  /* Live agent feed: floating recent-action list above the pill. */
-  .agent-feed {
-    position: fixed;
-    right: 14px;
-    bottom: 150px;
-    z-index: 60;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    max-width: 240px;
-    pointer-events: none;
-  }
-  .agent-feed.hidden { display: none; }
-  .feed-item {
-    display: flex;
-    align-items: center;
-    gap: 7px;
-    padding: 5px 11px;
-    border-radius: 999px;
-    background: color-mix(in srgb, var(--color-bg) 84%, transparent);
-    backdrop-filter: blur(8px);
-    border: 1px solid var(--color-border-weak);
-    box-shadow: 0 4px 16px rgba(0,0,0,0.14);
-    font-size: 0.6875rem;
-    color: var(--color-text-strong);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    will-change: transform, opacity;
-  }
-  .agent-pill {
-    position: fixed;
-    left: 50%;
-    bottom: 86px;
-    transform: translateX(-50%);
-    z-index: 60;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 6px 14px;
-    border-radius: 999px;
-    background: color-mix(in srgb, var(--color-bg) 82%, transparent);
-    backdrop-filter: blur(8px);
-    border: 1px solid var(--color-border);
-    box-shadow: 0 6px 24px rgba(0,0,0,0.16);
-    font-size: 0.75rem;
-    color: var(--color-text);
-    pointer-events: none;
-    will-change: transform, opacity;
-  }
-  .agent-pill.hidden { display: none; }
-  .agent-pill-icon { font-size: 1rem; line-height: 1; }
-  /* Stream ripple loader: sits below the newest live content and follows it
-     down as the turn grows. Motion drives scale/fade; this only shapes.
-     Made very visible: larger, thicker border, glow, centered. */
-  .stream-ripple { display: flex; justify-content: center; align-items: center; gap: 12px; padding: 18px 0; }
-  .stream-ripple::after {
-    content: 'Agent working…';
-    font-size: 0.8rem; font-weight: 600; color: var(--color-text);
-    animation: ripple-text-pulse 1.4s ease-in-out infinite;
-  }
-  @keyframes ripple-text-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.6; } }
-  .ripple-container { position: relative; width: 90px; height: 40px; flex-shrink: 0; }
-  .ripple-container .ripple {
-    position: absolute; top: 2px; left: 0;
-    width: 36px; height: 36px;
-    border-radius: 50%;
-    border: 4px solid var(--color-bg-interactive);
-    opacity: 0;
-    will-change: transform, opacity;
-    box-shadow: 0 0 12px color-mix(in srgb, var(--color-bg-interactive) 45%, transparent);
-  }
-  .ripple-container.ripple-css .ripple { animation: ripple-css-pulse 1.6s infinite ease-out; }
-  .ripple-container.ripple-css .ripple:nth-child(2) { animation-delay: 0.35s; }
-  .ripple-container.ripple-css .ripple:nth-child(3) { animation-delay: 0.7s; }
-  @keyframes ripple-css-pulse {
-    0% { transform: scale(0.25); opacity: 0.9; }
-    100% { transform: scale(1); opacity: 0; }
-  }
-  /* Dotted chat backdrop (uses accent so picker visibly changes it) +
-     streaming tint shift — what triggers ripple also triggers this. */
-  /* Full-bleed dotted backdrop — covers entire viewport, not just the
-     centered column. Body holds the dots; #chat-messages stays transparent
-     so they show through edge-to-edge on every device. Streaming tint
-     lives on body so the whole background glows, not just the middle. */
-  body {
-    background-image: radial-gradient(circle, color-mix(in srgb, var(--color-bg-interactive) 38%, transparent) 1.7px, transparent 1.9px);
-    background-size: 22px 22px;
-    background-attachment: fixed;
-    transition: background-color 0.6s ease, background-image 0.6s ease;
-  }
-  body.streaming {
-    /* Mix with --color-bg (NOT transparent): a translucent color here
-       replaces body's opaque background and lets the white canvas show
-       through — the "white glow" bug. Keeps theme bg, adds accent tint. */
-    background-color: color-mix(in srgb, var(--color-bg-interactive) 14%, var(--color-bg));
-    background-image: radial-gradient(circle, var(--color-bg-interactive) 2.2px, transparent 2.4px);
-    animation: dots-stream-pulse 1.6s ease-in-out infinite;
-  }
-  @keyframes dots-stream-pulse { 0%,100% { filter: brightness(1); } 50% { filter: brightness(1.25); } }
+  /* Live agent feed + status pill: MOVED to StyleX (overlay.stylex.js). */
+  /* Stream-ripple: MOVED to StyleX (activity.stylex.js); ::after text is a
+     real span. The old `.ripple-css` Motion-less fallback was dead code
+     (motion.js is always bundled) — removed from here and motion-fx.js. */
+  /* Dotted backdrop + streaming glow: MOVED to StyleX (bg.stylex.js on the
+     JS-created #bg-dots layer). Accent picker: MOVED to StyleX
+     (theme-picker.stylex.js); accent effect applied from JS via
+     --color-bg-interactive. No body::before / body.streaming / #accent-picker
+     / [data-accent] rules remain. */
   #chat-messages {
     background: transparent;
     border-radius: 12px;
   }
-  /* Corner accent picker: collapsed dot, expands on tap. */
-  #accent-picker {
-    position: fixed; top: 12px; right: 12px; z-index: 70;
-    display: flex; align-items: center; gap: 8px;
-    padding: 4px; border-radius: 999px;
-    background: color-mix(in srgb, var(--color-bg) 84%, transparent);
-    backdrop-filter: blur(8px);
-    border: 1px solid var(--color-border-weak);
-    box-shadow: 0 2px 10px rgba(0,0,0,0.10);
-  }
-  #accent-picker-toggle {
-    width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--color-bg);
-    cursor: pointer; flex-shrink: 0; box-shadow: 0 0 0 1px var(--color-border-weak);
-  }
-  #accent-picker .accent-list {
-    display: flex; gap: 8px; list-style: none; margin: 0; padding: 0;
-  }
-  #accent-picker.collapsed .accent-list { display: none; }
-  #accent-picker .accent-list button {
-    width: 20px; height: 20px; border-radius: 50%; border: none; cursor: pointer;
-    outline: 2px solid transparent; outline-offset: 2px; padding: 0;
-  }
-  #accent-picker li.selected button { outline-color: var(--color-text-strong); }
-  #accent-picker .ap-blue button { background: #3b82f6; }
-  #accent-picker .ap-pink button { background: #ec4899; }
-  #accent-picker .ap-sun button { background: #eab308; }
-  #accent-picker .ap-mint button { background: #10b981; }
-  #accent-picker .ap-orange button { background: #ff8c00; }
-  [data-accent="pink"] { --color-bg-interactive: #ec4899; }
-  [data-accent="sun"] { --color-bg-interactive: #ca8a04; }
-  [data-accent="mint"] { --color-bg-interactive: #059669; }
-  [data-accent="orange"] { --color-bg-interactive: #ff8c00; }
   .chat-markdown img { max-width: 100%; height: auto; border-radius: 8px; border: 1px solid var(--color-border-weak); cursor: pointer; display: block; margin: 0.75rem 0; transition: opacity 0.2s; }
   .chat-markdown img:hover { opacity: 0.85; }
   .chat-markdown video { max-width: 100%; border-radius: 8px; border: 1px solid var(--color-border-weak); margin: 0.75rem 0; display: block; }
@@ -552,18 +313,7 @@
   .chat-markdown .file-embed:hover { background: var(--color-bg-weak-hover); }
   .chat-markdown .file-embed .file-icon { font-size: 1rem; flex-shrink: 0; }
   .chat-markdown iframe.pdf-embed { width: 100%; height: 500px; border: 1px solid var(--color-border-weak); border-radius: 8px; margin: 0.75rem 0; }
-  #lightbox { position: fixed; inset: 0; z-index: 9999; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; opacity: 0; pointer-events: none; transition: opacity 0.25s; cursor: zoom-out; }
-  #lightbox.active { opacity: 1; pointer-events: auto; }
-  #lightbox img { max-width: 90vw; max-height: 90vh; border-radius: 8px; box-shadow: 0 4px 24px rgba(0,0,0,0.5); }
-  #lightbox .lb-loading { color: rgba(255,255,255,0.6); font-size: 0.875rem; }
-  #lightbox .lb-close { position: absolute; top: 16px; right: 16px; width: 36px; height: 36px; border-radius: 50%; border: none; background: var(--color-bg-interactive-weak); color: #fff; font-size: 1.25rem; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background 0.2s; }
-  #lightbox .lb-close:hover { background: var(--color-bg-interactive); }
-  #lightbox .lb-prev,
-  #lightbox .lb-next { position: absolute; top: 50%; transform: translateY(-50%); z-index: 1; width: 44px; height: 44px; border-radius: 50%; border: none; background: var(--color-bg-interactive-weak); color: #fff; font-size: 1.25rem; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background 0.2s; }
-  #lightbox .lb-prev:hover,
-  #lightbox .lb-next:hover { background: var(--color-bg-interactive); }
-  #lightbox .lb-prev { left: 16px; }
-  #lightbox .lb-next { right: 16px; }
+  /* Image lightbox MOVED to StyleX (lightbox.stylex.js, faithful). */
   html {
     scroll-padding-bottom: 180px;
   }
@@ -866,158 +616,15 @@
     max-width: 100%;
   }
 
-  #mermaid-modal {
-    position: fixed;
-    inset: 0;
-    z-index: 9999;
-    background: rgba(0, 0, 0, 0.85);
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.25s;
-  }
-  #mermaid-modal.active { opacity: 1; pointer-events: auto; }
-  #mermaid-modal .mm-stage {
-    width: 100%;
-    height: 100%;
-    overflow: hidden;
-    cursor: grab;
-    touch-action: none;
-  }
-  #mermaid-modal .mm-stage:active { cursor: grabbing; }
-  #mermaid-modal .mm-canvas {
-    transform-origin: 0 0;
-    will-change: transform;
-  }
-  #mermaid-modal .mm-canvas svg {
-    display: block;
-    max-width: none;
-    max-height: none;
-    background: var(--color-bg-weak);
-    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5);
-  }
-  #mermaid-modal .mm-close {
-    position: absolute;
-    top: 16px;
-    right: 16px;
-    width: 36px;
-    height: 36px;
-    border-radius: 50%;
-    border: none;
-    background: var(--color-bg-interactive-weak);
-    color: #fff;
-    font-size: 1.25rem;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: background 0.2s;
-    z-index: 2;
-  }
-  #mermaid-modal .mm-close:hover { background: var(--color-bg-interactive); }
-  #mermaid-modal .mm-controls {
-    position: absolute;
-    bottom: 24px;
-    left: 50%;
-    transform: translateX(-50%);
-    display: flex;
-    gap: 8px;
-    z-index: 2;
-  }
-  #mermaid-modal .mm-btn {
-    width: 36px;
-    height: 36px;
-    border-radius: 50%;
-    border: none;
-    background: var(--color-bg-interactive-weak);
-    color: #fff;
-    font-size: 1.15rem;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: background 0.2s;
-  }
-  #mermaid-modal .mm-btn:hover { background: var(--color-bg-interactive); }
+  /* Mermaid zoom modal MOVED to StyleX (mermaid.stylex.js, faithful). */
 }
 
-/* ---- side drawer: chats & tools (replaces the cramped session dropdown) ---- */
+/* ---- side drawer: chats & tools (replaces the cramped session dropdown) ----
+   Drawer visuals MOVED to StyleX (drawer.stylex.js, faithful 1:1). Only the
+   legacy-dropdown kill + layout guards stay here. */
 #session-bar { display: none !important; }
 #chat-messages, #chat-bottom-bar { min-width: 0; }
 #chat-messages { overflow-x: hidden; }
-#drawer-overlay {
-  position: fixed; inset: 0;
-  background: rgba(0, 0, 0, 0.35);
-  z-index: 60;
-}
-#drawer-overlay.hidden { display: none; }
-#side-drawer {
-  position: fixed; top: 0; left: 0; height: 100dvh;
-  width: min(320px, 85vw);
-  z-index: 61;
-  display: flex; flex-direction: column;
-  background: var(--color-bg);
-  border-right: 1px solid var(--color-border-weak);
-  box-shadow: 8px 0 24px rgba(0, 0, 0, 0.18);
-  transform: translateX(-105%);
-  transition: transform 0.25s ease;
-}
-#side-drawer.open { transform: none; }
-#drawer-header {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 14px 16px 10px;
-}
-#drawer-title { font-size: 0.85rem; font-weight: 600; color: var(--color-text-strong); }
-#drawer-close-btn {
-  display: flex; align-items: center; justify-content: center;
-  width: 30px; height: 30px; border-radius: 8px; cursor: pointer;
-  border: 1px solid var(--color-border-weak);
-  background: var(--color-bg-weak); color: var(--color-text-weak);
-}
-#drawer-actions { padding: 0 16px 8px; }
-#drawer-new-btn {
-  display: flex; align-items: center; gap: 8px;
-  width: 100%; padding: 8px 12px; border-radius: 10px; cursor: pointer;
-  font-size: 0.8rem;
-  border: 1px solid var(--color-border-weak);
-  background: var(--color-bg-weak); color: var(--color-text-strong);
-}
-#drawer-new-btn:hover { background: var(--color-bg-weak-hover); }
-#drawer-sessions-label {
-  padding: 8px 16px 4px;
-  font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em;
-  color: var(--color-text-weak);
-}
-#drawer-list {
-  flex: 1; min-height: 0; overflow-y: auto;
-  padding: 0 8px 8px;
-  display: flex; flex-direction: column; gap: 2px;
-}
-.drawer-item {
-  display: block; width: 100%; text-align: left; cursor: pointer;
-  padding: 8px 10px; border-radius: 10px; border: 1px solid transparent;
-  background: transparent; color: var(--color-text-strong);
-}
-.drawer-item:hover { background: var(--color-bg-weak); }
-.drawer-item.active {
-  background: var(--color-bg-weak);
-  border-color: var(--color-border-weak);
-}
-.drawer-item .drawer-item-title {
-  display: block; font-size: 0.8rem;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.drawer-item .drawer-item-meta {
-  display: block; font-size: 0.68rem; margin-top: 2px;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  color: var(--color-text-weak);
-}
-.drawer-empty { font-size: 0.78rem; color: var(--color-text-weak); padding: 10px; }
-#drawer-usage {
-  border-top: 1px solid var(--color-border-weak);
-  padding: 10px 16px 14px;
-  font-size: 0.72rem; color: var(--color-text-weak);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
 
 /* ---- mobile squeeze guards: flex items must shrink below content size ---- */
 #chat-form .flex-1 { min-width: 0; }
@@ -1058,98 +665,8 @@
   padding: 0 16px 8px;
   display: flex; flex-direction: column; gap: 10px;
 }
-.ask-card {
-  border: 1px solid var(--color-border-weak);
-  border-radius: 14px; padding: 10px 12px;
-  background: var(--color-bg-weak);
-  display: flex; flex-direction: column; gap: 8px;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.08);
-}
-.ask-system-banner {
-  border-radius: 14px; padding: 10px 12px;
-  background: linear-gradient(180deg, var(--color-bg-weak), var(--color-bg));
-  border: 1px solid var(--color-border);
-  box-shadow: 0 2px 10px rgba(0,0,0,0.08);
-}
-.ask-system-title { font-size: 0.85rem; font-weight: 800; color: var(--color-text-strong); }
-.ask-system-sub { font-size: 0.75rem; color: var(--color-text); margin-top: 2px; line-height: 1.5; }
-.ask-objective { font-size: 0.7rem; color: var(--color-text-weak); }
-.ask-card textarea, .ask-card select, .ask-card input[type="text"] {
-  width: 100%; box-sizing: border-box;
-  font-size: 0.8rem; border-radius: 8px; padding: 6px 8px;
-  border: 1px solid var(--color-border-weak);
-  background: var(--color-bg); color: var(--color-text-strong);
-  font-family: inherit;
-}
-.ask-card textarea[data-q="answer"] {
-  min-height: 64px;
-  border-width: 2px;
-  font-size: 0.85rem;
-}
-.ask-card textarea[data-q="answer"]::placeholder { color: var(--color-text-weak); opacity: 0.9; }
-.ask-pills { display: flex; flex-wrap: wrap; gap: 6px; }
-.ask-pill {
-  padding: 6px 14px; border-radius: 999px; cursor: pointer;
-  font-size: 0.78rem; font-weight: 600;
-  border: 1px solid var(--color-border);
-  background: var(--color-bg); color: var(--color-text-strong);
-  transition: transform 0.12s ease, background 0.12s ease;
-}
-.ask-pill:hover { transform: translateY(-1px); }
-.ask-pill.selected {
-  background: var(--color-bg-interactive);
-  color: var(--color-text-inverted);
-  border-color: transparent;
-}
-.ask-wizard-header {
-  display: flex; align-items: center; justify-content: space-between;
-  font-size: 0.75rem; font-weight: 600; color: var(--color-text-strong);
-  padding: 4px 2px;
-}
-.ask-dots { display: flex; gap: 6px; align-items: center; }
-.ask-dot {
-  width: 8px; height: 8px; border-radius: 50%;
-  border: 1px solid var(--color-border);
-  background: var(--color-bg-weak);
-  padding: 0; cursor: pointer;
-}
-.ask-dot.active { background: var(--color-bg-interactive); border-color: var(--color-bg-interactive); }
-.ask-dot.answered { background: var(--color-status-success); border-color: var(--color-status-success); }
-.ask-dot.active.answered { background: var(--color-bg-interactive); }
-.ask-q-label, .ask-a-label {
-  font-size: 0.7rem; font-weight: 600; color: var(--color-text-weak);
-  text-transform: uppercase; letter-spacing: 0.03em;
-}
-.ask-wizard-card { min-height: 0; }
-.ask-wizard-nav {
-  display: flex; align-items: center; justify-content: space-between;
-  gap: 8px; padding: 4px 0;
-}
-.ask-nav-btn {
-  padding: 6px 14px; border-radius: 999px; cursor: pointer;
-  font-size: 0.78rem; font-weight: 600;
-  border: 1px solid var(--color-border);
-  background: var(--color-bg); color: var(--color-text-strong);
-}
-.ask-nav-btn.primary {
-  background: var(--color-bg-interactive);
-  color: var(--color-text-inverted);
-  border-color: transparent;
-}
-.ask-nav-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-.ask-nav-count {
-  font-size: 0.75rem; font-weight: 600; color: var(--color-text-weak);
-}
-.ask-queue-banner, .ask-empty {
-  font-size: 0.75rem; color: var(--color-text-weak);
-  padding: 6px 8px; text-align: center;
-  background: var(--color-bg-weak); border-radius: 8px;
-}
-.ask-review-q { font-size: 0.8rem; font-weight: 600; color: var(--color-text-strong); }
-.ask-review-a {
-  font-size: 0.8rem; color: var(--color-text);
-  white-space: pre-wrap; word-break: break-word;
-}
+/* Ask-drawer CARDS MOVED to StyleX (ask.stylex.js, faithful). The drawer
+   shell (#ask-*) is Rust-rendered and stays here. */
 #ask-footer {
   display: flex; gap: 8px; padding: 8px 16px;
   border-top: 1px solid var(--color-border-weak);
