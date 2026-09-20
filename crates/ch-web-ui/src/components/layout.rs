@@ -23,7 +23,9 @@ pub async fn root_layout(cx: &Cx, slot: Result) -> Result {
     // prefix like /srv/<board>/) resolves them against the document base
     // instead of the host root (served by the RootDispatchLayer via ?asset=).
     let css_url = format!("?asset={}", bundled_asset(cx, STYLESHEET).name());
-    // StyleX second sheet. ON: drawer (sessions) cut over to StyleX 2026-09-20.
+    // StyleX second sheet. ON: floating piles (think/tool cards) cut over
+    // 2026-09-20 — their old styles.css rules were deleted, so the sheet is
+    // required for them to render. Drawer stays on old CSS (reverted).
     // Tailwind first, StyleX second so StyleX wins without !important.
     const USE_STYLEX: bool = true;
     let stylex_url = format!("?asset={}", bundled_asset(cx, STYLEX_CSS).name());

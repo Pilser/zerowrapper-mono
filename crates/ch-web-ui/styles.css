@@ -402,99 +402,13 @@
   .action-output { font-size: 0.6875rem; color: var(--color-text-weak); margin-top: 3px; }
   .action-detail details { margin-top: 3px; }
   .action-detail summary { font-size: 0.6875rem; color: var(--color-text-weak); cursor: pointer; }
-  /* Floating turn piles: independent soft cards, minimal height, playful
-     but calm. Motion (motion-fx.js) drives transform/opacity; CSS only
-     shapes, depth, and the countdown track. */
-  .tool-pile, .think-pile {
-    border-radius: 14px;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.08), 0 0 0 1px var(--color-border-weak);
-    background: linear-gradient(180deg, var(--color-bg-weak), var(--color-bg));
-    will-change: transform, opacity;
-  }
-  .tool-pile.active, .think-pile.active {
-    box-shadow: 0 4px 16px rgba(0,0,0,0.12), 0 0 0 1px var(--color-border);
-  }
-  .pile-icon { font-size: 0.9375rem; line-height: 1; display: inline-block; flex-shrink: 0; will-change: transform; }
-  .cd-track { height: 3px; border-radius: 999px; background: var(--color-border-weak); margin: 0 10px 6px; overflow: hidden; }
-  .cd-track.hidden { display: none; }
-  .cd-bar { height: 100%; width: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--color-status-running), var(--color-status-success)); transform-origin: left center; }
-  .cd-label { font-family: var(--font-mono); font-size: 0.625rem; color: var(--color-text-weak); margin-left: auto; flex-shrink: 0; }
-  .cd-label.cd-warm { color: var(--color-status-error); font-weight: 700; }
-  /* Floating turn piles v2: independent cards, high-contrast readable
-     text on the dark background, counts + previews visible without
-     expanding. Motion (motion-fx.js) drives transform/opacity; CSS only
-     shapes, depth, color. CSS variables below are only *used*, never
-     redefined. */
-  .think-card, .tool-card {
-    border-radius: 16px;
-    background: linear-gradient(180deg, var(--color-bg-weak), var(--color-bg));
-    box-shadow: 0 3px 12px rgba(0,0,0,0.10), 0 0 0 1px var(--color-border-weak);
-    overflow: hidden;
-    will-change: transform, opacity;
-  }
-  .think-card.active {
-    box-shadow: 0 4px 18px rgba(0,0,0,0.16), 0 0 0 1px var(--color-status-running);
-  }
-  .tool-card.active {
-    box-shadow: 0 4px 18px rgba(0,0,0,0.16), 0 0 0 1px var(--color-status-running);
-  }
-  .think-head, .tool-head {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    width: 100%;
-    padding: 7px 12px;
-    background: none;
-    border: none;
-    cursor: pointer;
-    font-size: 0.75rem;
-    line-height: 1.45;
-    color: var(--color-text-strong);
-    text-align: left;
-  }
-  .think-icon, .tool-icon { font-size: 1.05rem; line-height: 1; flex-shrink: 0; display: inline-block; will-change: transform; }
-  .think-title, .tool-title { font-weight: 700; color: var(--color-text-strong); white-space: nowrap; }
-  .think-count, .tool-count {
-    font-family: var(--font-mono);
-    font-size: 0.6875rem;
-    font-weight: 700;
-    color: var(--color-bg);
-    background: var(--color-status-running);
-    border-radius: 999px;
-    padding: 1px 8px;
-    line-height: 1.6;
-    flex-shrink: 0;
-  }
-  .tool-card.done .tool-count { background: var(--color-status-success); }
-  .think-preview, .tool-sub {
-    color: var(--color-text);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    min-width: 0;
-    flex: 1;
-  }
-  .think-chev, .tool-chev { margin-left: auto; color: var(--color-text-weak); display: inline-flex; transition: transform 0.15s ease; flex-shrink: 0; }
-  .think-card.open .think-chev, .tool-card.open .tool-chev { transform: rotate(180deg); }
-  .think-body, .tool-body { display: none; padding: 2px 12px 10px; }
-  .think-card.open .think-body, .tool-card.open .tool-body { display: block; }
-  .think-body pre, .tool-args pre {
-    font-size: 0.75rem;
-    font-family: var(--font-mono);
-    line-height: 1.55;
-    margin: 0;
-    white-space: pre-wrap;
-    word-break: break-word;
-    color: var(--color-text);
-    max-height: 220px;
-    overflow-y: auto;
-    background: var(--color-bg);
-    border-radius: 8px;
-    padding: 8px 10px;
-  }
-  .tool-out { font-size: 0.75rem; color: var(--color-text); margin-top: 6px; }
-  .tool-body details { margin-top: 6px; }
-  .tool-body summary { font-size: 0.75rem; color: var(--color-text); cursor: pointer; }
+  /* ---- Floating piles: CUT OVER to StyleX 2026-09-20 ----
+     Faithful translation in piles/piles.stylex.js (tokens across modules
+     verified). v1 dead rules deleted earlier; v2 + cd-* moved 1:1.
+     Quirks preserved: tool args/output <pre> unstyled (old selectors
+     matched nothing), state markers open/running/done/hidden/cd-warm kept
+     as JS hooks with StyleX variants. */
+  /* (v2 card rules lived here — moved 1:1 to piles/piles.stylex.js) */
   /* Live agent feed: floating recent-action list above the pill. */
   .agent-feed {
     position: fixed;
@@ -587,7 +501,10 @@
     transition: background-color 0.6s ease, background-image 0.6s ease;
   }
   body.streaming {
-    background-color: color-mix(in srgb, var(--color-bg-interactive) 14%, transparent);
+    /* Mix with --color-bg (NOT transparent): a translucent color here
+       replaces body's opaque background and lets the white canvas show
+       through — the "white glow" bug. Keeps theme bg, adds accent tint. */
+    background-color: color-mix(in srgb, var(--color-bg-interactive) 14%, var(--color-bg));
     background-image: radial-gradient(circle, var(--color-bg-interactive) 2.2px, transparent 2.4px);
     animation: dots-stream-pulse 1.6s ease-in-out infinite;
   }
@@ -1023,13 +940,84 @@
   #mermaid-modal .mm-btn:hover { background: var(--color-bg-interactive); }
 }
 
-/* ---- side drawer: CUT OVER to StyleX 2026-09-20 (drawer.stylex.js) ----
-   Only the legacy-dropdown kill + layout guards stay here. All drawer
-   visuals (overlay/panel/items/usage) are compiled from drawer.stylex.js
-   into stylex.css and linked after this sheet. */
+/* ---- side drawer: chats & tools (replaces the cramped session dropdown) ---- */
 #session-bar { display: none !important; }
 #chat-messages, #chat-bottom-bar { min-width: 0; }
 #chat-messages { overflow-x: hidden; }
+#drawer-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  z-index: 60;
+}
+#drawer-overlay.hidden { display: none; }
+#side-drawer {
+  position: fixed; top: 0; left: 0; height: 100dvh;
+  width: min(320px, 85vw);
+  z-index: 61;
+  display: flex; flex-direction: column;
+  background: var(--color-bg);
+  border-right: 1px solid var(--color-border-weak);
+  box-shadow: 8px 0 24px rgba(0, 0, 0, 0.18);
+  transform: translateX(-105%);
+  transition: transform 0.25s ease;
+}
+#side-drawer.open { transform: none; }
+#drawer-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 16px 10px;
+}
+#drawer-title { font-size: 0.85rem; font-weight: 600; color: var(--color-text-strong); }
+#drawer-close-btn {
+  display: flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; border-radius: 8px; cursor: pointer;
+  border: 1px solid var(--color-border-weak);
+  background: var(--color-bg-weak); color: var(--color-text-weak);
+}
+#drawer-actions { padding: 0 16px 8px; }
+#drawer-new-btn {
+  display: flex; align-items: center; gap: 8px;
+  width: 100%; padding: 8px 12px; border-radius: 10px; cursor: pointer;
+  font-size: 0.8rem;
+  border: 1px solid var(--color-border-weak);
+  background: var(--color-bg-weak); color: var(--color-text-strong);
+}
+#drawer-new-btn:hover { background: var(--color-bg-weak-hover); }
+#drawer-sessions-label {
+  padding: 8px 16px 4px;
+  font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--color-text-weak);
+}
+#drawer-list {
+  flex: 1; min-height: 0; overflow-y: auto;
+  padding: 0 8px 8px;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.drawer-item {
+  display: block; width: 100%; text-align: left; cursor: pointer;
+  padding: 8px 10px; border-radius: 10px; border: 1px solid transparent;
+  background: transparent; color: var(--color-text-strong);
+}
+.drawer-item:hover { background: var(--color-bg-weak); }
+.drawer-item.active {
+  background: var(--color-bg-weak);
+  border-color: var(--color-border-weak);
+}
+.drawer-item .drawer-item-title {
+  display: block; font-size: 0.8rem;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.drawer-item .drawer-item-meta {
+  display: block; font-size: 0.68rem; margin-top: 2px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  color: var(--color-text-weak);
+}
+.drawer-empty { font-size: 0.78rem; color: var(--color-text-weak); padding: 10px; }
+#drawer-usage {
+  border-top: 1px solid var(--color-border-weak);
+  padding: 10px 16px 14px;
+  font-size: 0.72rem; color: var(--color-text-weak);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 
 /* ---- mobile squeeze guards: flex items must shrink below content size ---- */
 #chat-form .flex-1 { min-width: 0; }

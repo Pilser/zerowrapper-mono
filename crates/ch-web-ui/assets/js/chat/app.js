@@ -5558,31 +5558,356 @@ var init_motion_fx = __esm(() => {
   import_motion = __toESM(require_motion(), 1);
 });
 
+// node_modules/@stylexjs/stylex/lib/es/stylex.mjs
+function requireStyleq() {
+  if (hasRequiredStyleq)
+    return styleq;
+  hasRequiredStyleq = 1;
+  Object.defineProperty(styleq, "__esModule", {
+    value: true
+  });
+  styleq.styleq = undefined;
+  var cache = new WeakMap;
+  var compiledKey = "$$css";
+  function createStyleq(options) {
+    var disableCache;
+    var disableMix;
+    var transform;
+    if (options != null) {
+      disableCache = options.disableCache === true;
+      disableMix = options.disableMix === true;
+      transform = options.transform;
+    }
+    return function styleq2() {
+      var definedProperties = [];
+      var className = "";
+      var inlineStyle = null;
+      var debugString = "";
+      var nextCache = disableCache ? null : cache;
+      var styles = new Array(arguments.length);
+      for (var i = 0;i < arguments.length; i++) {
+        styles[i] = arguments[i];
+      }
+      while (styles.length > 0) {
+        var possibleStyle = styles.pop();
+        if (possibleStyle == null || possibleStyle === false) {
+          continue;
+        }
+        if (Array.isArray(possibleStyle)) {
+          for (var _i = 0;_i < possibleStyle.length; _i++) {
+            styles.push(possibleStyle[_i]);
+          }
+          continue;
+        }
+        var style = transform != null ? transform(possibleStyle) : possibleStyle;
+        if (style.$$css != null) {
+          var classNameChunk = "";
+          if (nextCache != null && nextCache.has(style)) {
+            var cacheEntry = nextCache.get(style);
+            if (cacheEntry != null) {
+              classNameChunk = cacheEntry[0];
+              debugString = cacheEntry[2];
+              definedProperties.push.apply(definedProperties, cacheEntry[1]);
+              nextCache = cacheEntry[3];
+            }
+          } else {
+            var definedPropertiesChunk = [];
+            for (var prop in style) {
+              var value = style[prop];
+              if (prop === compiledKey) {
+                var compiledKeyValue = style[prop];
+                if (compiledKeyValue !== true) {
+                  debugString = debugString ? compiledKeyValue + "; " + debugString : compiledKeyValue;
+                }
+                continue;
+              }
+              if (typeof value === "string" || value === null) {
+                if (!definedProperties.includes(prop)) {
+                  definedProperties.push(prop);
+                  if (nextCache != null) {
+                    definedPropertiesChunk.push(prop);
+                  }
+                  if (typeof value === "string") {
+                    classNameChunk += classNameChunk ? " " + value : value;
+                  }
+                }
+              } else {
+                console.error("styleq: ".concat(prop, " typeof ").concat(String(value), ' is not "string" or "null".'));
+              }
+            }
+            if (nextCache != null) {
+              var weakMap = new WeakMap;
+              nextCache.set(style, [classNameChunk, definedPropertiesChunk, debugString, weakMap]);
+              nextCache = weakMap;
+            }
+          }
+          if (classNameChunk) {
+            className = className ? classNameChunk + " " + className : classNameChunk;
+          }
+        } else {
+          if (disableMix) {
+            if (inlineStyle == null) {
+              inlineStyle = {};
+            }
+            inlineStyle = Object.assign({}, style, inlineStyle);
+          } else {
+            var subStyle = null;
+            for (var _prop in style) {
+              var _value = style[_prop];
+              if (_value !== undefined) {
+                if (!definedProperties.includes(_prop)) {
+                  if (_value != null) {
+                    if (inlineStyle == null) {
+                      inlineStyle = {};
+                    }
+                    if (subStyle == null) {
+                      subStyle = {};
+                    }
+                    subStyle[_prop] = _value;
+                  }
+                  definedProperties.push(_prop);
+                  nextCache = null;
+                }
+              }
+            }
+            if (subStyle != null) {
+              inlineStyle = Object.assign(subStyle, inlineStyle);
+            }
+          }
+        }
+      }
+      var styleProps = [className, inlineStyle, debugString];
+      return styleProps;
+    };
+  }
+  var styleq$1 = styleq.styleq = createStyleq();
+  styleq$1.factory = createStyleq;
+  return styleq;
+}
+function props(...styles) {
+  const [className, style, dataStyleSrc] = styleqExports.styleq(styles);
+  const result = {};
+  if (className != null && className !== "") {
+    result.className = className;
+  }
+  if (style != null && Object.keys(style).length > 0) {
+    result.style = style;
+  }
+  if (dataStyleSrc != null && dataStyleSrc !== "") {
+    result["data-style-src"] = dataStyleSrc;
+  }
+  return result;
+}
+var styleq, hasRequiredStyleq, styleqExports, env;
+var init_stylex = __esm(() => {
+  styleq = {};
+  styleqExports = /* @__PURE__ */ requireStyleq();
+  env = Object.freeze({});
+});
+
+// tokens.stylex.js
+var init_tokens_stylex = () => {};
+
+// piles/piles.stylex.js
+var p;
+var init_piles_stylex = __esm(() => {
+  init_tokens_stylex();
+  p = {
+    card: {
+      kaIpWk: "xgqmno8",
+      kKwaWg: "x1y279fn",
+      kGVxlE: "xyajat9",
+      kVQacm: "xb3r6kr",
+      k6sLGO: "x1q1rmc8",
+      $$css: true
+    },
+    cardRunning: {
+      kGVxlE: "xzx866d",
+      $$css: true
+    },
+    head: {
+      k1xSpc: "x78zum5",
+      kGNEyG: "x6s0dn4",
+      kOIVth: "x167g77z",
+      kzqmXN: "xh8yej3",
+      kmVPX3: "xhrpmxf",
+      kWkggS: "xjbqb8w",
+      kKwaWg: "x18o3ruo",
+      kMzoRj: "xc342km",
+      ksu8eU: "xng3xce",
+      kkrTdU: "x1ypdohk",
+      kGuDYH: "xboafo0",
+      kLWn49: "xfrs9s4",
+      kMwMTN: "x1wp7847",
+      k9WMMc: "xdpxx8g",
+      $$css: true
+    },
+    icon: {
+      kGuDYH: "x1ksoetq",
+      kLWn49: "xo5v014",
+      kmuXW: "x2lah0s",
+      k1xSpc: "x1rg5ohu",
+      k6sLGO: "x1so62im",
+      $$css: true
+    },
+    title: {
+      k63SB2: "x1xlr1w8",
+      kMwMTN: "x1wp7847",
+      khDVqt: "xuxw1ft",
+      $$css: true
+    },
+    count: {
+      kMv6JI: "xnhzrae",
+      kGuDYH: "x12lo8hy",
+      k63SB2: "x1xlr1w8",
+      kMwMTN: "x1fuqind",
+      kWkggS: "x6eb63x",
+      kaIpWk: "x1e6avla",
+      kmVPX3: "xl7t7w5",
+      kLWn49: "x1dbl2gt",
+      kmuXW: "x2lah0s",
+      $$css: true
+    },
+    countDone: {
+      kWkggS: "xw3j01q",
+      $$css: true
+    },
+    preview: {
+      kMwMTN: "x9g7u3q",
+      khDVqt: "xuxw1ft",
+      kVQacm: "xb3r6kr",
+      kg5iWk: "xlyipyv",
+      k7Eaqz: "xeuugli",
+      kUk6DE: "x98rzlu",
+      $$css: true
+    },
+    chev: {
+      koQZXg: "x8x9d4c",
+      kMwMTN: "xh1wwo8",
+      k1xSpc: "x3nfvp2",
+      k1ekBW: "x11xpdln",
+      kIyJzY: "xx6bhzk",
+      kAMwcw: "xwji4o3",
+      kmuXW: "x2lah0s",
+      $$css: true
+    },
+    chevOpen: {
+      k3aq6I: "x19jd1h0",
+      $$css: true
+    },
+    body: {
+      kmVPX3: "x1xyxd1",
+      $$css: true
+    },
+    bodyClosed: {
+      k1xSpc: "x1s85apg",
+      $$css: true
+    },
+    bodyOpen: {
+      k1xSpc: "x1lliihq",
+      $$css: true
+    },
+    thinkPre: {
+      kGuDYH: "xboafo0",
+      kMv6JI: "xnhzrae",
+      kLWn49: "x1jjo3f5",
+      kogj98: "x1ghz6dp",
+      khDVqt: "x126k92a",
+      kTgw9: "x13faqbe",
+      kMwMTN: "x9g7u3q",
+      kskxy: "x1983irj",
+      kORKVm: "x1odjw0f",
+      kWkggS: "xkdfcq9",
+      kaIpWk: "xur7f20",
+      kmVPX3: "x1160tuk",
+      $$css: true
+    },
+    toolOut: {
+      kGuDYH: "xboafo0",
+      kMwMTN: "x9g7u3q",
+      keoZOQ: "x1k70j0n",
+      $$css: true
+    },
+    det: {
+      keoZOQ: "x1k70j0n",
+      $$css: true
+    },
+    sum: {
+      kGuDYH: "xboafo0",
+      kMwMTN: "x9g7u3q",
+      kkrTdU: "x1ypdohk",
+      $$css: true
+    },
+    cdTrack: {
+      kZKoxP: "xuoj239",
+      kaIpWk: "x1e6avla",
+      kWkggS: "x2tzy6w",
+      kogj98: "x1n1yzln",
+      kVQacm: "xb3r6kr",
+      $$css: true
+    },
+    trackHidden: {
+      k1xSpc: "x1s85apg",
+      $$css: true
+    },
+    cdBar: {
+      kZKoxP: "x5yr21d",
+      kzqmXN: "xh8yej3",
+      kaIpWk: "x1e6avla",
+      kKwaWg: "x9q9wxs",
+      k3nNDw: "x1nf803f",
+      $$css: true
+    },
+    cdLabel: {
+      kMv6JI: "xnhzrae",
+      kGuDYH: "x2ohwh0",
+      kMwMTN: "xh1wwo8",
+      koQZXg: "x8x9d4c",
+      kmuXW: "x2lah0s",
+      $$css: true
+    },
+    labelWarm: {
+      kMwMTN: "x175nh0r",
+      k63SB2: "x1xlr1w8",
+      $$css: true
+    }
+  };
+});
+
 // piles/think.js
 function previewWords(text, n = 56) {
-  const t = String(text || "").replace(/\s+/g, " ").trim();
-  if (t.length <= n)
-    return t;
-  return t.slice(0, n) + "…";
+  const t2 = String(text || "").replace(/\s+/g, " ").trim();
+  if (t2.length <= n)
+    return t2;
+  return t2.slice(0, n) + "…";
 }
 function createThinkPile(opts = {}) {
   const live = opts.live !== false;
   const card = document.createElement("div");
-  card.className = "think-card running";
+  card.className = cx(p.card, p.cardRunning);
   const head = document.createElement("button");
-  head.className = "think-head";
+  head.className = cx(p.head);
   head.type = "button";
-  head.innerHTML = '<span class="think-icon">\uD83D\uDCAD</span><span class="think-title">Thinking</span><span class="think-count">0</span><span class="think-preview"></span><span class="think-chev">' + CHEV + "</span>";
+  head.innerHTML = '<span class="think-icon ' + cx(p.icon) + '">\uD83D\uDCAD</span><span class="think-title ' + cx(p.title) + '">Thinking</span><span class="think-count ' + cx(p.count) + '">0</span><span class="think-preview ' + cx(p.preview) + '"></span><span class="think-chev ' + cx(p.chev) + '">' + CHEV + "</span>";
   const countEl = head.querySelector(".think-count");
   const previewEl = head.querySelector(".think-preview");
+  const chevEl = head.querySelector(".think-chev");
   const body = document.createElement("div");
-  body.className = "think-body";
+  body.className = cx(p.body, p.bodyClosed);
   const pre = document.createElement("pre");
+  pre.className = cx(p.thinkPre);
   body.appendChild(pre);
   card.appendChild(head);
   card.appendChild(body);
+  const paintOpen = () => {
+    const open2 = card.classList.contains("open");
+    body.className = cx(p.body, open2 ? p.bodyOpen : p.bodyClosed);
+    if (chevEl)
+      chevEl.className = "think-chev " + cx(p.chev, open2 && p.chevOpen);
+  };
   head.addEventListener("click", () => {
     card.classList.toggle("open");
+    paintOpen();
   });
   let count = 0;
   let full = "";
@@ -5596,7 +5921,9 @@ function createThinkPile(opts = {}) {
   paint();
   if (live) {
     try {
-      popIn(card, { index: opts.index || 0 });
+      popIn(card, {
+        index: opts.index || 0
+      });
     } catch {}
     try {
       shimmerCtl = shimmer(previewEl || card);
@@ -5625,7 +5952,9 @@ function createThinkPile(opts = {}) {
         if (target && target.style)
           target.style.opacity = "";
       } catch {}
+      const stillOpen = card.classList.contains("open");
       card.classList.remove("running");
+      card.className = (stillOpen ? "open " : "") + cx(p.card);
       if (countEl)
         countEl.textContent = count;
       if (live) {
@@ -5650,26 +5979,30 @@ function createThinkPile(opts = {}) {
   };
 }
 function renderStaticThink(container2, text, count) {
-  const pile = createThinkPile({ live: false });
-  const t = typeof text === "string" ? text : "";
-  if (t) {
+  const pile = createThinkPile({
+    live: false
+  });
+  const t2 = typeof text === "string" ? text : "";
+  if (t2) {
     const pre = pile.row.querySelector("pre");
     if (pre)
-      pre.textContent = t;
+      pre.textContent = t2;
     const previewEl = pile.row.querySelector(".think-preview");
     const countEl = pile.row.querySelector(".think-count");
     const n = Number.isFinite(count) && count > 0 ? count : 1;
     if (countEl)
       countEl.textContent = n;
     if (previewEl)
-      previewEl.textContent = previewWords(t);
+      previewEl.textContent = previewWords(t2);
   }
   container2.appendChild(pile.row);
   return pile.row;
 }
-var CHEV = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>';
+var cx = (...args) => props(...args).className || "", CHEV = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>';
 var init_think = __esm(() => {
   init_motion_fx();
+  init_stylex();
+  init_piles_stylex();
 });
 
 // icons.js
@@ -5795,12 +6128,12 @@ function parseCli(command) {
   const binary = parts[0].split("/").pop();
   let subcommand = "";
   for (let i = 1;i < parts.length; i++) {
-    const t = parts[i];
-    if (!t || t === "&&" || t === "||" || t === ";")
+    const t2 = parts[i];
+    if (!t2 || t2 === "&&" || t2 === "||" || t2 === ";")
       break;
-    if (t.startsWith("-"))
+    if (t2.startsWith("-"))
       continue;
-    subcommand = t.replace(/^["']|["']$/g, "");
+    subcommand = t2.replace(/^["']|["']$/g, "");
     break;
   }
   return { binary, subcommand };
@@ -5882,10 +6215,10 @@ var init_icons = __esm(() => {
 
 // notes.js
 function head(s, n = 64) {
-  const t = String(s == null ? "" : s).replace(/\s+/g, " ").trim();
-  if (t.length <= n)
-    return t;
-  return t.slice(0, n) + "…";
+  const t2 = String(s == null ? "" : s).replace(/\s+/g, " ").trim();
+  if (t2.length <= n)
+    return t2;
+  return t2.slice(0, n) + "…";
 }
 function str(v) {
   return typeof v === "string" ? v : "";
@@ -5995,10 +6328,10 @@ function subForTool(name, args) {
   }
 }
 function head2(s, n) {
-  const t = String(s == null ? "" : s).replace(/\s+/g, " ").trim();
-  if (t.length <= n)
-    return t;
-  return t.slice(0, n) + "…";
+  const t2 = String(s == null ? "" : s).replace(/\s+/g, " ").trim();
+  if (t2.length <= n)
+    return t2;
+  return t2.slice(0, n) + "…";
 }
 function attachOutput(body, output) {
   if (!output)
@@ -6006,14 +6339,16 @@ function attachOutput(body, output) {
   let out = body.querySelector(".tool-out");
   if (!out) {
     out = document.createElement("div");
-    out.className = "tool-out";
+    out.className = "tool-out " + cx2(p.toolOut);
     body.appendChild(out);
   }
   if (output.length <= 120) {
     out.textContent = output;
   } else {
     const det = document.createElement("details");
+    det.className = cx2(p.det);
     const sum = document.createElement("summary");
+    sum.className = cx2(p.sum);
     sum.textContent = output.slice(0, 120) + "…";
     const pre = document.createElement("pre");
     pre.textContent = output;
@@ -6022,28 +6357,36 @@ function attachOutput(body, output) {
     out.appendChild(det);
   }
 }
-function createToolPile({ name, args, note }, opts = {}) {
+function createToolPile({
+  name,
+  args,
+  note
+}, opts = {}) {
   const live = opts.live !== false;
   const index = opts.index || "";
   const resolvedNote = resolveNote(name, args, note);
-  const { icon, label } = pileIdentity(name, args, resolvedNote || note);
+  const {
+    icon,
+    label
+  } = pileIdentity(name, args, resolvedNote || note);
   const card = document.createElement("div");
-  card.className = "tool-card running";
+  card.className = cx2(p.card, p.cardRunning);
   const headBtn = document.createElement("button");
-  headBtn.className = "tool-head";
+  headBtn.className = cx2(p.head);
   headBtn.type = "button";
-  headBtn.innerHTML = '<span class="tool-icon"></span><span class="tool-title"></span><span class="tool-count"></span><span class="tool-sub"></span><span class="cd-label"></span><span class="tool-chev">' + CHEV2 + "</span>";
+  headBtn.innerHTML = '<span class="tool-icon ' + cx2(p.icon) + '"></span><span class="tool-title ' + cx2(p.title) + '"></span><span class="tool-count ' + cx2(p.count) + '"></span><span class="tool-sub ' + cx2(p.preview) + '"></span><span class="cd-label ' + cx2(p.cdLabel) + '"></span><span class="tool-chev ' + cx2(p.chev) + '">' + CHEV2 + "</span>";
   headBtn.querySelector(".tool-icon").textContent = icon;
   headBtn.querySelector(".tool-title").textContent = resolvedNote || label;
   const countEl = headBtn.querySelector(".tool-count");
   const subEl = headBtn.querySelector(".tool-sub");
   const cdLabel = headBtn.querySelector(".cd-label");
+  const chevEl = headBtn.querySelector(".tool-chev");
   if (countEl && index !== "")
     countEl.textContent = "#" + index;
   if (subEl)
     subEl.textContent = subForTool(name, args);
   const body = document.createElement("div");
-  body.className = "tool-body";
+  body.className = cx2(p.body, p.bodyClosed);
   const argsPre = document.createElement("pre");
   argsPre.className = "tool-args";
   const aStr = argsText(args);
@@ -6054,20 +6397,29 @@ function createToolPile({ name, args, note }, opts = {}) {
   card.appendChild(headBtn);
   card.appendChild(body);
   const cdTrack = document.createElement("div");
-  cdTrack.className = "cd-track hidden";
+  cdTrack.className = cx2(p.cdTrack, p.trackHidden);
   const cdBar = document.createElement("div");
-  cdBar.className = "cd-bar";
+  cdBar.className = cx2(p.cdBar);
   cdTrack.appendChild(cdBar);
   card.appendChild(cdTrack);
+  const paintOpen = () => {
+    const open2 = card.classList.contains("open");
+    body.className = cx2(p.body, open2 ? p.bodyOpen : p.bodyClosed);
+    if (chevEl)
+      chevEl.className = "tool-chev " + cx2(p.chev, open2 && p.chevOpen);
+  };
   headBtn.addEventListener("click", () => {
     card.classList.toggle("open");
+    paintOpen();
   });
   const iconEl = headBtn.querySelector(".tool-icon");
   let stopFloat = () => {};
   let stopCd = () => {};
   if (live) {
     try {
-      popIn(card, { index });
+      popIn(card, {
+        index
+      });
     } catch {}
     try {
       stopFloat = floatLoop(iconEl, 2.5, 2);
@@ -6075,8 +6427,26 @@ function createToolPile({ name, args, note }, opts = {}) {
     const budget = args && typeof args.timeout === "number" ? args.timeout : 0;
     if (budget > 0) {
       try {
-        cdTrack.classList.remove("hidden");
-        stopCd = countdown(cdBar, cdLabel, budget);
+        cdTrack.className = cx2(p.cdTrack);
+        const warmFacade = {
+          set textContent(v) {
+            if (cdLabel)
+              cdLabel.textContent = v;
+          },
+          get textContent() {
+            return cdLabel ? cdLabel.textContent : "";
+          },
+          classList: {
+            add(c) {
+              if (c === "cd-warm" && cdLabel) {
+                cdLabel.className = "cd-label " + cx2(p.cdLabel, p.labelWarm);
+              } else if (cdLabel) {
+                cdLabel.classList.add(c);
+              }
+            }
+          }
+        };
+        stopCd = countdown(cdBar, warmFacade, budget);
       } catch {}
     }
   }
@@ -6090,13 +6460,17 @@ function createToolPile({ name, args, note }, opts = {}) {
         stopCd();
       } catch {}
       try {
-        cdTrack.classList.add("hidden");
+        cdTrack.className = cx2(p.cdTrack, p.trackHidden);
       } catch {}
+      const stillOpen = card.classList.contains("open");
       card.classList.remove("running");
       card.classList.add("done");
+      card.className = (stillOpen ? "open " : "") + "done " + cx2(p.card);
       attachOutput(body, output || "");
-      if (countEl)
+      if (countEl) {
         countEl.textContent = "✓";
+        countEl.className = "tool-count " + cx2(p.count, p.countDone);
+      }
       if (subEl && output)
         subEl.textContent = head2(output, 90);
       if (live) {
@@ -6124,17 +6498,26 @@ function createToolPile({ name, args, note }, opts = {}) {
   };
 }
 function renderStaticTool(container2, tool, index = "") {
-  const t = tool || {};
-  const pile = createToolPile({ name: t.name, args: t.args, note: t.note }, { live: false, index });
-  pile.done(typeof t.output === "string" ? t.output : "");
+  const t2 = tool || {};
+  const pile = createToolPile({
+    name: t2.name,
+    args: t2.args,
+    note: t2.note
+  }, {
+    live: false,
+    index
+  });
+  pile.done(typeof t2.output === "string" ? t2.output : "");
   container2.appendChild(pile.row);
   return pile.row;
 }
-var CHEV2 = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>';
+var cx2 = (...args) => props(...args).className || "", CHEV2 = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>';
 var init_tool = __esm(() => {
   init_icons();
   init_notes();
   init_motion_fx();
+  init_stylex();
+  init_piles_stylex();
 });
 
 // overlay.js
@@ -6155,8 +6538,8 @@ function ensure2() {
 }
 function show() {
   try {
-    const p = ensure2();
-    p.classList.remove("hidden");
+    const p2 = ensure2();
+    p2.classList.remove("hidden");
     if (hideTimer) {
       window.clearTimeout(hideTimer);
       hideTimer = null;
@@ -6278,12 +6661,12 @@ function target() {
 }
 function setStreamingTint(on2) {
   try {
-    const t = target();
-    if (t) {
+    const t2 = target();
+    if (t2) {
       if (on2)
-        t.classList.add("streaming");
+        t2.classList.add("streaming");
       else
-        t.classList.remove("streaming");
+        t2.classList.remove("streaming");
     }
     if (on2)
       document.body.classList.add("streaming");
@@ -6292,8 +6675,8 @@ function setStreamingTint(on2) {
   } catch {}
 }
 function ensureBox() {
-  const t = target();
-  if (!t)
+  const t2 = target();
+  if (!t2)
     return null;
   if (!box || !box.isConnected || !turnOpen) {
     box = document.createElement("div");
@@ -6303,7 +6686,7 @@ function ensureBox() {
     toolSeq = 0;
     pending.length = 0;
     turnOpen = true;
-    t.appendChild(box);
+    t2.appendChild(box);
     setStreamingTint(true);
   }
   return box;
@@ -6355,7 +6738,7 @@ function pushToolCall(id, name, args) {
   autoScroll();
 }
 function pushToolResult(id, name, output) {
-  const idx = pending.findIndex((p) => p.id === (id || ""));
+  const idx = pending.findIndex((p2) => p2.id === (id || ""));
   if (idx === -1)
     return;
   const item = pending[idx];
@@ -6434,9 +6817,9 @@ function renderStaticTrace(container2, trace) {
       }
     } catch {}
   }
-  for (const t of tools) {
+  for (const t2 of tools) {
     try {
-      const row = renderStaticTool(wrap, t || {}, idx);
+      const row = renderStaticTool(wrap, t2 || {}, idx);
       if (row) {
         try {
           revealOnView(row, { index: idx++ });
@@ -6685,9 +7068,9 @@ function extractMessageText(raw) {
     return "";
   if (raw.startsWith("{")) {
     try {
-      const p = JSON.parse(raw);
-      if (p.message)
-        return p.message;
+      const p2 = JSON.parse(raw);
+      if (p2.message)
+        return p2.message;
     } catch (e) {}
   }
   return raw;
@@ -6696,9 +7079,9 @@ function extractAttachments(raw) {
   if (!raw || !raw.startsWith("{"))
     return null;
   try {
-    const p = JSON.parse(raw);
-    if (p.attachments && Array.isArray(p.attachments) && p.attachments.length > 0) {
-      return p.attachments;
+    const p2 = JSON.parse(raw);
+    if (p2.attachments && Array.isArray(p2.attachments) && p2.attachments.length > 0) {
+      return p2.attachments;
     }
   } catch (e) {}
   return null;
@@ -6719,10 +7102,10 @@ function renderTextWithAttachments(text) {
     div.appendChild(fileList);
   }
   if (msgText) {
-    const p = document.createElement("p");
-    p.style.margin = attachments ? "6px 0 0" : "0";
-    p.textContent = msgText;
-    div.appendChild(p);
+    const p2 = document.createElement("p");
+    p2.style.margin = attachments ? "6px 0 0" : "0";
+    p2.textContent = msgText;
+    div.appendChild(p2);
   }
   return div;
 }
@@ -7031,10 +7414,10 @@ function positionArrows() {
   if (!input)
     return;
   const r = input.getBoundingClientRect();
-  const cx = r.left + r.width / 2 + 55;
+  const cx3 = r.left + r.width / 2 + 55;
   const top = r.top - 48;
   const pos = (btn, x) => {
-    btn.style.left = cx + x + "px";
+    btn.style.left = cx3 + x + "px";
     btn.style.top = top + "px";
     btn.style.right = "auto";
     btn.style.bottom = "auto";
@@ -7113,18 +7496,18 @@ function init2() {
     });
   if (share)
     share.addEventListener("click", () => {
-      const p = currentPageData();
-      if (!p || !p.public_slug)
+      const p2 = currentPageData();
+      if (!p2 || !p2.public_slug)
         return;
-      openPublicUrl(p.public_slug);
+      openPublicUrl(p2.public_slug);
     });
   if (copyLink)
     copyLink.addEventListener("click", () => {
-      const p = currentPageData();
-      if (!p || !p.public_slug)
+      const p2 = currentPageData();
+      if (!p2 || !p2.public_slug)
         return;
-      showLinkPop(p.public_slug);
-      copyPublicUrl(p.public_slug);
+      showLinkPop(p2.public_slug);
+      copyPublicUrl(p2.public_slug);
     });
   document.addEventListener("click", (e) => {
     const pop = getEl2("wb-link-pop");
@@ -7256,7 +7639,7 @@ function goToPage(pageNo) {
   const n = Number(pageNo);
   if (!Number.isFinite(n))
     return false;
-  let idx = currentState.pages.findIndex((p) => p.page_no === n);
+  let idx = currentState.pages.findIndex((p2) => p2.page_no === n);
   if (idx < 0)
     idx = Math.max(0, Math.min(Math.round(n) - 1, currentState.pages.length - 1));
   currentPage = idx;
@@ -7279,7 +7662,7 @@ function setBoard(data) {
   if (data.state) {
     currentState = data.state;
     const pages = data.state.pages || [];
-    let idx = pages.findIndex((p) => p.page_no === data.state.active_page);
+    let idx = pages.findIndex((p2) => p2.page_no === data.state.active_page);
     if (idx < 0)
       idx = 0;
     currentPage = Math.max(0, Math.min(idx, pages.length - 1));
@@ -7731,13 +8114,13 @@ async function html2canvas(element, options = {}) {
     img.decoding = "sync";
     img.src = url2;
     await new Promise((resolve, reject) => {
-      const t = setTimeout(() => reject(new Error("svg load timeout")), 1800);
+      const t2 = setTimeout(() => reject(new Error("svg load timeout")), 1800);
       img.onload = () => {
-        clearTimeout(t);
+        clearTimeout(t2);
         resolve();
       };
       img.onerror = () => {
-        clearTimeout(t);
+        clearTimeout(t2);
         reject(new Error("svg load error"));
       };
     });
@@ -8191,14 +8574,14 @@ async function doSnap(targetSelector) {
     const data = await up2.json().catch(() => ({}));
     if (!up2.ok || data.error)
       throw new Error(data.error || "upload failed");
-    const p = data.path || "";
+    const p2 = data.path || "";
     let fileUrl = "";
-    if (p) {
-      const h = await hashPath(p);
+    if (p2) {
+      const h = await hashPath(p2);
       if (h)
         fileUrl = "/files/" + h;
       else
-        fileUrl = p;
+        fileUrl = p2;
     }
     if (data.hash)
       fileUrl = "/files/" + data.hash;
@@ -8781,9 +9164,9 @@ function connect2() {
       };
       const resumeWithHistoryStatus = () => sendResume(null);
       try {
-        const p = fetchHistory();
-        if (p && p.then)
-          p.then((snap) => sendResume(snap), resumeWithHistoryStatus);
+        const p2 = fetchHistory();
+        if (p2 && p2.then)
+          p2.then((snap) => sendResume(snap), resumeWithHistoryStatus);
         else
           sendResume(null);
       } catch {
@@ -8960,345 +9343,6 @@ init_file_upload();
 init_dom();
 init_auth();
 init_messages();
-
-// node_modules/@stylexjs/stylex/lib/es/stylex.mjs
-var styleq = {};
-var hasRequiredStyleq;
-function requireStyleq() {
-  if (hasRequiredStyleq)
-    return styleq;
-  hasRequiredStyleq = 1;
-  Object.defineProperty(styleq, "__esModule", {
-    value: true
-  });
-  styleq.styleq = undefined;
-  var cache = new WeakMap;
-  var compiledKey = "$$css";
-  function createStyleq(options) {
-    var disableCache;
-    var disableMix;
-    var transform;
-    if (options != null) {
-      disableCache = options.disableCache === true;
-      disableMix = options.disableMix === true;
-      transform = options.transform;
-    }
-    return function styleq2() {
-      var definedProperties = [];
-      var className = "";
-      var inlineStyle = null;
-      var debugString = "";
-      var nextCache = disableCache ? null : cache;
-      var styles = new Array(arguments.length);
-      for (var i = 0;i < arguments.length; i++) {
-        styles[i] = arguments[i];
-      }
-      while (styles.length > 0) {
-        var possibleStyle = styles.pop();
-        if (possibleStyle == null || possibleStyle === false) {
-          continue;
-        }
-        if (Array.isArray(possibleStyle)) {
-          for (var _i = 0;_i < possibleStyle.length; _i++) {
-            styles.push(possibleStyle[_i]);
-          }
-          continue;
-        }
-        var style = transform != null ? transform(possibleStyle) : possibleStyle;
-        if (style.$$css != null) {
-          var classNameChunk = "";
-          if (nextCache != null && nextCache.has(style)) {
-            var cacheEntry = nextCache.get(style);
-            if (cacheEntry != null) {
-              classNameChunk = cacheEntry[0];
-              debugString = cacheEntry[2];
-              definedProperties.push.apply(definedProperties, cacheEntry[1]);
-              nextCache = cacheEntry[3];
-            }
-          } else {
-            var definedPropertiesChunk = [];
-            for (var prop in style) {
-              var value = style[prop];
-              if (prop === compiledKey) {
-                var compiledKeyValue = style[prop];
-                if (compiledKeyValue !== true) {
-                  debugString = debugString ? compiledKeyValue + "; " + debugString : compiledKeyValue;
-                }
-                continue;
-              }
-              if (typeof value === "string" || value === null) {
-                if (!definedProperties.includes(prop)) {
-                  definedProperties.push(prop);
-                  if (nextCache != null) {
-                    definedPropertiesChunk.push(prop);
-                  }
-                  if (typeof value === "string") {
-                    classNameChunk += classNameChunk ? " " + value : value;
-                  }
-                }
-              } else {
-                console.error("styleq: ".concat(prop, " typeof ").concat(String(value), ' is not "string" or "null".'));
-              }
-            }
-            if (nextCache != null) {
-              var weakMap = new WeakMap;
-              nextCache.set(style, [classNameChunk, definedPropertiesChunk, debugString, weakMap]);
-              nextCache = weakMap;
-            }
-          }
-          if (classNameChunk) {
-            className = className ? classNameChunk + " " + className : classNameChunk;
-          }
-        } else {
-          if (disableMix) {
-            if (inlineStyle == null) {
-              inlineStyle = {};
-            }
-            inlineStyle = Object.assign({}, style, inlineStyle);
-          } else {
-            var subStyle = null;
-            for (var _prop in style) {
-              var _value = style[_prop];
-              if (_value !== undefined) {
-                if (!definedProperties.includes(_prop)) {
-                  if (_value != null) {
-                    if (inlineStyle == null) {
-                      inlineStyle = {};
-                    }
-                    if (subStyle == null) {
-                      subStyle = {};
-                    }
-                    subStyle[_prop] = _value;
-                  }
-                  definedProperties.push(_prop);
-                  nextCache = null;
-                }
-              }
-            }
-            if (subStyle != null) {
-              inlineStyle = Object.assign(subStyle, inlineStyle);
-            }
-          }
-        }
-      }
-      var styleProps = [className, inlineStyle, debugString];
-      return styleProps;
-    };
-  }
-  var styleq$1 = styleq.styleq = createStyleq();
-  styleq$1.factory = createStyleq;
-  return styleq;
-}
-var styleqExports = /* @__PURE__ */ requireStyleq();
-function props(...styles) {
-  const [className, style, dataStyleSrc] = styleqExports.styleq(styles);
-  const result = {};
-  if (className != null && className !== "") {
-    result.className = className;
-  }
-  if (style != null && Object.keys(style).length > 0) {
-    result.style = style;
-  }
-  if (dataStyleSrc != null && dataStyleSrc !== "") {
-    result["data-style-src"] = dataStyleSrc;
-  }
-  return result;
-}
-var env = Object.freeze({});
-
-// drawer.stylex.js
-var s = {
-  overlay: {
-    kVAEAm: "xixxii4",
-    kpwlN0: "x10a8y8t",
-    kWkggS: "xa44r0r",
-    kY2c9j: "x1aciyhk",
-    $$css: true
-  },
-  overlayHidden: {
-    k1xSpc: "x1s85apg",
-    $$css: true
-  },
-  panel: {
-    kVAEAm: "xixxii4",
-    k87sOh: "x13vifvy",
-    kbCHJM: "xu96u03",
-    kZKoxP: "xtdtrs8",
-    kzqmXN: "x13uh5dk",
-    kY2c9j: "x13mdkc",
-    k1xSpc: "x78zum5",
-    kXwgrk: "xdt5ytf",
-    kWkggS: "x4zv5z4",
-    kGVxlE: "x1s62sfi",
-    k1ekBW: "x11xpdln",
-    kIyJzY: "x1rvut6x",
-    kAMwcw: "xwji4o3",
-    $$css: true
-  },
-  panelClosed: {
-    k3aq6I: "x5fxwdf",
-    $$css: true
-  },
-  panelOpen: {
-    k3aq6I: "x1c071of",
-    $$css: true
-  },
-  header: {
-    k1xSpc: "x78zum5",
-    kGNEyG: "x6s0dn4",
-    kjj79g: "x1qughib",
-    kmVPX3: "xzw2spd",
-    $$css: true
-  },
-  title: {
-    kGuDYH: "xgommxb",
-    k63SB2: "x1xlr1w8",
-    kP9fke: "xtvhhri",
-    kb6lSQ: "x9pfba7",
-    kMwMTN: "x1hpp4kd",
-    $$css: true
-  },
-  closeBtn: {
-    k1xSpc: "x78zum5",
-    kGNEyG: "x6s0dn4",
-    kjj79g: "xl56j7k",
-    kzqmXN: "x1849jeq",
-    kZKoxP: "x1gnnpzl",
-    kaIpWk: "x1q4ynmn",
-    kkrTdU: "x1ypdohk",
-    kMv6JI: "xjb2p0i",
-    kWkggS: "x1w3zwpd",
-    kMwMTN: "xy6rsxr",
-    kGzVvX: "x1688wid",
-    kaVNsj: "x1rmuloz",
-    kDPRdz: "x1iih0q2",
-    $$css: true
-  },
-  actions: {
-    kmVPX3: "xk152dh",
-    $$css: true
-  },
-  newBtn: {
-    k1xSpc: "x78zum5",
-    kGNEyG: "x6s0dn4",
-    kjj79g: "xl56j7k",
-    kOIVth: "x167g77z",
-    kzqmXN: "xh8yej3",
-    kmVPX3: "x6yrr3s",
-    kaIpWk: "x4pepcl",
-    kkrTdU: "x1ypdohk",
-    kMv6JI: "xjb2p0i",
-    kGuDYH: "xym1t2f",
-    k63SB2: "x1s688f",
-    kKwaWg: "x1eo26m4",
-    kMwMTN: "xfungia",
-    kO95pf: "x3v1jnx",
-    $$css: true
-  },
-  label: {
-    kmVPX3: "x1vzzlyo",
-    kGuDYH: "x191ayms",
-    k63SB2: "x1xlr1w8",
-    kP9fke: "xtvhhri",
-    kb6lSQ: "x1dor1uw",
-    kMwMTN: "x1hpp4kd",
-    $$css: true
-  },
-  list: {
-    kUk6DE: "x98rzlu",
-    kAzted: "x2lwn1j",
-    kORKVm: "x1odjw0f",
-    kmVPX3: "x1kfpmg1",
-    k1xSpc: "x78zum5",
-    kXwgrk: "xdt5ytf",
-    kOIVth: "x1jnr06f",
-    $$css: true
-  },
-  item: {
-    k1xSpc: "x1lliihq",
-    kzqmXN: "xh8yej3",
-    k9WMMc: "xdpxx8g",
-    kkrTdU: "x1ypdohk",
-    kMv6JI: "xjb2p0i",
-    kmVPX3: "x6yrr3s",
-    kaIpWk: "x4pepcl",
-    kMzoRj: "xmkeg23",
-    ksu8eU: "x1y0btm7",
-    kVAM5u: "x9r1u3d",
-    kWkggS: "xjbqb8w",
-    kMwMTN: "xqfnruw",
-    k1ekBW: "xts7igz",
-    kIyJzY: "xx6bhzk",
-    kGzVvX: "x100i51q",
-    $$css: true
-  },
-  itemActive: {
-    kWkggS: "xkfhepb",
-    kVAM5u: "x7ahe48",
-    kGVxlE: "x1txfbru",
-    $$css: true
-  },
-  itemTitle: {
-    k1xSpc: "x1lliihq",
-    kGuDYH: "xym1t2f",
-    k63SB2: "x1s688f",
-    khDVqt: "xuxw1ft",
-    kVQacm: "xb3r6kr",
-    kg5iWk: "xlyipyv",
-    $$css: true
-  },
-  itemTitleActive: {
-    kMwMTN: "xcorkxk",
-    $$css: true
-  },
-  itemMeta: {
-    k1xSpc: "x1lliihq",
-    kGuDYH: "x191ayms",
-    keoZOQ: "x7r5mf7",
-    khDVqt: "xuxw1ft",
-    kVQacm: "xb3r6kr",
-    kg5iWk: "xlyipyv",
-    kMwMTN: "xy6rsxr",
-    $$css: true
-  },
-  empty: {
-    kGuDYH: "xgommxb",
-    k9WMMc: "x2b8uid",
-    kMwMTN: "xy6rsxr",
-    kmVPX3: "x1enw65i",
-    $$css: true
-  },
-  usage: {
-    kWkggS: "x1w3zwpd",
-    kmVPX3: "x1v56k37",
-    kGuDYH: "x1sfrptf",
-    kMwMTN: "xy6rsxr",
-    khDVqt: "xuxw1ft",
-    kVQacm: "xb3r6kr",
-    kg5iWk: "xlyipyv",
-    $$css: true
-  }
-};
-
-// drawer.js
-var cx = (...args) => props(...args).className || "";
-function paintShell(open2) {
-  if (els.drawerOverlay) {
-    els.drawerOverlay.className = (!open2 ? "hidden " : "") + cx(s.overlay, !open2 && s.overlayHidden);
-  }
-  if (els.drawer) {
-    els.drawer.className = (open2 ? "open " : "") + cx(s.panel, open2 ? s.panelOpen : s.panelClosed);
-  }
-}
-function paintStatic() {
-  const byId = (id) => document.getElementById(id);
-  const pairs = [["drawer-header", s.header], ["drawer-title", s.title], ["drawer-close-btn", s.closeBtn], ["drawer-actions", s.actions], ["drawer-new-btn", s.newBtn], ["drawer-sessions-label", s.label], ["drawer-list", s.list], ["drawer-usage", s.usage]];
-  for (const [id, style] of pairs) {
-    const el2 = byId(id);
-    if (el2)
-      el2.className = cx(style);
-  }
-}
 function fmtTokens(n) {
   n = Number(n) || 0;
   if (n >= 1000)
@@ -9317,8 +9361,8 @@ async function loadLive() {
         continue;
       const j = await r.json();
       const map = {};
-      for (const s2 of j.sessions || [])
-        map[s2.id] = s2;
+      for (const s of j.sessions || [])
+        map[s.id] = s;
       return map;
     } catch {}
   }
@@ -9340,7 +9384,6 @@ function setOpen2(open2) {
     els.drawer.setAttribute("aria-hidden", "true");
     els.drawerOverlay.classList.add("hidden");
   }
-  paintShell(open2);
 }
 function toggle() {
   setOpen2(!isOpen3());
@@ -9353,30 +9396,29 @@ async function renderList() {
   els.drawerList.innerHTML = "";
   if (!list || list.length === 0) {
     const d = document.createElement("div");
-    d.className = cx(s.empty);
+    d.className = "drawer-empty";
     d.textContent = "No chats yet — start a new one.";
     els.drawerList.appendChild(d);
   }
   const seen = new Set;
-  for (const s2 of list || []) {
-    const id = s2.id || s2.session_id;
+  for (const s of list || []) {
+    const id = s.id || s.session_id;
     if (!id || seen.has(id))
       continue;
     seen.add(id);
-    const title = s2.title && s2.title !== id ? s2.title : id;
+    const title = s.title && s.title !== id ? s.title : id;
     const lv = live[id];
     const btn = document.createElement("button");
     btn.type = "button";
-    const isActive = id === state2.sessionId;
-    btn.className = cx(s2.item, isActive && s2.itemActive);
-    const t = document.createElement("span");
-    t.className = cx(s2.itemTitle, isActive && s2.itemTitleActive);
-    t.textContent = title;
-    t.title = title + `
+    btn.className = "drawer-item" + (id === state2.sessionId ? " active" : "");
+    const t2 = document.createElement("span");
+    t2.className = "drawer-item-title";
+    t2.textContent = title;
+    t2.title = title + `
 ` + id;
-    btn.appendChild(t);
+    btn.appendChild(t2);
     const meta = document.createElement("span");
-    meta.className = cx(s2.itemMeta);
+    meta.className = "drawer-item-meta";
     meta.textContent = lv && lv.model ? lv.model + " · " + fmtTokens(lv.input_tokens) + " in / " + fmtTokens(lv.output_tokens) + " out · " + fmtCost(lv.cost) : id;
     btn.appendChild(meta);
     btn.addEventListener("click", () => switchSession(id));
@@ -9408,9 +9450,7 @@ async function switchSession(id) {
   state2.sessionId = id;
   saveToStorage();
   els.messages.innerHTML = "";
-  const {
-    fetchHistory: fetchHistory2
-  } = await Promise.resolve().then(() => (init_messages(), exports_messages));
+  const { fetchHistory: fetchHistory2 } = await Promise.resolve().then(() => (init_messages(), exports_messages));
   const whiteboard = await Promise.resolve().then(() => (init_whiteboard(), exports_whiteboard));
   disconnect2();
   connect2();
@@ -9447,8 +9487,6 @@ function init5() {
   try {
     setOnStateChange(refreshUsage);
   } catch {}
-  paintStatic();
-  paintShell(false);
   renderList();
 }
 
@@ -9603,8 +9641,8 @@ function init7() {
   init5();
   init3();
   init6();
-  on("stateChange", (s2) => {
-    if (s2 === State.CONNECTED)
+  on("stateChange", (s) => {
+    if (s === State.CONNECTED)
       syncCancelButton();
   });
   syncCancelButton();
@@ -9662,7 +9700,7 @@ async function syncCancelButton() {
         if (!r.ok)
           continue;
         const j = await r.json();
-        const hit = (j.sessions || []).find((s2) => (s2.id || s2.session_id) === state2.sessionId);
+        const hit = (j.sessions || []).find((s) => (s.id || s.session_id) === state2.sessionId);
         running = !!(hit && hit.running);
         break;
       } catch {}
@@ -9690,8 +9728,8 @@ async function refreshSessionList() {
         if (!r.ok)
           continue;
         const j = await r.json();
-        for (const s2 of j.sessions || [])
-          live[s2.id] = s2;
+        for (const s of j.sessions || [])
+          live[s.id] = s;
         break;
       } catch {}
     }
@@ -9700,8 +9738,8 @@ async function refreshSessionList() {
     return;
   els.sessionSelect.innerHTML = "";
   const seen = new Set;
-  for (const s2 of list) {
-    const id = s2.id || s2.session_id;
+  for (const s of list) {
+    const id = s.id || s.session_id;
     if (!id || seen.has(id))
       continue;
     seen.add(id);
@@ -9709,7 +9747,7 @@ async function refreshSessionList() {
     opt.value = id;
     const lv = live[id];
     const liveSuffix = lv && lv.model ? " · " + lv.model + (lv.cost ? " · $" + Number(lv.cost).toFixed(4) : "") : "";
-    opt.textContent = (s2.title && s2.title !== id ? s2.title + " · " : "") + id + liveSuffix;
+    opt.textContent = (s.title && s.title !== id ? s.title + " · " : "") + id + liveSuffix;
     if (id === state2.sessionId)
       opt.selected = true;
     els.sessionSelect.appendChild(opt);
@@ -9962,8 +10000,8 @@ function initSnap() {
       return doSnap(sel);
     };
     window.addEventListener("zw-snap", (e) => {
-      const t = e.detail && e.detail.target ? e.detail.target : e.detail || "#whiteboard-body";
-      doSnap(t);
+      const t2 = e.detail && e.detail.target ? e.detail.target : e.detail || "#whiteboard-body";
+      doSnap(t2);
     });
     if (!window.ws)
       window.ws = {};

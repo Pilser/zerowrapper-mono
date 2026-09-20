@@ -2,6 +2,10 @@
 // count badge + word preview, click to expand the full text. Own
 // .think-card styles (bright readable text); Motion entrance + shimmer.
 import { popIn, shimmer } from '../motion-fx.js'
+import * as stylex from '@stylexjs/stylex'
+import { p } from './piles.stylex.js'
+
+const cx = (...args) => (stylex.props(...args).className || '')
 
 const CHEV = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>'
 
@@ -15,21 +19,35 @@ function previewWords(text, n = 56) {
 export function createThinkPile(opts = {}) {
   const live = opts.live !== false
   const card = document.createElement('div')
-  card.className = 'think-card running'
+  card.className = cx(p.card, p.cardRunning)
   const head = document.createElement('button')
-  head.className = 'think-head'
+  head.className = cx(p.head)
   head.type = 'button'
-  head.innerHTML = '<span class="think-icon">💭</span><span class="think-title">Thinking</span><span class="think-count">0</span><span class="think-preview"></span><span class="think-chev">' + CHEV + '</span>'
+  // Marker classes (think-count/-preview/-chev) stay as JS query hooks;
+  // visuals come from the atoms. Same pattern as drawer IDs.
+  head.innerHTML = '<span class="think-icon ' + cx(p.icon) + '">💭</span><span class="think-title ' + cx(p.title) + '">Thinking</span><span class="think-count ' + cx(p.count) + '">0</span><span class="think-preview ' + cx(p.preview) + '"></span><span class="think-chev ' + cx(p.chev) + '">' + CHEV + '</span>'
   const countEl = head.querySelector('.think-count')
   const previewEl = head.querySelector('.think-preview')
+  const chevEl = head.querySelector('.think-chev')
   const body = document.createElement('div')
-  body.className = 'think-body'
+  body.className = cx(p.body, p.bodyClosed)
   const pre = document.createElement('pre')
+  pre.className = cx(p.thinkPre)
   body.appendChild(pre)
   card.appendChild(head)
   card.appendChild(body)
+  // Old CSS showed/hid body + rotated chev via `.open` descendants.
+  // StyleX has no descendant selectors: repaint both on toggle. The `open`
+  // marker stays for state only.
+  const paintOpen = () => {
+    const open = card.classList.contains('open')
+    body.className = cx(p.body, open ? p.bodyOpen : p.bodyClosed)
+    // Preserve the think-chev query hook when repainting.
+    if (chevEl) chevEl.className = 'think-chev ' + cx(p.chev, open && p.chevOpen)
+  }
   head.addEventListener('click', () => {
     card.classList.toggle('open')
+    paintOpen()
   })
   let count = 0
   let full = ''
@@ -63,7 +81,10 @@ export function createThinkPile(opts = {}) {
         const target = previewEl || card
         if (target && target.style) target.style.opacity = ''
       } catch {}
+      // Preserve the `open` marker: auto-dismiss below skips pinned cards.
+      const stillOpen = card.classList.contains('open')
       card.classList.remove('running')
+      card.className = (stillOpen ? 'open ' : '') + cx(p.card)
       if (countEl) countEl.textContent = count
       if (live) {
         // Auto-dismiss floating burst after a few seconds (history keeps it)
