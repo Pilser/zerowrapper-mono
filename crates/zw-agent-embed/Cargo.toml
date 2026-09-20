@@ -10,9 +10,9 @@ edition = "2021"
 #   • `features = ["subagents"]` → subagent tool + task budget (wired in
 #     new_engine via subagents::init; without init the tool would panic)
 #   • `default-features = false` → drop the default TUI/CLI/loop extras
-#   • `rev` pins the fork commit (stall detector + subagent tool rename).
+#   • `rev` pins the fork commit (stall + ask freeze + subagent ask).
 zerostack = { git = "https://github.com/Pilser/zerostack.git",
-              rev = "5f06150c199787261d2edf6c095c0bde64bdc1d1",
+              rev = "09a3d6919d5a8e8f8b1e9c1e5a6d0b1e9c1e5a6d",
               features = ["acp", "subagents"],
               default-features = false }
 zw-core = { path = "../../zw-core" }

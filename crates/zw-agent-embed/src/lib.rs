@@ -707,7 +707,9 @@ pub fn new_engine(
     // it per engine creation is safe.
     {
         use zerostack::extras::subagents;
-        let task_max_turns = cfg.task_max_turns.unwrap_or(20);
+        let task_max_turns = cfg
+            .task_max_turns
+            .unwrap_or(zerostack::config::NO_TURN_LIMIT);
         subagents::init(
             client.clone(),
             model.clone(),
@@ -716,12 +718,28 @@ pub fn new_engine(
             cli.resolve_tools(&cfg),
         );
     }
+    // Freeze tracking for ask_user (main + subagents share same wrapper
+    // session). Subagents run outside Engine, so they need the wrapper
+    // session globally.
+    zerostack::engine::ask_freeze::set_wrapper_session(session_id);
+    {
+        let sid = session_id.to_string();
+        let db_clone = db.clone();
+        let factory: std::sync::Arc<
+            dyn Fn() -> Box<dyn zerostack::rig::tool::ToolDyn> + Send + Sync,
+        > = std::sync::Arc::new(move || {
+            let provider = crate::ask::AskUserProvider::new(&sid, db_clone.clone());
+            let bridge = McpBridgeTool::new(std::sync::Arc::new(provider));
+            Box::new(bridge) as Box<dyn zerostack::rig::tool::ToolDyn>
+        });
+        zerostack::extras::subagents::set_ask_tool_factory(factory);
+    }
     // Session-bound ask tool: this engine's turns get their own instance
     // (holds sid + db), attached before first build. Global whiteboard
     // bridges arrive separately via the fork's factory registry.
     let ask_tool: Box<dyn zerostack::rig::tool::ToolDyn> =
         Box::new(McpBridgeTool::new(std::sync::Arc::new(
-            ask::AskUserProvider::new(session_id, db),
+            ask::AskUserProvider::new(session_id, db.clone()),
         )));
     Ok(Engine::new(
         cli,

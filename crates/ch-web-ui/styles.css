@@ -1155,6 +1155,50 @@
   color: var(--color-text-inverted);
   border-color: transparent;
 }
+.ask-wizard-header {
+  display: flex; align-items: center; justify-content: space-between;
+  font-size: 0.75rem; font-weight: 600; color: var(--color-text-strong);
+  padding: 4px 2px;
+}
+.ask-dots { display: flex; gap: 6px; align-items: center; }
+.ask-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-weak);
+  padding: 0; cursor: pointer;
+}
+.ask-dot.active { background: var(--color-bg-interactive); border-color: var(--color-bg-interactive); }
+.ask-dot.answered { background: var(--color-status-success); border-color: var(--color-status-success); }
+.ask-dot.active.answered { background: var(--color-bg-interactive); }
+.ask-q-label, .ask-a-label {
+  font-size: 0.7rem; font-weight: 600; color: var(--color-text-weak);
+  text-transform: uppercase; letter-spacing: 0.03em;
+}
+.ask-wizard-card { min-height: 0; }
+.ask-wizard-nav {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 8px; padding: 4px 0;
+}
+.ask-nav-btn {
+  padding: 6px 14px; border-radius: 999px; cursor: pointer;
+  font-size: 0.78rem; font-weight: 600;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg); color: var(--color-text-strong);
+}
+.ask-nav-btn.primary {
+  background: var(--color-bg-interactive);
+  color: var(--color-text-inverted);
+  border-color: transparent;
+}
+.ask-nav-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.ask-nav-count {
+  font-size: 0.75rem; font-weight: 600; color: var(--color-text-weak);
+}
+.ask-queue-banner, .ask-empty {
+  font-size: 0.75rem; color: var(--color-text-weak);
+  padding: 6px 8px; text-align: center;
+  background: var(--color-bg-weak); border-radius: 8px;
+}
 .ask-review-q { font-size: 0.8rem; font-weight: 600; color: var(--color-text-strong); }
 .ask-review-a {
   font-size: 0.8rem; color: var(--color-text);
@@ -1163,6 +1207,13 @@
 #ask-footer {
   display: flex; gap: 8px; padding: 8px 16px;
   border-top: 1px solid var(--color-border-weak);
+  position: sticky; bottom: 0; background: var(--color-bg);
+  flex-wrap: wrap;
+}
+@media (max-width: 600px) {
+  #ask-footer { flex-direction: column; }
+  #ask-footer button { width: 100%; justify-content: center; }
+  #ask-drawer { width: 100vw; }
 }
 #ask-footer button {
   display: flex; align-items: center; gap: 6px;

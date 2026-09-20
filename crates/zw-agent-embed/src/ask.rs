@@ -21,7 +21,8 @@ use zw_core::{McpToolProvider, ToolOutput};
 /// with everything marked unanswered. Not env-configurable by design.
 pub const ASK_TIMEOUT_SECS: u64 = 1800;
 /// Hardcoded policy: upper bound per call so one turn can't spam the drawer.
-pub const ASK_MAX_QUESTIONS: usize = 8;
+/// Raised from 8 to 32 for research use — drawer wizard handles overflow.
+pub const ASK_MAX_QUESTIONS: usize = 32;
 
 /// Answers fanned out by the REST endpoint: (ask_id, answers JSON).
 static ASK_ANSWERS: LazyLock<broadcast::Sender<(String, serde_json::Value)>> =
@@ -65,6 +66,13 @@ pub(crate) fn register_bus(session_id: &str, bus: AskNotifyBus) {
     }
 }
 
+pub(crate) fn get_or_create_bus(session_id: &str) -> AskNotifyBus {
+    let mut m = ASK_BUSSES.lock().unwrap_or_else(|e| e.into_inner());
+    m.entry(session_id.to_string())
+        .or_insert_with(AskNotifyBus::default)
+        .clone()
+}
+
 pub(crate) fn bus_for(session_id: &str) -> Option<AskNotifyBus> {
     ASK_BUSSES.lock().ok()?.get(session_id).cloned()
 }
@@ -101,8 +109,7 @@ pub struct AskUserProvider {
 
 impl AskUserProvider {
     pub fn new(session_id: &str, db: zw_db::DbPool) -> Self {
-        let bus = AskNotifyBus::default();
-        register_bus(session_id, bus.clone());
+        let bus = get_or_create_bus(session_id);
         Self {
             session_id: session_id.to_string(),
             db,
@@ -206,6 +213,17 @@ impl McpToolProvider for AskUserProvider {
 
         let ask_id = nanos_id("ask");
         let questions_json = serde_json::json!(questions).to_string();
+        // Freeze the turn while this ask is outstanding — no other tool
+        // or final answer may proceed until the human answers. Counter
+        // supports nesting (main + 2 subagents). Guard dec's on all exits.
+        struct FreezeGuard(String);
+        impl Drop for FreezeGuard {
+            fn drop(&mut self) {
+                zerostack::engine::ask_freeze::dec(&self.0);
+            }
+        }
+        zerostack::engine::ask_freeze::inc(&self.session_id);
+        let _freeze_guard = FreezeGuard(self.session_id.clone());
         self.db
             .ask_insert(&ask_id, &self.session_id, &questions_json)
             .await?;

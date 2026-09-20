@@ -7282,22 +7282,22 @@ function setStatus(msg, isError) {
   els.askStatus.textContent = msg || "";
   els.askStatus.style.color = isError ? "var(--color-status-error)" : "var(--color-text-weak)";
 }
-function readForm() {
+function saveCurrentCard() {
   if (!current || !els.askBody)
     return;
-  const cards = els.askBody.querySelectorAll("[data-qid]");
-  cards.forEach((card) => {
-    const qid = card.getAttribute("data-qid");
-    const q = current.questions.find((x) => x.id === qid);
-    if (!q)
-      return;
-    const qta = card.querySelector('textarea[data-q="text"]');
-    if (qta)
-      q.question = qta.value;
-    const ta = card.querySelector('textarea[data-q="answer"]');
-    if (ta)
-      q.answer = ta.value;
-  });
+  const card = els.askBody.querySelector("[data-qid]");
+  if (!card)
+    return;
+  const qid = card.getAttribute("data-qid");
+  const q = current.questions.find((x) => x.id === qid);
+  if (!q)
+    return;
+  const qta = card.querySelector('textarea[data-q="text"]');
+  if (qta)
+    q.question = qta.value;
+  const ta = card.querySelector('textarea[data-q="answer"]');
+  if (ta)
+    q.answer = ta.value;
 }
 function answerControl(q) {
   let pills = "";
@@ -7307,46 +7307,117 @@ function answerControl(q) {
       return '<button type="button" class="ask-pill' + sel + '" data-q="pick" data-val="' + esc(o) + '">' + esc(o) + "</button>";
     }).join("") + "</div>";
   }
-  return pills + '<textarea data-q="answer" rows="2" placeholder="Type your answer…">' + esc(q.answer || "") + "</textarea>";
+  return pills + '<textarea data-q="answer" rows="3" placeholder="Type your answer…">' + esc(q.answer || "") + "</textarea>";
 }
-function renderEdit() {
+function renderWizard() {
   if (!els.askBody || !current)
     return;
-  els.askBody.innerHTML = "";
-  if (isSystemAsk()) {
-    const banner = document.createElement("div");
-    banner.className = "ask-system-banner";
-    banner.innerHTML = '<div class="ask-system-title">⏸️ Agent paused</div>' + '<div class="ask-system-sub">Long turn, no final answer yet. Continue for another full budget, or stop here — the committed summary stays.</div>';
-    els.askBody.appendChild(banner);
+  const total = current.questions.length;
+  if (total === 0) {
+    els.askBody.innerHTML = '<div class="ask-empty">No questions</div>';
+    return;
   }
-  current.questions.forEach((q) => {
-    const card = document.createElement("div");
-    card.className = "ask-card";
-    card.setAttribute("data-qid", q.id);
-    card.innerHTML = (q.objective ? '<div class="ask-objective">' + esc(q.objective) + "</div>" : "") + '<textarea data-q="text" rows="2">' + esc(q.question) + "</textarea>" + answerControl(q);
-    els.askBody.appendChild(card);
-  });
-  els.askBody.querySelectorAll('button[data-q="pick"]').forEach((btn) => {
+  if (wizardIndex < 0)
+    wizardIndex = 0;
+  if (wizardIndex >= total)
+    wizardIndex = total - 1;
+  const q = current.questions[wizardIndex];
+  const isFirst = wizardIndex === 0;
+  const isLast = wizardIndex === total - 1;
+  let dots = "";
+  if (total > 1) {
+    dots = '<div class="ask-dots">' + current.questions.map((_, i) => {
+      const active = i === wizardIndex ? " active" : "";
+      const answered = current.questions[i].answer && current.questions[i].answer.trim() ? " answered" : "";
+      return '<button type="button" class="ask-dot' + active + answered + '" data-dot="' + i + '" aria-label="Question ' + (i + 1) + '"></button>';
+    }).join("") + "</div>";
+  }
+  let header = "";
+  if (isSystemAsk()) {
+    header = '<div class="ask-system-banner"><div class="ask-system-title">⏸️ Agent paused</div><div class="ask-system-sub">Long turn, no final answer yet. Continue for another full budget, or stop here — the committed summary stays.</div></div>';
+  } else if (pendingQueue.length > 1) {
+    header = '<div class="ask-queue-banner">' + pendingQueue.length + " pending asks — viewing " + (wizardIndex + 1) + "/" + total + " of current</div>";
+  } else if (total > 1) {
+    header = '<div class="ask-wizard-header">Question ' + (wizardIndex + 1) + " of " + total + dots + "</div>";
+  } else {
+    header = dots;
+  }
+  const card = document.createElement("div");
+  card.className = "ask-card ask-wizard-card";
+  card.setAttribute("data-qid", q.id);
+  card.innerHTML = header + (q.objective ? '<div class="ask-objective">' + esc(q.objective) + "</div>" : "") + '<label class="ask-q-label">Question</label><textarea data-q="text" rows="2">' + esc(q.question) + "</textarea>" + '<label class="ask-a-label">Your answer</label>' + answerControl(q);
+  els.askBody.innerHTML = "";
+  if (total > 1 && !isSystemAsk() && pendingQueue.length <= 1) {}
+  els.askBody.appendChild(card);
+  card.querySelectorAll('button[data-q="pick"]').forEach((btn) => {
     btn.addEventListener("click", () => {
-      const card = btn.closest("[data-qid]");
-      const box2 = card ? card.querySelector('textarea[data-q="answer"]') : null;
+      const box2 = card.querySelector('textarea[data-q="answer"]');
       if (box2) {
         box2.value = btn.getAttribute("data-val") || "";
         try {
           box2.focus();
         } catch {}
+        saveCurrentCard();
+        card.querySelectorAll('button[data-q="pick"]').forEach((s) => s.classList.toggle("selected", s === btn));
+        updateWizardNav();
       }
-      const sibs = card ? card.querySelectorAll('button[data-q="pick"]') : [];
-      sibs.forEach((s) => s.classList.toggle("selected", s === btn));
     });
   });
+  els.askBody.querySelectorAll("button[data-dot]").forEach((dot) => {
+    dot.addEventListener("click", () => {
+      saveCurrentCard();
+      const idx = parseInt(dot.getAttribute("data-dot") || "0", 10);
+      wizardIndex = idx;
+      renderWizard();
+    });
+  });
+  const nav = document.createElement("div");
+  nav.className = "ask-wizard-nav";
+  nav.innerHTML = '<button type="button" class="ask-nav-btn" data-nav="back"' + (isFirst ? " disabled" : "") + ">← Back</button>" + '<span class="ask-nav-count">' + (wizardIndex + 1) + " / " + total + "</span>" + '<button type="button" class="ask-nav-btn primary" data-nav="next">' + (isLast ? "Review →" : "Next →") + "</button>";
+  els.askBody.appendChild(nav);
+  nav.querySelectorAll("button[data-nav]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const dir = btn.getAttribute("data-nav");
+      saveCurrentCard();
+      if (dir === "back" && wizardIndex > 0) {
+        wizardIndex--;
+        renderWizard();
+      } else if (dir === "next") {
+        if (isLast) {
+          renderReview();
+        } else {
+          wizardIndex++;
+          renderWizard();
+        }
+      }
+    });
+  });
+  try {
+    const ta = card.querySelector('textarea[data-q="answer"]');
+    if (ta && window.innerWidth < 600) {}
+  } catch {}
+  updateWizardNav();
   els.askBackBtn.classList.add("hidden");
-  els.askReviewBtn.classList.remove("hidden");
-  els.askSubmitBtn.classList.add("hidden");
+  els.askReviewBtn.classList.add("hidden");
+  els.askSubmitBtn.classList.remove("hidden");
   mode2 = "edit";
+  try {
+    els.askSubmitBtn.style.display = "";
+  } catch {}
+}
+function updateWizardNav() {
+  if (!current || !els.askBody)
+    return;
+  els.askBody.querySelectorAll("button[data-dot]").forEach((dot, i) => {
+    const q = current.questions[i];
+    if (q && q.answer && q.answer.trim())
+      dot.classList.add("answered");
+    else
+      dot.classList.remove("answered");
+  });
 }
 function renderReview() {
-  readForm();
+  saveCurrentCard();
   if (!els.askBody || !current)
     return;
   els.askBody.innerHTML = "";
@@ -7363,12 +7434,28 @@ function renderReview() {
   els.askReviewBtn.classList.add("hidden");
   els.askSubmitBtn.classList.remove("hidden");
   mode2 = "review";
+  els.askBackBtn.onclick = () => {
+    wizardIndex = current.questions.length - 1;
+    renderWizard();
+  };
 }
 function openWith(ask) {
   if (!ask || !ask.ask_id)
     return;
   if (current && current.ask_id === ask.ask_id && isOpen2())
     return;
+  if (current && current.ask_id !== ask.ask_id) {
+    if (!pendingQueue.find((x) => x.ask_id === ask.ask_id)) {
+      pendingQueue.push({
+        ask_id: ask.ask_id,
+        session_id: ask.session_id || state2.sessionId,
+        kind: ask.kind || "model",
+        questions: Array.isArray(ask.questions) ? ask.questions : []
+      });
+    }
+    setStatus(pendingQueue.length + " pending asks");
+    return;
+  }
   customCount = 0;
   const qs = Array.isArray(ask.questions) ? ask.questions : [];
   current = {
@@ -7384,14 +7471,16 @@ function openWith(ask) {
       custom: false
     }))
   };
+  wizardIndex = 0;
+  pendingQueue = [{ ask_id: current.ask_id, kind: current.kind, questions: qs }];
   setStatus("");
-  renderEdit();
+  renderWizard();
   setOpen(true);
 }
 function addOwnQuestion() {
   if (!current)
     return;
-  readForm();
+  saveCurrentCard();
   customCount += 1;
   current.questions.push({
     id: "custom-" + customCount,
@@ -7401,20 +7490,16 @@ function addOwnQuestion() {
     answer: "",
     custom: true
   });
-  if (mode2 === "review")
-    renderEdit();
-  else
-    renderEdit();
+  wizardIndex = current.questions.length - 1;
+  renderWizard();
   try {
-    const cards = els.askBody.querySelectorAll("[data-qid]");
-    const last = cards[cards.length - 1];
-    const ta = last ? last.querySelector('textarea[data-q="text"]') : null;
+    const ta = els.askBody.querySelector('textarea[data-q="text"]');
     if (ta)
       ta.focus();
   } catch {}
 }
 async function submit() {
-  readForm();
+  saveCurrentCard();
   if (!current)
     return;
   const answers = current.questions.map((q) => ({
@@ -7440,6 +7525,15 @@ async function submit() {
           window.dispatchEvent(new CustomEvent("askResolved", { detail: { ask_id: resolvedId } }));
         } catch {}
         current = null;
+        pendingQueue = pendingQueue.filter((x) => x.ask_id !== resolvedId);
+        if (pendingQueue.length > 0) {
+          const next = pendingQueue[0];
+          let qs = [];
+          try {
+            qs = Array.isArray(next.questions) ? next.questions : JSON.parse(next.questions || "[]");
+          } catch {}
+          setTimeout(() => openWith({ ask_id: next.ask_id, session_id: next.session_id, questions: qs, kind: next.kind }), 300);
+        }
         setTimeout(() => {
           setOpen(false);
           setStatus("");
@@ -7474,13 +7568,22 @@ async function pollPending() {
           continue;
         const j = await r.json().catch(() => ({}));
         const list = j.pending || [];
+        pendingQueue = list.map((x) => {
+          let qs = [];
+          try {
+            qs = typeof x.questions === "string" ? JSON.parse(x.questions) : Array.isArray(x.questions) ? x.questions : [];
+          } catch {}
+          return { ask_id: x.id, session_id: x.session_id, questions: qs, kind: x.kind || "model" };
+        });
         if (list.length > 0 && !isOpen2()) {
           const first = list[0];
           let questions = [];
           try {
-            questions = JSON.parse(first.questions || "[]");
+            questions = typeof first.questions === "string" ? JSON.parse(first.questions) : Array.isArray(first.questions) ? first.questions : [];
           } catch {}
           openWith({ ask_id: first.id, session_id: first.session_id, questions, kind: first.kind || "model" });
+        } else if (list.length > 1 && isOpen2() && current) {
+          setStatus(list.length + " pending asks — finish current to see next");
         }
         return;
       } catch {}
@@ -7495,7 +7598,16 @@ function init3() {
   if (els.askAddBtn)
     els.askAddBtn.addEventListener("click", addOwnQuestion);
   if (els.askBackBtn)
-    els.askBackBtn.addEventListener("click", renderEdit);
+    els.askBackBtn.addEventListener("click", () => {
+      if (mode2 === "review") {
+        wizardIndex = Math.max(0, current ? current.questions.length - 1 : 0);
+        renderWizard();
+      } else if (wizardIndex > 0) {
+        saveCurrentCard();
+        wizardIndex--;
+        renderWizard();
+      }
+    });
   if (els.askReviewBtn)
     els.askReviewBtn.addEventListener("click", () => {
       if (current)
@@ -7512,11 +7624,12 @@ function init3() {
   pollTimer = setInterval(pollPending, 15000);
   setTimeout(pollPending, 4000);
 }
-var current = null, mode2 = "edit", customCount = 0, pollTimer = null;
+var current = null, wizardIndex = 0, mode2 = "edit", customCount = 0, pollTimer = null, pendingQueue;
 var init_ask_drawer = __esm(() => {
   init_dom();
   init_network();
   init_auth();
+  pendingQueue = [];
 });
 
 // html2canvas.js
