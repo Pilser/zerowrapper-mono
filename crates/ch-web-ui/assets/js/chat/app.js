@@ -6566,8 +6566,10 @@ function ensureRipple() {
 function showTyping() {
   try {
     const node = ensureRipple();
-    if (els.messages)
+    if (els.messages) {
       els.messages.appendChild(node);
+      els.messages.classList.add("streaming");
+    }
     if (!stopRippleLoop) {
       try {
         stopRippleLoop = rippleLoop(node.querySelector(".ripple-container"));
@@ -6593,6 +6595,10 @@ function hideTyping() {
       rippleNode.parentElement.removeChild(rippleNode);
   } catch {}
   rippleNode = null;
+  try {
+    if (els.messages)
+      els.messages.classList.remove("streaming");
+  } catch {}
 }
 var el = null, content = "", streamId = 0, renderPending = false, onFinalize = null, rippleNode = null, stopRippleLoop = null;
 var init_streaming = __esm(() => {

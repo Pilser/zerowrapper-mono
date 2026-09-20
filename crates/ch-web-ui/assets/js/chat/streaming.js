@@ -181,11 +181,15 @@ function ensureRipple() {
 
 // Live position marker: sits BELOW the newest streaming content (tool piles
 // + response bubble) and follows down as the turn grows. Replaces the old
-// fixed typing indicator.
+// fixed typing indicator. Also drives the dotted-bg tint so the same
+// trigger animates both ripple and background.
 export function showTyping() {
   try {
     const node = ensureRipple()
-    if (els.messages) els.messages.appendChild(node)
+    if (els.messages) {
+      els.messages.appendChild(node)
+      els.messages.classList.add('streaming')
+    }
     if (!stopRippleLoop) {
       try { stopRippleLoop = rippleLoop(node.querySelector('.ripple-container')) } catch {}
     }
@@ -211,4 +215,7 @@ export function hideTyping() {
     if (rippleNode && rippleNode.parentElement) rippleNode.parentElement.removeChild(rippleNode)
   } catch {}
   rippleNode = null
+  try {
+    if (els.messages) els.messages.classList.remove('streaming')
+  } catch {}
 }

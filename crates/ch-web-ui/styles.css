@@ -548,16 +548,24 @@
   .agent-pill.hidden { display: none; }
   .agent-pill-icon { font-size: 1rem; line-height: 1; }
   /* Stream ripple loader: sits below the newest live content and follows it
-     down as the turn grows. Motion drives scale/fade; this only shapes. */
-  .stream-ripple { display: flex; justify-content: flex-start; padding: 6px 0 6px 52px; }
-  .ripple-container { position: relative; width: 52px; height: 26px; }
+     down as the turn grows. Motion drives scale/fade; this only shapes.
+     Made very visible: larger, thicker border, glow, centered. */
+  .stream-ripple { display: flex; justify-content: center; align-items: center; gap: 12px; padding: 18px 0; }
+  .stream-ripple::after {
+    content: 'Agent working…';
+    font-size: 0.8rem; font-weight: 600; color: var(--color-text);
+    animation: ripple-text-pulse 1.4s ease-in-out infinite;
+  }
+  @keyframes ripple-text-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.6; } }
+  .ripple-container { position: relative; width: 90px; height: 40px; flex-shrink: 0; }
   .ripple-container .ripple {
-    position: absolute; top: 0; left: 0;
-    width: 26px; height: 26px;
+    position: absolute; top: 2px; left: 0;
+    width: 36px; height: 36px;
     border-radius: 50%;
-    border: 3px solid var(--color-bg-interactive);
+    border: 4px solid var(--color-bg-interactive);
     opacity: 0;
     will-change: transform, opacity;
+    box-shadow: 0 0 12px color-mix(in srgb, var(--color-bg-interactive) 45%, transparent);
   }
   .ripple-container.ripple-css .ripple { animation: ripple-css-pulse 1.6s infinite ease-out; }
   .ripple-container.ripple-css .ripple:nth-child(2) { animation-delay: 0.35s; }
@@ -566,17 +574,20 @@
     0% { transform: scale(0.25); opacity: 0.9; }
     100% { transform: scale(1); opacity: 0; }
   }
-  /* Dotted chat backdrop (subtle, welcoming) + streaming tint shift.
-     Variables only used, never redefined. */
+  /* Dotted chat backdrop (uses accent so picker visibly changes it) +
+     streaming tint shift — what triggers ripple also triggers this. */
   #chat-messages {
-    background-image: radial-gradient(circle, var(--color-border-weak) 1px, transparent 1.4px);
+    background-image: radial-gradient(circle, color-mix(in srgb, var(--color-bg-interactive) 38%, transparent) 1.7px, transparent 1.9px);
     background-size: 22px 22px;
     border-radius: 12px;
-    transition: background-color 0.6s ease;
+    transition: background-color 0.6s ease, background-image 0.6s ease;
   }
   #chat-messages.streaming {
-    background-color: color-mix(in srgb, var(--color-bg-interactive) 5%, transparent);
+    background-color: color-mix(in srgb, var(--color-bg-interactive) 14%, transparent);
+    background-image: radial-gradient(circle, var(--color-bg-interactive) 2.2px, transparent 2.4px);
+    animation: dots-stream-pulse 1.6s ease-in-out infinite;
   }
+  @keyframes dots-stream-pulse { 0%,100% { filter: brightness(1); } 50% { filter: brightness(1.25); } }
   /* Corner accent picker: predefined accents via data-attr (no var edits). */
   #accent-picker {
     position: fixed; top: 12px; right: 12px; z-index: 70;
