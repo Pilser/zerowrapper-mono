@@ -1,10 +1,12 @@
 // Corner accent picker: predefined accents switched via data-attr.
+// Collapsed by default: shows current color dot; tap to expand full palette.
 // Never redefines variables — just selects among preset overrides.
 const ACCENTS = [
-  { key: 'blue', label: 'Blue' },
-  { key: 'pink', label: 'Pink' },
-  { key: 'sun', label: 'Sun' },
-  { key: 'mint', label: 'Mint' },
+  { key: 'blue', label: 'Blue', color: '#3b82f6' },
+  { key: 'pink', label: 'Pink', color: '#ec4899' },
+  { key: 'sun', label: 'Sun', color: '#eab308' },
+  { key: 'mint', label: 'Mint', color: '#10b981' },
+  { key: 'orange', label: 'Orange', color: '#ff8c00' },
 ]
 const STORE_KEY = 'zerowrapper_accent'
 
@@ -19,12 +21,15 @@ function apply(key) {
       if (on) li.classList.add('selected')
       else li.classList.remove('selected')
     })
+    // Update toggle dot to current color
+    const cur = ACCENTS.find((a) => a.key === (key || 'blue')) || ACCENTS[0]
+    const toggle = document.getElementById('accent-picker-toggle')
+    if (toggle) toggle.style.background = cur.color
   } catch {}
 }
 
 async function animatePickerChange(key, x, y) {
   const doApply = () => apply(key)
-  // Try Motion's View Transition circular wipe; fallback to instant.
   try {
     const m = await import('./motion.js')
     const av = m.animateView || (m.default && m.default.animateView) || (typeof window !== 'undefined' && window.Motion && window.Motion.animateView)
@@ -38,12 +43,10 @@ async function animatePickerChange(key, x, y) {
         )
         return
       }
-      // Fallback if .new not available: just await view transition
       await vt.finished.catch(() => {})
       return
     }
   } catch {}
-  // Fallback: small pop on the chat backdrop + instant switch
   doApply()
   try {
     const chat = document.getElementById('chat-messages')
@@ -65,8 +68,16 @@ export function init() {
       apply(current)
       return
     }
-    const ul = document.createElement('ul')
-    ul.id = 'accent-picker'
+    const wrap = document.createElement('div')
+    wrap.id = 'accent-picker'
+    wrap.className = 'collapsed'
+    const toggle = document.createElement('button')
+    toggle.type = 'button'
+    toggle.id = 'accent-picker-toggle'
+    toggle.setAttribute('aria-label', 'Change accent')
+    toggle.title = 'Change accent'
+    const list = document.createElement('ul')
+    list.className = 'accent-list'
     for (const a of ACCENTS) {
       const li = document.createElement('li')
       li.className = 'ap-' + a.key
@@ -75,16 +86,28 @@ export function init() {
       btn.type = 'button'
       btn.setAttribute('aria-label', a.label)
       btn.title = a.label
+      btn.style.background = a.color
       btn.addEventListener('click', (e) => {
+        e.stopPropagation()
         try { localStorage.setItem(STORE_KEY, a.key) } catch {}
         const x = e && typeof e.pageX === 'number' ? e.pageX : window.innerWidth / 2
         const y = e && typeof e.pageY === 'number' ? e.pageY : window.innerHeight / 2
         animatePickerChange(a.key, x, y)
+        wrap.classList.add('collapsed')
       })
       li.appendChild(btn)
-      ul.appendChild(li)
+      list.appendChild(li)
     }
-    document.body.appendChild(ul)
+    toggle.addEventListener('click', (e) => {
+      e.stopPropagation()
+      wrap.classList.toggle('collapsed')
+    })
+    document.addEventListener('click', (e) => {
+      if (!wrap.contains(e.target)) wrap.classList.add('collapsed')
+    })
+    wrap.appendChild(toggle)
+    wrap.appendChild(list)
+    document.body.appendChild(wrap)
     apply(current)
   } catch {}
 }

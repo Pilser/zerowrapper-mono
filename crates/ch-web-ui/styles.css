@@ -588,17 +588,25 @@
     animation: dots-stream-pulse 1.6s ease-in-out infinite;
   }
   @keyframes dots-stream-pulse { 0%,100% { filter: brightness(1); } 50% { filter: brightness(1.25); } }
-  /* Corner accent picker: predefined accents via data-attr (no var edits). */
+  /* Corner accent picker: collapsed dot, expands on tap. */
   #accent-picker {
     position: fixed; top: 12px; right: 12px; z-index: 70;
-    display: flex; gap: 8px; list-style: none; margin: 0; padding: 6px 8px;
-    border-radius: 999px;
+    display: flex; align-items: center; gap: 8px;
+    padding: 4px; border-radius: 999px;
     background: color-mix(in srgb, var(--color-bg) 84%, transparent);
     backdrop-filter: blur(8px);
     border: 1px solid var(--color-border-weak);
     box-shadow: 0 2px 10px rgba(0,0,0,0.10);
   }
-  #accent-picker button {
+  #accent-picker-toggle {
+    width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--color-bg);
+    cursor: pointer; flex-shrink: 0; box-shadow: 0 0 0 1px var(--color-border-weak);
+  }
+  #accent-picker .accent-list {
+    display: flex; gap: 8px; list-style: none; margin: 0; padding: 0;
+  }
+  #accent-picker.collapsed .accent-list { display: none; }
+  #accent-picker .accent-list button {
     width: 20px; height: 20px; border-radius: 50%; border: none; cursor: pointer;
     outline: 2px solid transparent; outline-offset: 2px; padding: 0;
   }
@@ -607,9 +615,11 @@
   #accent-picker .ap-pink button { background: #ec4899; }
   #accent-picker .ap-sun button { background: #eab308; }
   #accent-picker .ap-mint button { background: #10b981; }
+  #accent-picker .ap-orange button { background: #ff8c00; }
   [data-accent="pink"] { --color-bg-interactive: #ec4899; }
   [data-accent="sun"] { --color-bg-interactive: #ca8a04; }
   [data-accent="mint"] { --color-bg-interactive: #059669; }
+  [data-accent="orange"] { --color-bg-interactive: #ff8c00; }
   .chat-markdown img { max-width: 100%; height: auto; border-radius: 8px; border: 1px solid var(--color-border-weak); cursor: pointer; display: block; margin: 0.75rem 0; transition: opacity 0.2s; }
   .chat-markdown img:hover { opacity: 0.85; }
   .chat-markdown video { max-width: 100%; border-radius: 8px; border: 1px solid var(--color-border-weak); margin: 0.75rem 0; display: block; }

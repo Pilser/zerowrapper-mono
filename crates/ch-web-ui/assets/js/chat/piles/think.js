@@ -65,6 +65,19 @@ export function createThinkPile(opts = {}) {
       } catch {}
       card.classList.remove('running')
       if (countEl) countEl.textContent = count
+      if (live) {
+        // Auto-dismiss floating burst after a few seconds (history keeps it)
+        setTimeout(() => {
+          try {
+            if (!card.isConnected) return
+            if (card.classList.contains('open')) return // keep if user pinned open
+            card.style.transition = 'opacity 0.4s ease, transform 0.4s ease'
+            card.style.opacity = '0'
+            card.style.transform = 'translateY(-8px) scale(0.98)'
+            setTimeout(() => { try { card.remove() } catch {} }, 420)
+          } catch {}
+        }, 4000)
+      }
     },
   }
 }

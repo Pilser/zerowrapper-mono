@@ -137,6 +137,17 @@ export function createToolPile({ name, args, note }, opts = {}) {
       if (subEl && output) subEl.textContent = head(output, 90)
       if (live) {
         try { bounce(card, 1.02) } catch {}
+        // Auto-dismiss floating tool tile after a few seconds (history keeps it)
+        setTimeout(() => {
+          try {
+            if (!card.isConnected) return
+            if (card.classList.contains('open')) return
+            card.style.transition = 'opacity 0.4s ease, transform 0.4s ease'
+            card.style.opacity = '0'
+            card.style.transform = 'translateY(-8px) scale(0.98)'
+            setTimeout(() => { try { card.remove() } catch {} }, 420)
+          } catch {}
+        }, 5000)
       }
     },
   }

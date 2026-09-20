@@ -5628,6 +5628,24 @@ function createThinkPile(opts = {}) {
       card.classList.remove("running");
       if (countEl)
         countEl.textContent = count;
+      if (live) {
+        setTimeout(() => {
+          try {
+            if (!card.isConnected)
+              return;
+            if (card.classList.contains("open"))
+              return;
+            card.style.transition = "opacity 0.4s ease, transform 0.4s ease";
+            card.style.opacity = "0";
+            card.style.transform = "translateY(-8px) scale(0.98)";
+            setTimeout(() => {
+              try {
+                card.remove();
+              } catch {}
+            }, 420);
+          } catch {}
+        }, 4000);
+      }
     }
   };
 }
@@ -6085,6 +6103,22 @@ function createToolPile({ name, args, note }, opts = {}) {
         try {
           bounce(card, 1.02);
         } catch {}
+        setTimeout(() => {
+          try {
+            if (!card.isConnected)
+              return;
+            if (card.classList.contains("open"))
+              return;
+            card.style.transition = "opacity 0.4s ease, transform 0.4s ease";
+            card.style.opacity = "0";
+            card.style.transform = "translateY(-8px) scale(0.98)";
+            setTimeout(() => {
+              try {
+                card.remove();
+              } catch {}
+            }, 420);
+          } catch {}
+        }, 5000);
       }
     }
   };
@@ -9058,10 +9092,11 @@ init_ask_drawer();
 
 // theme-picker.js
 var ACCENTS = [
-  { key: "blue", label: "Blue" },
-  { key: "pink", label: "Pink" },
-  { key: "sun", label: "Sun" },
-  { key: "mint", label: "Mint" }
+  { key: "blue", label: "Blue", color: "#3b82f6" },
+  { key: "pink", label: "Pink", color: "#ec4899" },
+  { key: "sun", label: "Sun", color: "#eab308" },
+  { key: "mint", label: "Mint", color: "#10b981" },
+  { key: "orange", label: "Orange", color: "#ff8c00" }
 ];
 var STORE_KEY = "zerowrapper_accent";
 function apply2(key) {
@@ -9079,6 +9114,10 @@ function apply2(key) {
       else
         li.classList.remove("selected");
     });
+    const cur = ACCENTS.find((a) => a.key === (key || "blue")) || ACCENTS[0];
+    const toggle2 = document.getElementById("accent-picker-toggle");
+    if (toggle2)
+      toggle2.style.background = cur.color;
   } catch {}
 }
 async function animatePickerChange(key, x, y) {
@@ -9121,8 +9160,16 @@ function init6() {
       apply2(current2);
       return;
     }
-    const ul = document.createElement("ul");
-    ul.id = "accent-picker";
+    const wrap = document.createElement("div");
+    wrap.id = "accent-picker";
+    wrap.className = "collapsed";
+    const toggle2 = document.createElement("button");
+    toggle2.type = "button";
+    toggle2.id = "accent-picker-toggle";
+    toggle2.setAttribute("aria-label", "Change accent");
+    toggle2.title = "Change accent";
+    const list = document.createElement("ul");
+    list.className = "accent-list";
     for (const a of ACCENTS) {
       const li = document.createElement("li");
       li.className = "ap-" + a.key;
@@ -9131,18 +9178,31 @@ function init6() {
       btn.type = "button";
       btn.setAttribute("aria-label", a.label);
       btn.title = a.label;
+      btn.style.background = a.color;
       btn.addEventListener("click", (e) => {
+        e.stopPropagation();
         try {
           localStorage.setItem(STORE_KEY, a.key);
         } catch {}
         const x = e && typeof e.pageX === "number" ? e.pageX : window.innerWidth / 2;
         const y = e && typeof e.pageY === "number" ? e.pageY : window.innerHeight / 2;
         animatePickerChange(a.key, x, y);
+        wrap.classList.add("collapsed");
       });
       li.appendChild(btn);
-      ul.appendChild(li);
+      list.appendChild(li);
     }
-    document.body.appendChild(ul);
+    toggle2.addEventListener("click", (e) => {
+      e.stopPropagation();
+      wrap.classList.toggle("collapsed");
+    });
+    document.addEventListener("click", (e) => {
+      if (!wrap.contains(e.target))
+        wrap.classList.add("collapsed");
+    });
+    wrap.appendChild(toggle2);
+    wrap.appendChild(list);
+    document.body.appendChild(wrap);
     apply2(current2);
   } catch {}
 }
