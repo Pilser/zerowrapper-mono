@@ -109,6 +109,39 @@ export function shimmer(el) {
   }
 }
 
+// Ripple loader: three expanding rings, staggered, driven by Motion
+// (transform/opacity only). Expects .ripple-container with .ripple children
+// (see streaming.js). Returns stop fn. Falls back to a CSS class pulse.
+export function rippleLoop(container) {
+  if (!container) return () => {}
+  const rings = Array.from(container.querySelectorAll('.ripple'))
+  if (rings.length === 0) return () => {}
+  if (!ok()) {
+    try { container.classList.add('ripple-css') } catch {}
+    return () => {
+      try { container.classList.remove('ripple-css') } catch {}
+    }
+  }
+  const controls = []
+  try {
+    rings.forEach((ring, i) => {
+      const c = animate(
+        ring,
+        { transform: ['scale(0.25)', 'scale(1)'], opacity: [0.9, 0] },
+        { duration: 1.6, repeat: Infinity, ease: 'easeOut', delay: i * 0.35 }
+      )
+      controls.push(c)
+    })
+  } catch {
+    return () => {}
+  }
+  return () => {
+    controls.forEach((c) => {
+      try { c.stop() } catch {}
+    })
+  }
+}
+
 // Countdown bar for tool timeouts: linear width shrink over budget ms.
 // Returns {done} to settle it early (tool finished) or let it run.
 export function countdown(barEl, labelEl, budgetMs, elapsedStart = 0) {

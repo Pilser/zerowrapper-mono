@@ -5479,6 +5479,39 @@ function shimmer(el) {
     return null;
   }
 }
+function rippleLoop(container2) {
+  if (!container2)
+    return () => {};
+  const rings = Array.from(container2.querySelectorAll(".ripple"));
+  if (rings.length === 0)
+    return () => {};
+  if (!ok()) {
+    try {
+      container2.classList.add("ripple-css");
+    } catch {}
+    return () => {
+      try {
+        container2.classList.remove("ripple-css");
+      } catch {}
+    };
+  }
+  const controls = [];
+  try {
+    rings.forEach((ring, i) => {
+      const c = import_motion.animate(ring, { transform: ["scale(0.25)", "scale(1)"], opacity: [0.9, 0] }, { duration: 1.6, repeat: Infinity, ease: "easeOut", delay: i * 0.35 });
+      controls.push(c);
+    });
+  } catch {
+    return () => {};
+  }
+  return () => {
+    controls.forEach((c) => {
+      try {
+        c.stop();
+      } catch {}
+    });
+  };
+}
 function countdown(barEl, labelEl, budgetMs, elapsedStart = 0) {
   const stopFns = [];
   if (!barEl || !ok() || !budgetMs || budgetMs <= 0)
@@ -6186,6 +6219,17 @@ var init_overlay = __esm(() => {
 function target() {
   return els.messages || document.getElementById("chat-messages");
 }
+function setStreamingTint(on2) {
+  try {
+    const t = target();
+    if (!t)
+      return;
+    if (on2)
+      t.classList.add("streaming");
+    else
+      t.classList.remove("streaming");
+  } catch {}
+}
 function ensureBox() {
   const t = target();
   if (!t)
@@ -6199,6 +6243,7 @@ function ensureBox() {
     pending.length = 0;
     turnOpen = true;
     t.appendChild(box);
+    setStreamingTint(true);
   }
   return box;
 }
@@ -6279,11 +6324,13 @@ function finishTurn() {
   if (!pileCount && box) {
     box.remove();
     box = null;
+    setStreamingTint(false);
     try {
       hideNow();
     } catch {}
     return;
   }
+  setStreamingTint(false);
   try {
     status("✅", "Done");
     feed("✅", "Done");
@@ -6301,6 +6348,7 @@ function resetTurn() {
   pileCount = 0;
   toolSeq = 0;
   pending.length = 0;
+  setStreamingTint(false);
   try {
     hideNow();
   } catch {}
@@ -6417,9 +6465,11 @@ function handleThinking(text, container2) {
 }
 function handleChunk(text) {
   finalizeThought();
-  hideTyping();
   content += text;
   scheduleRender(streamId);
+  try {
+    tickRipple();
+  } catch {}
 }
 function finalize() {
   finalizeThought();
@@ -6500,19 +6550,51 @@ function reset() {
   content = "";
   streamId++;
 }
+function ensureRipple() {
+  if (rippleNode && rippleNode.isConnected)
+    return rippleNode;
+  try {
+    if (stopRippleLoop)
+      stopRippleLoop();
+  } catch {}
+  stopRippleLoop = null;
+  rippleNode = document.createElement("div");
+  rippleNode.className = "stream-ripple";
+  rippleNode.innerHTML = '<div class="ripple-container"><div class="ripple"></div><div class="ripple"></div><div class="ripple"></div></div>';
+  return rippleNode;
+}
 function showTyping() {
-  if (els.typingEl) {
-    els.typingEl.classList.remove("hidden");
-    els.typingEl.classList.add("active");
-  }
+  try {
+    const node = ensureRipple();
+    if (els.messages)
+      els.messages.appendChild(node);
+    if (!stopRippleLoop) {
+      try {
+        stopRippleLoop = rippleLoop(node.querySelector(".ripple-container"));
+      } catch {}
+    }
+  } catch {}
+}
+function tickRipple() {
+  try {
+    if (rippleNode && rippleNode.isConnected && els.messages) {
+      els.messages.appendChild(rippleNode);
+    }
+  } catch {}
 }
 function hideTyping() {
-  if (els.typingEl) {
-    els.typingEl.classList.add("hidden");
-    els.typingEl.classList.remove("active");
-  }
+  try {
+    if (stopRippleLoop)
+      stopRippleLoop();
+  } catch {}
+  stopRippleLoop = null;
+  try {
+    if (rippleNode && rippleNode.parentElement)
+      rippleNode.parentElement.removeChild(rippleNode);
+  } catch {}
+  rippleNode = null;
 }
-var el = null, content = "", streamId = 0, renderPending = false, onFinalize = null;
+var el = null, content = "", streamId = 0, renderPending = false, onFinalize = null, rippleNode = null, stopRippleLoop = null;
 var init_streaming = __esm(() => {
   init_dom();
   init_markdown();
@@ -8229,6 +8311,9 @@ function handleMessage(e) {
         break;
       case "thinking":
         handleThinking(data.content);
+        try {
+          tickRipple();
+        } catch {}
         break;
       case "chunk":
         handleChunk(data.content);
@@ -8239,9 +8324,15 @@ function handleMessage(e) {
       case "tool_call":
         flush();
         handleToolCall(data.tool_call_id, data.name, data.args);
+        try {
+          tickRipple();
+        } catch {}
         break;
       case "tool_result":
         handleToolResult(data.tool_call_id, data.name, data.output);
+        try {
+          tickRipple();
+        } catch {}
         break;
       case "done": {
         if (hasPendingAsk()) {
@@ -8838,6 +8929,67 @@ function init5() {
 
 // main.js
 init_ask_drawer();
+
+// theme-picker.js
+var ACCENTS = [
+  { key: "blue", label: "Blue" },
+  { key: "pink", label: "Pink" },
+  { key: "sun", label: "Sun" },
+  { key: "mint", label: "Mint" }
+];
+var STORE_KEY = "zerowrapper_accent";
+function apply2(key) {
+  try {
+    if (!key || key === "blue")
+      document.documentElement.removeAttribute("data-accent");
+    else
+      document.documentElement.setAttribute("data-accent", key);
+  } catch {}
+  try {
+    document.querySelectorAll("#accent-picker li").forEach((li) => {
+      const on2 = li.getAttribute("data-accent-key") === (key || "blue");
+      if (on2)
+        li.classList.add("selected");
+      else
+        li.classList.remove("selected");
+    });
+  } catch {}
+}
+function init6() {
+  let current2 = "blue";
+  try {
+    current2 = localStorage.getItem(STORE_KEY) || "blue";
+  } catch {}
+  try {
+    if (document.getElementById("accent-picker")) {
+      apply2(current2);
+      return;
+    }
+    const ul = document.createElement("ul");
+    ul.id = "accent-picker";
+    for (const a of ACCENTS) {
+      const li = document.createElement("li");
+      li.className = "ap-" + a.key;
+      li.setAttribute("data-accent-key", a.key);
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.setAttribute("aria-label", a.label);
+      btn.title = a.label;
+      btn.addEventListener("click", () => {
+        try {
+          localStorage.setItem(STORE_KEY, a.key);
+        } catch {}
+        apply2(a.key);
+      });
+      li.appendChild(btn);
+      ul.appendChild(li);
+    }
+    document.body.appendChild(ul);
+    apply2(current2);
+  } catch {}
+}
+
+// main.js
 function logPendingResources() {
   const entries = performance.getEntriesByType("resource");
   const pending2 = entries.filter((e) => !e.responseEnd || e.responseEnd <= 0);
@@ -8849,7 +9001,7 @@ function logPendingResources() {
   const fonts = document.fonts ? document.fonts.status : "n/a";
   console.log("[resources] readyState:", document.readyState, "fonts:", fonts);
 }
-function init6() {
+function init7() {
   init();
   logPendingResources();
   setTimeout(logPendingResources, 3000);
@@ -8867,6 +9019,7 @@ function init6() {
   refreshSessionList();
   init5();
   init3();
+  init6();
   on("stateChange", (s) => {
     if (s === State.CONNECTED)
       syncCancelButton();
@@ -8937,7 +9090,9 @@ async function syncCancelButton() {
       showSendIcon();
   } catch {}
 }
-function handleCancel() {
+function handleCancel(e) {
+  if (e && e.preventDefault)
+    e.preventDefault();
   sendCancel2();
   cancel();
   showSendIcon();
@@ -9267,6 +9422,6 @@ function initSnap() {
 }
 
 // app-entry.js
-init6();
+init7();
 init2();
 initSnap();

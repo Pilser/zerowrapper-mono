@@ -9,6 +9,7 @@ import * as lightbox from './lightbox.js'
 import { uploadFile, createAttachmentChip, uploadState } from './file-upload.js'
 import * as drawer from './drawer.js'
 import * as askDrawer from './ask-drawer.js'
+import * as themePicker from './theme-picker.js'
 
 function logPendingResources() {
   const entries = performance.getEntriesByType('resource')
@@ -45,6 +46,7 @@ export function init() {
   refreshSessionList()
   drawer.init()
   askDrawer.init()
+  themePicker.init()
   // Send→cancel window: after any (re)connect, ask the server whether this
   // session has a turn in flight and show the matching button. Turn end
   // flips back via streaming.onFinalize; cancel is a real runner abort.
@@ -110,7 +112,8 @@ async function syncCancelButton() {
   } catch {}
 }
 
-function handleCancel() {
+function handleCancel(e) {
+  if (e && e.preventDefault) e.preventDefault()
   connection.sendCancel()
   streaming.cancel()
   showSendIcon()

@@ -18,13 +18,6 @@ pub async fn chat_section(cx: &Cx) -> Result {
                     </button>
                 </div>
             </div>
-            <div id="typing-indicator" class="hidden" style="padding: 12px 16px 12px 52px; margin-bottom: 10px; position: relative;">
-                <div class="flex gap-1.5 items-center">
-                    <span class="w-3 h-3 rounded-full" style="background: var(--color-text-weak); animation: chat-typing-bounce 1.4s infinite ease-in-out both;"></span>
-                    <span class="w-3 h-3 rounded-full" style="background: var(--color-text-weak); animation: chat-typing-bounce 1.4s infinite ease-in-out both; animation-delay: 0.16s;"></span>
-                    <span class="w-3 h-3 rounded-full" style="background: var(--color-text-weak); animation: chat-typing-bounce 1.4s infinite ease-in-out both; animation-delay: 0.32s;"></span>
-                </div>
-            </div>
             <div id="chat-bottom-bar" style="flex-shrink: 0; z-index: 10; background: var(--color-bg); padding-top: 12px; margin-top: 8px;">
                 <div id="agent-banner" class="hidden text-xs px-3 py-1.5 rounded-lg" style="border: 1px solid var(--color-status-error); background: color-mix(in srgb, var(--color-status-error) 12%, transparent); color: var(--color-text-strong); text-align: center;">"Agent offline — check provider key, then reconnect."</div>
                 <div id="session-bar" class="hidden items-center gap-2 mt-4 px-3 py-1.5 rounded-lg" style="display: none; border: 1px solid var(--color-border-weak); background: var(--color-bg-weak);">
@@ -48,10 +41,10 @@ pub async fn chat_section(cx: &Cx) -> Result {
                         <input type="file" id="file-input" class="hidden" multiple="true" />
                         <div class="flex-1 relative">
                             <textarea id="chat-input" placeholder="Type your message here..." rows="2" class="w-full px-5 py-3.5 pr-12 text-sm rounded-xl resize-none outline-none transition leading-relaxed" style="min-height: 52px; max-height: 160px; border: 1.5px solid var(--color-border); background: var(--color-bg-weak); color: var(--color-text-strong); font-family: var(--font-mono);"></textarea>
-                            <button id="send-btn" class="absolute bottom-2 right-2 z-10 flex items-center justify-center cursor-pointer transition rounded-lg" style="width: 32px; height: 32px; border: none; background: var(--color-bg-interactive); color: var(--color-text-inverted);">
+                            <button type="submit" id="send-btn" class="absolute bottom-2 right-2 z-10 flex items-center justify-center cursor-pointer transition rounded-lg" style="width: 32px; height: 32px; border: none; background: var(--color-bg-interactive); color: var(--color-text-inverted);">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
                             </button>
-                            <button id="cancel-btn" class="absolute bottom-2 right-2 z-10 hidden items-center justify-center cursor-pointer transition rounded-lg" style="width: 32px; height: 32px; border: none; background: var(--color-status-error); color: #fff;">
+                            <button type="button" id="cancel-btn" class="absolute bottom-2 right-2 z-10 hidden items-center justify-center cursor-pointer transition rounded-lg" style="width: 32px; height: 32px; border: none; background: var(--color-status-error); color: #fff;">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/></svg>
                             </button>
                         </div>

@@ -3,7 +3,7 @@ import { els } from './dom.js'
 import { BOT_AVATAR } from './constants.js'
 import { render as renderMarkdown } from './markdown.js'
 import { autoScroll } from './scroll.js'
-import { popIn } from './motion-fx.js'
+import { popIn, rippleLoop } from './motion-fx.js'
 import * as activity from './activity.js'
 
 let el = null
@@ -75,9 +75,10 @@ export function handleThinking(text, container) {
 
 export function handleChunk(text) {
   finalizeThought()
-  hideTyping()
   content += text
   scheduleRender(streamId)
+  // Ripple stays visible while streaming, re-anchored below new content.
+  try { tickRipple() } catch {}
 }
 
 export function finalize() {
@@ -165,16 +166,49 @@ export function reset() {
   streamId++
 }
 
+let rippleNode = null
+let stopRippleLoop = null
+
+function ensureRipple() {
+  if (rippleNode && rippleNode.isConnected) return rippleNode
+  try { if (stopRippleLoop) stopRippleLoop() } catch {}
+  stopRippleLoop = null
+  rippleNode = document.createElement('div')
+  rippleNode.className = 'stream-ripple'
+  rippleNode.innerHTML = '<div class="ripple-container"><div class="ripple"></div><div class="ripple"></div><div class="ripple"></div></div>'
+  return rippleNode
+}
+
+// Live position marker: sits BELOW the newest streaming content (tool piles
+// + response bubble) and follows down as the turn grows. Replaces the old
+// fixed typing indicator.
 export function showTyping() {
-  if (els.typingEl) {
-    els.typingEl.classList.remove('hidden')
-    els.typingEl.classList.add('active')
-  }
+  try {
+    const node = ensureRipple()
+    if (els.messages) els.messages.appendChild(node)
+    if (!stopRippleLoop) {
+      try { stopRippleLoop = rippleLoop(node.querySelector('.ripple-container')) } catch {}
+    }
+  } catch {}
+}
+
+// Re-anchor the ripple below the latest content (call after every chunk,
+// thinking burst, or tool event so it visibly follows the stream down).
+export function tickRipple() {
+  try {
+    if (rippleNode && rippleNode.isConnected && els.messages) {
+      els.messages.appendChild(rippleNode)
+    }
+  } catch {}
 }
 
 export function hideTyping() {
-  if (els.typingEl) {
-    els.typingEl.classList.add('hidden')
-    els.typingEl.classList.remove('active')
-  }
+  try {
+    if (stopRippleLoop) stopRippleLoop()
+  } catch {}
+  stopRippleLoop = null
+  try {
+    if (rippleNode && rippleNode.parentElement) rippleNode.parentElement.removeChild(rippleNode)
+  } catch {}
+  rippleNode = null
 }

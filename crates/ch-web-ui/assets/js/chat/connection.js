@@ -172,6 +172,7 @@ function handleMessage(e) {
         break
       case 'thinking':
         streaming.handleThinking(data.content)
+        try { streaming.tickRipple() } catch {}
         break
       case 'chunk':
         streaming.handleChunk(data.content)
@@ -184,9 +185,11 @@ function handleMessage(e) {
       case 'tool_call':
         streaming.flush()
         toolCalls.handleToolCall(data.tool_call_id, data.name, data.args)
+        try { streaming.tickRipple() } catch {}
         break
       case 'tool_result':
         toolCalls.handleToolResult(data.tool_call_id, data.name, data.output)
+        try { streaming.tickRipple() } catch {}
         break
       case 'done': {
         // B: smart gate — if an ask is still pending, the engine hasn't

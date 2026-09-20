@@ -22,6 +22,15 @@ function target() {
   return els.messages || document.getElementById('chat-messages')
 }
 
+function setStreamingTint(on) {
+  try {
+    const t = target()
+    if (!t) return
+    if (on) t.classList.add('streaming')
+    else t.classList.remove('streaming')
+  } catch {}
+}
+
 function ensureBox() {
   const t = target()
   if (!t) return null
@@ -34,6 +43,7 @@ function ensureBox() {
     pending.length = 0
     turnOpen = true
     t.appendChild(box)
+    setStreamingTint(true)
   }
   return box
 }
@@ -105,9 +115,11 @@ export function finishTurn() {
   if (!pileCount && box) {
     box.remove()
     box = null
+    setStreamingTint(false)
     try { overlay.hideNow() } catch {}
     return
   }
+  setStreamingTint(false)
   try {
     overlay.status('✅', 'Done')
     overlay.feed('✅', 'Done')
@@ -123,6 +135,7 @@ export function resetTurn() {
   pileCount = 0
   toolSeq = 0
   pending.length = 0
+  setStreamingTint(false)
   try { overlay.hideNow() } catch {}
 }
 
