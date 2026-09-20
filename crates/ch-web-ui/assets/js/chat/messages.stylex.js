@@ -92,6 +92,12 @@ export const m = stylex.create({
   },
   chipName: { color: t.textStrong },
   chipSize: { color: t.textWeak, fontSize: '0.625rem' },
+  chipIcon: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    flexShrink: 0,
+    color: t.textWeak,
+  },
   removeBtn: {
     backgroundColor: 'transparent',
     borderStyle: 'none',

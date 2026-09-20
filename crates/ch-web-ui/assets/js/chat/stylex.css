@@ -33,6 +33,10 @@
     padding: 0;
   }
 
+  .x1b4vry6 {
+    padding: 10px 0;
+  }
+
   .x6yrr3s {
     padding: 10px 12px;
   }
@@ -51,10 +55,6 @@
 
   .xwvmjul {
     padding: 14px 16px 10px;
-  }
-
-  .x3sov96 {
-    padding: 18px 0;
   }
 
   .xl7t7w5 {
@@ -183,16 +183,16 @@
     border-width: 2px;
   }
 
-  .x1a87jhh {
-    border-width: 4px;
+  .xf0lols {
+    border-width: 5px;
   }
 
   .x98rzlu {
     flex: 1;
   }
 
-  .x1v2ro7d {
-    gap: 12px;
+  .x1af02g3 {
+    gap: 14px;
   }
 
   .x195vfkc {
@@ -373,8 +373,8 @@
     box-shadow: 0 0 0 1px var(--x9yzoed);
   }
 
-  .x1v2c64d {
-    box-shadow: 0 0 12px color-mix(in srgb,var(--color-bg-interactive) 45%,transparent);
+  .xlgt5cz {
+    box-shadow: 0 0 16px color-mix(in srgb,var(--color-bg-interactive) 50%,transparent);
   }
 
   .xsyyb4p {
@@ -661,6 +661,10 @@
     position: relative;
   }
 
+  .x7wzq59 {
+    position: sticky;
+  }
+
   .x2b8uid {
     text-align: center;
   }
@@ -785,6 +789,10 @@
     z-index: 2;
   }
 
+  .x1u8a7rm {
+    z-index: 5;
+  }
+
   .x1aciyhk {
     z-index: 60;
   }
@@ -863,6 +871,10 @@
     border-top-width: 1px;
   }
 
+  .x1ey2m1c {
+    bottom: 0;
+  }
+
   .xqvrlgc {
     bottom: 150px;
   }
@@ -907,12 +919,16 @@
     height: 3px;
   }
 
-  .x1vqgdyp {
-    height: 40px;
-  }
-
   .xn3w4p2 {
     height: 44px;
+  }
+
+  .x10wjd1d {
+    height: 50px;
+  }
+
+  .xnnlda6 {
+    height: 56px;
   }
 
   .xdk7pt {
@@ -1023,8 +1039,8 @@
     top: 16px;
   }
 
-  .xs7f9wi {
-    top: 2px;
+  .xxk6nc9 {
+    top: 3px;
   }
 
   .xwa60dl {
@@ -1033,6 +1049,10 @@
 
   .xh8yej3 {
     width: 100%;
+  }
+
+  .x13ie5k6 {
+    width: 130px;
   }
 
   .xw4jnvo {
@@ -1059,12 +1079,12 @@
     width: 44px;
   }
 
-  .x1xc55vz {
-    width: 8px;
+  .x1pju0fl {
+    width: 50px;
   }
 
-  .xefyazp {
-    width: 90px;
+  .x1xc55vz {
+    width: 8px;
   }
 
   .x14atkfc {

@@ -22,14 +22,21 @@ export const a = stylex.create({
     gap: '8px',
   },
   streamRipple: {
+    // Sticky to the bottom of the messages scrollport so the loader stays
+    // visible just above the input instead of being pushed below the newest
+    // response. Stays put when the user scrolls up to read.
+    position: 'sticky',
+    bottom: 0,
+    zIndex: 5,
     display: 'flex',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: '12px',
-    padding: '18px 0',
+    gap: '14px',
+    padding: '10px 0',
+    pointerEvents: 'none',
   },
   rippleText: {
-    fontSize: '0.8rem',
+    fontSize: '1rem',
     fontWeight: 600,
     color: t.text,
     animationName: textPulse,
@@ -39,23 +46,23 @@ export const a = stylex.create({
   },
   rippleContainer: {
     position: 'relative',
-    width: '90px',
-    height: '40px',
+    width: '130px',
+    height: '56px',
     flexShrink: 0,
   },
   ripple: {
     position: 'absolute',
-    top: '2px',
+    top: '3px',
     left: 0,
-    width: '36px',
-    height: '36px',
+    width: '50px',
+    height: '50px',
     borderRadius: '50%',
-    borderWidth: '4px',
+    borderWidth: '5px',
     borderStyle: 'solid',
     borderColor: t.bgInteractive,
     opacity: 0,
     willChange: 'transform, opacity',
     boxShadow:
-      '0 0 12px color-mix(in srgb, var(--color-bg-interactive) 45%, transparent)',
+      '0 0 16px color-mix(in srgb, var(--color-bg-interactive) 50%, transparent)',
   },
 });

@@ -6943,15 +6943,19 @@ var init_activity_stylex = __esm(() => {
       $$css: true
     },
     streamRipple: {
+      kVAEAm: "x7wzq59",
+      krVfgx: "x1ey2m1c",
+      kY2c9j: "x1u8a7rm",
       k1xSpc: "x78zum5",
       kjj79g: "xl56j7k",
       kGNEyG: "x6s0dn4",
-      kOIVth: "x1v2ro7d",
-      kmVPX3: "x3sov96",
+      kOIVth: "x1af02g3",
+      kmVPX3: "x1b4vry6",
+      kfzvcC: "x47corl",
       $$css: true
     },
     rippleText: {
-      kGuDYH: "xgommxb",
+      kGuDYH: "x1jchvi3",
       k63SB2: "x1s688f",
       kMwMTN: "x9g7u3q",
       kKVMdj: "x16lng38",
@@ -6962,24 +6966,24 @@ var init_activity_stylex = __esm(() => {
     },
     rippleContainer: {
       kVAEAm: "x1n2onr6",
-      kzqmXN: "xefyazp",
-      kZKoxP: "x1vqgdyp",
+      kzqmXN: "x13ie5k6",
+      kZKoxP: "xnnlda6",
       kmuXW: "x2lah0s",
       $$css: true
     },
     ripple: {
       kVAEAm: "x10l6tqk",
-      k87sOh: "xs7f9wi",
+      k87sOh: "xxk6nc9",
       kbCHJM: "xu96u03",
-      kzqmXN: "x14qfxbe",
-      kZKoxP: "xc9qbxq",
+      kzqmXN: "x1pju0fl",
+      kZKoxP: "x10wjd1d",
       kaIpWk: "x16rqkct",
-      kMzoRj: "x1a87jhh",
+      kMzoRj: "xf0lols",
       ksu8eU: "x1y0btm7",
       kVAM5u: "x1fxipln",
       kSiTet: "xg01cxk",
       k6sLGO: "x1q1rmc8",
-      kGVxlE: "x1v2c64d",
+      kGVxlE: "xlgt5cz",
       $$css: true
     }
   };
@@ -7286,6 +7290,13 @@ var init_messages_stylex = __esm(() => {
       kGuDYH: "x2ohwh0",
       $$css: true
     },
+    chipIcon: {
+      k1xSpc: "x3nfvp2",
+      kGNEyG: "x6s0dn4",
+      kmuXW: "x2lah0s",
+      kMwMTN: "xh1wwo8",
+      $$css: true
+    },
     removeBtn: {
       kWkggS: "xjbqb8w",
       ksu8eU: "xng3xce",
@@ -7530,6 +7541,52 @@ var init_streaming = __esm(() => {
   init_activity_stylex();
 });
 
+// attach.js
+function formatSize(bytes) {
+  const n = Number(bytes) || 0;
+  if (n < 1024)
+    return n + " B";
+  if (n < 1024 * 1024)
+    return (n / 1024).toFixed(1) + " KB";
+  return (n / (1024 * 1024)).toFixed(1) + " MB";
+}
+function svg(inner) {
+  return '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' + 'stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + inner + "</svg>";
+}
+function fileIconSvg(mime, name) {
+  const m2 = String(mime || "").toLowerCase();
+  const n = String(name || "").toLowerCase();
+  const ext = n.includes(".") ? n.split(".").pop() : "";
+  if (m2.startsWith("image/") || IMAGE_EXT.includes(ext)) {
+    return svg('<rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>');
+  }
+  if (m2.startsWith("video/") || VIDEO_EXT.includes(ext)) {
+    return svg('<polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>');
+  }
+  if (m2.startsWith("audio/") || AUDIO_EXT.includes(ext)) {
+    return svg('<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>');
+  }
+  if (m2 === "application/pdf" || ext === "pdf") {
+    return svg('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>');
+  }
+  if (m2.startsWith("text/") || m2 === "application/json" || m2 === "application/xml" || TEXT_EXT.includes(ext)) {
+    return svg('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>');
+  }
+  if (ARCHIVE_EXT.includes(ext)) {
+    return svg('<polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/>');
+  }
+  return svg('<path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/>');
+}
+var IMAGE_EXT, VIDEO_EXT, AUDIO_EXT, TEXT_EXT, ARCHIVE_EXT, REMOVE_X_SVG;
+var init_attach = __esm(() => {
+  IMAGE_EXT = ["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "ico", "avif", "heic"];
+  VIDEO_EXT = ["mp4", "webm", "mov", "avi", "mkv", "m4v", "mpeg", "mpg"];
+  AUDIO_EXT = ["mp3", "wav", "ogg", "m4a", "flac", "aac"];
+  TEXT_EXT = ["txt", "md", "log", "csv", "json", "xml", "yaml", "yml", "rs", "js", "ts", "py", "sh", "html", "css", "toml"];
+  ARCHIVE_EXT = ["zip", "tar", "gz", "tgz", "rar", "7z", "bz2"];
+  REMOVE_X_SVG = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' + 'stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">' + '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+});
+
 // messages.js
 var exports_messages = {};
 __export(exports_messages, {
@@ -7573,7 +7630,8 @@ function renderTextWithAttachments(text) {
     attachments.forEach((a2) => {
       const chip = document.createElement("span");
       chip.className = "attachment-chip " + cx9(m.chip);
-      chip.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg> ' + escapeHtml(a2.filename || a2.name || "file");
+      const label = a2.filename || a2.name || "file";
+      chip.innerHTML = '<span class="' + cx9(m.chipIcon) + '">' + fileIconSvg(a2.mime_type, label) + "</span>" + '<span class="' + cx9(m.chipName) + '">' + escapeHtml(label) + "</span>" + (a2.size ? '<span class="' + cx9(m.chipSize) + '">' + formatSize(a2.size) + "</span>" : "");
       fileList.appendChild(chip);
     });
     div.appendChild(fileList);
@@ -7731,6 +7789,7 @@ var init_messages = __esm(() => {
   init_scroll();
   init_stylex();
   init_messages_stylex();
+  init_attach();
 });
 
 // whiteboard-render.js
@@ -8833,8 +8892,8 @@ async function html2canvas(element, options = {}) {
     const clone = element.cloneNode(true);
     const serializer = new XMLSerializer;
     let html = serializer.serializeToString(clone);
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}"><foreignObject width="100%" height="100%"><div xmlns="http://www.w3.org/1999/xhtml" style="width:${w}px;height:${h}px;overflow:hidden;">${html}</div></foreignObject></svg>`;
-    const url2 = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+    const svg2 = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}"><foreignObject width="100%" height="100%"><div xmlns="http://www.w3.org/1999/xhtml" style="width:${w}px;height:${h}px;overflow:hidden;">${html}</div></foreignObject></svg>`;
+    const url2 = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg2);
     const img = new Image;
     img.crossOrigin = "anonymous";
     img.decoding = "sync";
@@ -9367,6 +9426,9 @@ async function uploadFile(file) {
 function createAttachmentChip(fileInfo) {
   const chip = document.createElement("div");
   chip.className = "attachment-chip " + cx12(m.chip);
+  const icon = document.createElement("span");
+  icon.className = cx12(m.chipIcon);
+  icon.innerHTML = fileIconSvg(fileInfo.mime_type, fileInfo.filename);
   const name = document.createElement("span");
   name.className = cx12(m.chipName);
   name.textContent = fileInfo.filename;
@@ -9374,28 +9436,26 @@ function createAttachmentChip(fileInfo) {
   size.className = cx12(m.chipSize);
   size.textContent = formatSize(fileInfo.size);
   const btn = document.createElement("button");
+  btn.type = "button";
   btn.className = "remove-attachment " + cx12(m.removeBtn);
-  btn.innerHTML = "&times;";
+  btn.title = "Remove";
+  btn.setAttribute("aria-label", "Remove attachment");
+  btn.innerHTML = REMOVE_X_SVG;
   btn.addEventListener("click", () => {
     chip.remove();
     uploadState.pending = uploadState.pending.filter((a2) => a2.path !== fileInfo.path);
   });
+  chip.appendChild(icon);
   chip.appendChild(name);
   chip.appendChild(size);
   chip.appendChild(btn);
   return chip;
 }
-function formatSize(bytes) {
-  if (bytes < 1024)
-    return bytes + " B";
-  if (bytes < 1024 * 1024)
-    return (bytes / 1024).toFixed(1) + " KB";
-  return (bytes / (1024 * 1024)).toFixed(1) + " MB";
-}
 var cx12 = (...args) => props(...args).className || "", uploadState;
 var init_file_upload = __esm(() => {
   init_stylex();
   init_messages_stylex();
+  init_attach();
   uploadState = {
     pending: []
   };
@@ -10998,7 +11058,7 @@ function handleSubmit(e) {
     addMessage("error", "Not connected to backend.");
     return;
   }
-  const wireAttachments = attachments.map((a2) => ({ filename: a2.filename, mime_type: a2.mime_type, path: a2.path, url: a2.url || "" }));
+  const wireAttachments = attachments.map((a2) => ({ filename: a2.filename, mime_type: a2.mime_type, size: a2.size, path: a2.path, url: a2.url || "" }));
   const combined = text && attachments.length > 0 ? JSON.stringify({ message: text, attachments: wireAttachments }) : attachments.length > 0 ? JSON.stringify({ attachments: wireAttachments }) : text;
   const turnKey = "t" + Date.now().toString(36) + Math.floor(Math.random() * 46656).toString(36);
   addMessage("user", combined);
@@ -11121,7 +11181,7 @@ function wireButton2(btn) {
             }
             if (attachments && mod && mod.createAttachmentChip) {
               try {
-                const chip = mod.createAttachmentChip({ filename: info.filename, size: info.size, path: info.path });
+                const chip = mod.createAttachmentChip({ filename: info.filename, size: info.size, path: info.path, mime_type: "image/png" });
                 attachments.appendChild(chip);
               } catch {}
             } else if (attachments) {

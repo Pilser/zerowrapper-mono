@@ -208,7 +208,7 @@ function handleSubmit(e) {
   // idle), so showing stop before it flips straight back to Send and the
   // cancel window never visibly opens.
   // Displayed row: plain text + chips (renderTextWithAttachments splits it).
-  const wireAttachments = attachments.map(a => ({ filename: a.filename, mime_type: a.mime_type, path: a.path, url: a.url || '' }))
+  const wireAttachments = attachments.map(a => ({ filename: a.filename, mime_type: a.mime_type, size: a.size, path: a.path, url: a.url || '' }))
   const combined = text && attachments.length > 0
     ? JSON.stringify({ message: text, attachments: wireAttachments })
     : (attachments.length > 0

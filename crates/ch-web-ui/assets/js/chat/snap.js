@@ -95,7 +95,7 @@ function wireButton(btn) {
             }
             if (attachments && mod && mod.createAttachmentChip) {
               try {
-                const chip = mod.createAttachmentChip({ filename: info.filename, size: info.size, path: info.path })
+                const chip = mod.createAttachmentChip({ filename: info.filename, size: info.size, path: info.path, mime_type: 'image/png' })
                 attachments.appendChild(chip)
               } catch {}
             } else if (attachments) {
