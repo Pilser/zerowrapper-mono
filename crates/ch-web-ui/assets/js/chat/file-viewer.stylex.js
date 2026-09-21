@@ -71,8 +71,45 @@ export const fv = stylex.create({
   content: {
     flex: 1,
     overflowY: 'auto',
+    overflowX: 'hidden',
     padding: '16px',
     backgroundColor: t.bg,
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    maxWidth: '100%',
+    boxSizing: 'border-box',
+    // Responsive: on mobile, use smaller max-height to avoid hidden overflow
+    // The JS will set maxHeight via inline style based on viewport, but CSS
+    // ensures no horizontal scroll and proper aspect handling.
+  },
+  mediaImage: {
+    maxWidth: '100%',
+    width: 'auto',
+    height: 'auto',
+    maxHeight: '70vh',
+    objectFit: 'contain',
+    display: 'block',
+    margin: '0 auto',
+    borderRadius: '8px',
+    boxShadow: '0 2px 12px rgba(0,0,0,0.1)',
+  },
+  mediaVideo: {
+    maxWidth: '100%',
+    width: '100%',
+    height: 'auto',
+    maxHeight: '70vh',
+    objectFit: 'contain',
+    display: 'block',
+    borderRadius: '8px',
+    backgroundColor: 'black',
+  },
+  mediaAudio: {
+    width: '100%',
+    maxWidth: '600px',
+    display: 'block',
+    margin: '20px auto',
   },
   footer: {
     display: 'flex',

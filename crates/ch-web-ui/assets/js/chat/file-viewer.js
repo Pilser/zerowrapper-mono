@@ -158,24 +158,30 @@ async function loadFile(index) {
 
   try {
     if (['jpg','jpeg','png','gif','webp','svg','bmp'].includes(ext)) {
-      content.innerHTML = `<img src="${url}" style="max-width:100%; max-height:80vh; object-fit:contain;" />`
+      // Responsive image: respects aspect ratio, never overflows viewport
+      content.innerHTML = `<img src="${url}" class="fv-media-image" style="max-width:100%; max-height:70vh; width:auto; height:auto; object-fit:contain; display:block; margin:0 auto; border-radius:8px;" />`
     } else if (['mp4','webm','mov'].includes(ext)) {
-      content.innerHTML = `<video controls src="${url}" style="max-width:100%; max-height:80vh;"></video>`
+      content.innerHTML = `<video controls src="${url}" style="max-width:100%; width:100%; height:auto; max-height:70vh; object-fit:contain; display:block; border-radius:8px; background:#000;"></video>`
     } else if (['mp3','wav','ogg','m4a'].includes(ext)) {
-      content.innerHTML = `<audio controls src="${url}" style="width:100%;"></audio>`
+      content.innerHTML = `<audio controls src="${url}" style="width:100%; max-width:600px; display:block; margin:20px auto;"></audio>`
     } else if (ext === 'pdf') {
-      // Use pdfjs if available, else iframe
       if (window.pdfjsLib) {
-        content.innerHTML = '<canvas id="pdf-canvas"></canvas>'
+        content.innerHTML = '<canvas id="pdf-canvas" style="max-width:100%; height:auto; display:block; margin:0 auto; border-radius:8px; box-shadow:0 2px 12px rgba(0,0,0,0.1);"></canvas>'
         const pdf = await window.pdfjsLib.getDocument(url).promise
         const page = await pdf.getPage(1)
-        const viewport = page.getViewport({ scale: 1.5 })
+        // Responsive scale: fit width on mobile, 1.5 on desktop
+        const isMobile = window.innerWidth < 600
+        const scale = isMobile ? 1.0 : 1.5
+        const viewport = page.getViewport({ scale })
         const canvas = content.querySelector('#pdf-canvas')
         canvas.width = viewport.width
         canvas.height = viewport.height
+        canvas.style.width = '100%'
+        canvas.style.maxWidth = viewport.width + 'px'
+        canvas.style.height = 'auto'
         await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise
       } else {
-        content.innerHTML = `<iframe src="${url}" style="width:100%; height:80vh; border:none;"></iframe>`
+        content.innerHTML = `<iframe src="${url}" style="width:100%; height:70vh; border:none; border-radius:8px; display:block;" loading="lazy"></iframe>`
       }
     } else if (['doc','docx'].includes(ext)) {
       if (window.docxPreview) {

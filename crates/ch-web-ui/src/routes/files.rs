@@ -50,7 +50,7 @@ pub async fn files_show(cx: &Cx) -> Result<Response> {
     let file_id = path_param::<FileHash>(cx);
     let query = topcoat::router::uri(cx).query().unwrap_or("");
     let is_download = query.contains("download=1");
-    let original_path = match ctx.db.system().file_view_resolve(file_id.as_str()).await.unwrap_or(None) {
+    let original_path = match ctx.db.system().file_view_resolve(&*file_id).await.unwrap_or(None) {
         Some(p) => p,
         None => {
             return Ok(Response::builder()
