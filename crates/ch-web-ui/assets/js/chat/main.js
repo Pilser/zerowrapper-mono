@@ -93,6 +93,11 @@ function showStopIcon() {
   if (els.cancelBtn) { els.cancelBtn.classList.remove('hidden'); els.cancelBtn.style.display = 'flex' }
 }
 
+// Turn key of the latest submitted prompt (null when idle/cancelled). Used
+// to tag the key superseded on cancel so the aborted turn's late terminal
+// event can't clobber the next turn's row.
+let currentTurnKey = null
+
 async function syncCancelButton() {
   // Send→cancel window: after any (re)connect, ask the server whether this
   // session has a turn in flight and show the matching button. Turn end
@@ -116,6 +121,11 @@ async function syncCancelButton() {
 
 function handleCancel(e) {
   if (e && e.preventDefault) e.preventDefault()
+  // Tag our turn key superseded BEFORE the local finalize: the server's
+  // terminal close for the aborted turn may arrive after the next prompt is
+  // sent, and must not wipe the new turn (see streaming.handleDone gate).
+  try { streaming.markTurnSuperseded(currentTurnKey) } catch {}
+  currentTurnKey = null
   connection.sendCancel()
   streaming.cancel()
   showSendIcon()
@@ -217,6 +227,8 @@ function handleSubmit(e) {
   // Client turn key: tags the optimistic row so history rows and the
   // final Done upsert against it instead of doubling.
   const turnKey = 't' + Date.now().toString(36) + Math.floor(Math.random() * 46656).toString(36)
+  currentTurnKey = turnKey
+  streaming.setActiveTurn(turnKey)
   addMessage('user', combined)
   showStopIcon()
   try {

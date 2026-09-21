@@ -120,9 +120,17 @@ function startHttpPoll() {
         if (network.getState() === network.State.CONNECTED) stopHttpPoll()
         // Also clear a deferred Done if we were waiting for this idle flip
         if (deferredDone && !hasPendingAsk()) {
-          // No more continuation expected; finalize the deferred Done now
-          const d = deferredDone
+          // A deferred Done for a cancelled/superseded turn must die here,
+          // not finalize over whatever the user started next.
+          const dd = deferredDone
           deferredDone = null
+          const ddTid = (dd && dd.turn_id) || ''
+          if (ddTid && streaming.isSuperseded(ddTid)) {
+            try { console.log('[stream] dropping stale deferred Done', ddTid) } catch {}
+            return
+          }
+          // No more continuation expected; finalize the deferred Done now
+          const d = dd
           const tid = d.turn_id || ''
           let replaced = false
           if (tid) { try { replaced = upsertAssistantTurn(tid, d.content || '') } catch {} }
@@ -192,6 +200,11 @@ function handleMessage(e) {
         try { streaming.tickRipple() } catch {}
         break
       case 'done': {
+        // Stale close from a cancelled/superseded turn (its terminal Done
+        // may arrive after the next prompt was sent): drop it entirely —
+        // no upsert, no finalize, no poll stop — so the new turn survives.
+        const staleTid = data.turn_id || ''
+        if (staleTid && streaming.isSuperseded(staleTid)) break
         // B: smart gate — if an ask is still pending, the engine hasn't
         // really finished this turn (it will continue after the human
         // answers). Defer finalizing so post-answer chunks still render as
@@ -217,6 +230,15 @@ function handleMessage(e) {
         addMessage('error', data.message || data.error || 'Unknown error')
         if (onStateChange) onStateChange('error')
         break
+      case 'cancelled': {
+        // Server ack of our cancel: {cancelled:true} = a turn was in flight
+        // and is being torn down; {cancelled:false} = nothing was running
+        // (cancel arrived late or was never needed). Local UI already
+        // finalized at click time, so this is only a log + state signal.
+        try { console.log('[stream] cancel ack, killed turn:', !!(data && data.cancelled)) } catch {}
+        if (onStateChange) onStateChange('cancelled')
+        break
+      }
       case 'agent_status':
         if (els.agentBanner) {
           if (data.online) els.agentBanner.classList.add('hidden')
@@ -403,6 +425,9 @@ export function connect() {
 
   network.connect(url, {
     onOpen: () => {
+      // A cancel issued while the socket was down must reach the server
+      // before we resume the stream, or the "killed" turn keeps running.
+      flushPendingCancels()
       whiteboard.setSession(authState.sessionId)
       whiteboard.sync()
       const sendResume = (snap) => {
@@ -499,5 +524,24 @@ export function send(text, role, attachments, turn) {
 }
 
 export function sendCancel() {
-  network.sendCancel(authState.sessionId)
+  const sid = authState.sessionId || localStorage.getItem('zerowrapper_session') || ''
+  // If the socket is mid-reconnect the cancel would vanish into
+  // network.send's silent drop while the server turn keeps running (and the
+  // next prompt then serializes behind it, looking dead). Queue it and
+  // flush on open instead; the server acks with {type:'cancelled'}.
+  if (!network.sendCancel(sid)) {
+    if (sid) pendingCancels.add(sid)
+  }
+}
+
+// Cancels queued while the socket was down (see sendCancel). Flushed on the
+// next open, before resume, so a turn cancelled during a reconnect still dies.
+let pendingCancels = new Set()
+function flushPendingCancels() {
+  if (!pendingCancels.size) return
+  const sids = Array.from(pendingCancels)
+  pendingCancels = new Set()
+  for (const sid of sids) {
+    try { network.sendCancel(sid) } catch {}
+  }
 }

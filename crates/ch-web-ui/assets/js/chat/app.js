@@ -101,10 +101,12 @@ function disconnect() {
 function send(data) {
   if (ws && ws.readyState === WebSocket.OPEN) {
     ws.send(typeof data === "string" ? data : JSON.stringify(data));
+    return true;
   }
+  return false;
 }
 function sendCancel(sessionId) {
-  send(JSON.stringify({ type: "cancel", session_id: sessionId || "" }));
+  return send(JSON.stringify({ type: "cancel", session_id: sessionId || "" }));
 }
 function setState(s) {
   state = s;
@@ -7248,6 +7250,30 @@ import { marked as marked2 } from "marked";
 function setOnFinalize(cb) {
   onFinalize = cb;
 }
+function setActiveTurn(t2) {
+  activeTurn = t2 || null;
+}
+function markTurnSuperseded(t2) {
+  if (!t2)
+    return;
+  supersededTurns.add(t2);
+  if (activeTurn === t2)
+    activeTurn = null;
+  while (supersededTurns.size > 200) {
+    const oldest = supersededTurns.values().next().value;
+    supersededTurns.delete(oldest);
+  }
+}
+function isSuperseded(t2) {
+  return !!t2 && supersededTurns.has(t2);
+}
+function consumeSuperseded(t2) {
+  if (t2) {
+    supersededTurns.delete(t2);
+    if (activeTurn === t2)
+      activeTurn = null;
+  }
+}
 function getEl() {
   if (!el2) {
     const row = document.createElement("div");
@@ -7353,6 +7379,10 @@ function finalizeIfActive() {
     flush();
 }
 function handleDone(text, turnId) {
+  if (isSuperseded(turnId)) {
+    consumeSuperseded(turnId);
+    return;
+  }
   finalizeThought();
   hideTyping();
   if (text)
@@ -7363,6 +7393,8 @@ function handleDone(text, turnId) {
       el2.parentElement.dataset.role = "assistant";
     } catch {}
   }
+  if (turnId)
+    activeTurn = null;
   finalize();
 }
 function dropPartial() {
@@ -7454,7 +7486,7 @@ function hideTyping() {
       els.messages.classList.remove("streaming");
   } catch {}
 }
-var cx8 = (...args) => props(...args).className || "", el2 = null, content = "", streamId = 0, renderPending = false, onFinalize = null, rippleNode = null, stopRippleLoop = null;
+var cx8 = (...args) => props(...args).className || "", el2 = null, content = "", streamId = 0, renderPending = false, onFinalize = null, activeTurn = null, supersededTurns, rippleNode = null, stopRippleLoop = null;
 var init_streaming = __esm(() => {
   init_dom();
   init_markdown();
@@ -7464,6 +7496,7 @@ var init_streaming = __esm(() => {
   init_messages_stylex();
   init_stylex();
   init_activity_stylex();
+  supersededTurns = new Set;
 });
 
 // attach.js
@@ -9853,8 +9886,16 @@ function startHttpPoll() {
         if (getState() === State.CONNECTED)
           stopHttpPoll();
         if (deferredDone && !hasPendingAsk()) {
-          const d = deferredDone;
+          const dd = deferredDone;
           deferredDone = null;
+          const ddTid = dd && dd.turn_id || "";
+          if (ddTid && isSuperseded(ddTid)) {
+            try {
+              console.log("[stream] dropping stale deferred Done", ddTid);
+            } catch {}
+            return;
+          }
+          const d = dd;
           const tid = d.turn_id || "";
           let replaced = false;
           if (tid) {
@@ -9937,6 +9978,9 @@ function handleMessage(e) {
         } catch {}
         break;
       case "done": {
+        const staleTid = data.turn_id || "";
+        if (staleTid && isSuperseded(staleTid))
+          break;
         if (hasPendingAsk()) {
           deferDone(data);
           break;
@@ -9964,6 +10008,14 @@ function handleMessage(e) {
         if (onStateChange)
           onStateChange("error");
         break;
+      case "cancelled": {
+        try {
+          console.log("[stream] cancel ack, killed turn:", !!(data && data.cancelled));
+        } catch {}
+        if (onStateChange)
+          onStateChange("cancelled");
+        break;
+      }
       case "agent_status":
         if (els.agentBanner) {
           if (data.online)
@@ -10160,6 +10212,7 @@ function connect2() {
   const url2 = protocol + "//" + location.host + wsUrl;
   connect(url2, {
     onOpen: () => {
+      flushPendingCancels();
       setSession(state2.sessionId);
       sync();
       const sendResume = (snap) => {
@@ -10256,7 +10309,23 @@ function send2(text, role, attachments, turn) {
   send(JSON.stringify(payload));
 }
 function sendCancel2() {
-  sendCancel(state2.sessionId);
+  const sid = state2.sessionId || localStorage.getItem("zerowrapper_session") || "";
+  if (!sendCancel(sid)) {
+    if (sid)
+      pendingCancels.add(sid);
+  }
+}
+var pendingCancels = new Set;
+function flushPendingCancels() {
+  if (!pendingCancels.size)
+    return;
+  const sids = Array.from(pendingCancels);
+  pendingCancels = new Set;
+  for (const sid of sids) {
+    try {
+      sendCancel(sid);
+    } catch {}
+  }
 }
 
 // main.js
@@ -11305,6 +11374,7 @@ function showStopIcon() {
     els.cancelBtn.style.display = "flex";
   }
 }
+var currentTurnKey = null;
 async function syncCancelButton() {
   try {
     let running = false;
@@ -11328,6 +11398,10 @@ async function syncCancelButton() {
 function handleCancel(e) {
   if (e && e.preventDefault)
     e.preventDefault();
+  try {
+    markTurnSuperseded(currentTurnKey);
+  } catch {}
+  currentTurnKey = null;
   sendCancel2();
   cancel();
   showSendIcon();
@@ -11420,6 +11494,8 @@ function handleSubmit(e) {
   const wireAttachments = attachments.map((a2) => ({ filename: a2.filename, mime_type: a2.mime_type, size: a2.size, path: a2.path, url: a2.url || "" }));
   const combined = text && attachments.length > 0 ? JSON.stringify({ message: text, attachments: wireAttachments }) : attachments.length > 0 ? JSON.stringify({ attachments: wireAttachments }) : text;
   const turnKey = "t" + Date.now().toString(36) + Math.floor(Math.random() * 46656).toString(36);
+  currentTurnKey = turnKey;
+  setActiveTurn(turnKey);
   addMessage("user", combined);
   showStopIcon();
   try {

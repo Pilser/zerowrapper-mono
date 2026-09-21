@@ -17,7 +17,37 @@ let streamId = 0
 let renderPending = false
 let onFinalize = null
 
+// Turn gating: a cancelled turn's trailing close (the server always emits a
+// terminal Done for the aborted turn, possibly AFTER the next prompt was
+// sent) must never wipe the new turn's partial row or flip the button.
+// The client turn key (see main.js) is the active turn; keys of
+// cancelled/superseded turns are remembered so their late closes drop.
+let activeTurn = null
+const supersededTurns = new Set()
+
 export function setOnFinalize(cb) { onFinalize = cb }
+
+export function setActiveTurn(t) { activeTurn = t || null }
+
+export function markTurnSuperseded(t) {
+  if (!t) return
+  supersededTurns.add(t)
+  if (activeTurn === t) activeTurn = null
+  // Bound memory: drop oldest entries first (insertion-ordered Set).
+  while (supersededTurns.size > 200) {
+    const oldest = supersededTurns.values().next().value
+    supersededTurns.delete(oldest)
+  }
+}
+
+export function isSuperseded(t) { return !!t && supersededTurns.has(t) }
+
+function consumeSuperseded(t) {
+  if (t) {
+    supersededTurns.delete(t)
+    if (activeTurn === t) activeTurn = null
+  }
+}
 
 function getEl() {
   if (!el) {
@@ -125,6 +155,10 @@ export function finalizeIfActive() {
 }
 
 export function handleDone(text, turnId) {
+  // Stale close from a cancelled/superseded turn: drop it. Without this the
+  // aborted turn's terminal event finalizes (wipes) the NEXT turn's row and
+  // flips the button back to Send while the new turn is still running.
+  if (isSuperseded(turnId)) { consumeSuperseded(turnId); return }
   finalizeThought()
   hideTyping()
   if (text) content = text
@@ -134,6 +168,7 @@ export function handleDone(text, turnId) {
       el.parentElement.dataset.role = 'assistant'
     } catch {}
   }
+  if (turnId) activeTurn = null
   finalize()
 }
 

@@ -61,11 +61,13 @@ export function disconnect() {
 export function send(data) {
   if (ws && ws.readyState === WebSocket.OPEN) {
     ws.send(typeof data === 'string' ? data : JSON.stringify(data))
+    return true
   }
+  return false
 }
 
 export function sendCancel(sessionId) {
-  send(JSON.stringify({ type: 'cancel', session_id: sessionId || '' }))
+  return send(JSON.stringify({ type: 'cancel', session_id: sessionId || '' }))
 }
 
 function setState(s) {

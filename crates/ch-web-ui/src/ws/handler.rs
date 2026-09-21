@@ -61,12 +61,14 @@ static ENGINES: LazyLock<
 > = LazyLock::new(|| tokio::sync::Mutex::new(HashMap::new()));
 
 // In-flight native turns: task handle (resolves to true when the turn
-// produced a final answer) + true-cancel slot per session.
+// produced a final answer) + true-cancel slot + turn generation per session.
 // Cancel aborts the RUNNER (model stream + tool children die for real),
 // never our task: the turn closes gracefully, the engine survives with its
 // context, and only a pre-drain cancel falls back to aborting the task
 // (engine dropped, rebuilt next message). Refresh/reconnect never cancels:
 // the turn keeps running and the stream resumes from the buffer.
+// The generation scopes each cancel marker to the exact turn it targeted
+// (see CANCELLED): a fast cancel→resend can no longer silence the NEW turn.
 static TASKS: LazyLock<
     tokio::sync::Mutex<
         HashMap<
@@ -74,16 +76,53 @@ static TASKS: LazyLock<
             (
                 tokio::task::JoinHandle<bool>,
                 zw_agent_embed::engine::AbortSlot,
+                u64,
             ),
         >,
     >,
 > = LazyLock::new(|| tokio::sync::Mutex::new(HashMap::new()));
 
-// Sessions the user explicitly cancelled: suppresses the structured
-// continue/cancel ask when the turn task resolves (a cancel is a decision,
-// not a stall). Entries are single-use (removed when consumed).
-static CANCELLED: LazyLock<tokio::sync::Mutex<std::collections::HashSet<String>>> =
-    LazyLock::new(|| tokio::sync::Mutex::new(std::collections::HashSet::new()));
+// Sessions the user explicitly cancelled, one marker per turn generation:
+// session id -> cancelled turn generation. A supervisor only suppresses its
+// structured continue/cancel ask when the marker covers its OWN turn
+// (marker gen >= supervisor gen); entries are single-use (removed when
+// consumed). A cancel is a decision, not a stall — but only for the turn it
+// targeted, never for a turn sent afterwards.
+static CANCELLED: LazyLock<tokio::sync::Mutex<HashMap<String, u64>>> =
+    LazyLock::new(|| tokio::sync::Mutex::new(HashMap::new()));
+
+// Monotonic turn generation across all sessions (uniqueness is all that
+// matters; per-session ordering falls out of the engine mutex).
+static NEXT_GEN: std::sync::atomic::AtomicU64 =
+    std::sync::atomic::AtomicU64::new(1);
+
+/// True when session `sid` carries a cancel marker covering turn generation
+/// `gen` (marker gen >= supervisor gen). Single-use: consumes the marker on
+/// a match so a cancel only ever silences the turn(s) it targeted.
+async fn consume_cancel_if_covering(sid: &str, gen: u64) -> bool {
+    let mut m = CANCELLED.lock().await;
+    match m.get(sid) {
+        Some(&g) if g >= gen => {
+            m.remove(sid);
+            true
+        }
+        _ => false,
+    }
+}
+
+/// Abort the live runner published in `slot`, if any. Poison-tolerant: a
+/// poisoned std mutex still yields its handle (a prior panic must not wed
+/// every future cancel to the task-abort fallback).
+fn abort_slot_handle(slot: &zw_agent_embed::engine::AbortSlot) -> bool {
+    slot
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone()
+        .map(|a| {
+            a.abort();
+        })
+        .is_some()
+}
 
 // Latest live socket per session. Connections drop constantly here (proxy
 // resets idle sockets roughly every ~30s), while turns/supervisors outlive
@@ -578,7 +617,7 @@ async fn run_embedded_turn(
     // `is_finished()` check inside the task was always false, leaking
     // `running:true` forever and breaking the live stream's Done gating.
     let mut tasks = TASKS.lock().await;
-    if let Some((_, stored_slot)) = tasks.get(&session_id) {
+    if let Some((_, stored_slot, _)) = tasks.get(&session_id) {
         if std::sync::Arc::ptr_eq(stored_slot, &abort_slot) {
             tasks.remove(&session_id);
         }
@@ -758,7 +797,7 @@ async fn start_turn(
             }
         }
     }
-    let done_rx = launch_turn(Some(ws_sender), db, session_id.clone(), prompt, raw, turn_id).await;
+    let (done_rx, sup_gen) = launch_turn(Some(ws_sender), db, session_id.clone(), prompt, raw, turn_id).await;
     // Supervisor: nothing more on success; on an unfinished turn offer the
     // human a structured continue/cancel instead of a dead end.
     // NOTE: no ws_sender is captured here on purpose — by the time a long
@@ -771,9 +810,10 @@ async fn start_turn(
         if completed {
             return;
         }
-        // Explicit user cancel is a decision, not a stall: no ask.
-        // (Single-use marker, consumed here.)
-        if CANCELLED.lock().await.remove(&sup_sid) {
+        // Explicit user cancel is a decision, not a stall: no ask — but only
+        // when the cancel targeted THIS turn (gen-scoped, single-use). A
+        // prompt sent after the cancel must still get its own ask.
+        if consume_cancel_if_covering(&sup_sid, sup_gen).await {
             return;
         }
         continue_flow(&sup_db, sup_sid).await;
@@ -781,7 +821,8 @@ async fn start_turn(
 }
 
 /// Launch one native turn: live forwarding channel, runner task, TASKS
-/// record. Returns the completion receiver (true = final answer produced).
+/// record. Returns the completion receiver (true = final answer produced)
+/// plus the turn's generation for cancel-marker scoping.
 /// Leaf helper: never spawns a supervisor and never asks — callers supervise.
 /// (Kept separate from start_turn so the supervise→continue path stays
 /// acyclic for `Send`; see start_turn note.)
@@ -792,10 +833,11 @@ async fn launch_turn(
     prompt: String,
     raw: String,
     turn_id: String,
-) -> tokio::sync::oneshot::Receiver<bool> {
+) -> (tokio::sync::oneshot::Receiver<bool>, u64) {
     let event_tx = spawn_live_forwarding(ws_sender, db, &session_id);
     let abort_slot: zw_agent_embed::engine::AbortSlot = Default::default();
     let (done_tx, done_rx) = tokio::sync::oneshot::channel::<bool>();
+    let gen = NEXT_GEN.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
     let sid_tracked = session_id.clone();
     let db_for_turn = db.clone();
     let slot_tracked = abort_slot.clone();
@@ -813,8 +855,11 @@ async fn launch_turn(
         let _ = done_tx.send(completed);
         completed
     });
-    TASKS.lock().await.insert(session_id, (turn, abort_slot));
-    done_rx
+    TASKS
+        .lock()
+        .await
+        .insert(session_id, (turn, abort_slot, gen));
+    (done_rx, gen)
 }
 
 /// Structured continue/cancel after an unfinished turn: durable ask row (the
@@ -910,14 +955,15 @@ async fn continue_flow(db: &zw_db::DbPool, session_id: String) {
             .unwrap_or(0);
         let new_turn = format!("cont-{nanos:x}");
         let live = live_sender(&session_id).await;
-        let done_rx = launch_turn(live.as_ref(), db, session_id.clone(), CONTINUE_PROMPT.to_string(), CONTINUE_PROMPT.to_string(), new_turn).await;
+        let (done_rx, respawn_gen) = launch_turn(live.as_ref(), db, session_id.clone(), CONTINUE_PROMPT.to_string(), CONTINUE_PROMPT.to_string(), new_turn).await;
         let completed = done_rx.await.unwrap_or(false);
         if completed {
             return;
         }
         // Unfinished again (and not user-cancelled — a cancelled respawn
-        // leaves CANCELLED set, which we consume here to end the loop).
-        if CANCELLED.lock().await.remove(&session_id) {
+        // leaves a covering CANCELLED marker, which we consume here to end
+        // the loop; gen-scoped so an older marker can't kill a newer loop).
+        if consume_cancel_if_covering(&session_id, respawn_gen).await {
             return;
         }
         // Loop: ask again for the next round.
@@ -1049,36 +1095,68 @@ pub async fn handle_ws_connection(
                     if current_session_id.is_empty() { None } else { Some(current_session_id.as_str()) }
                 });
             if let Some(sid) = sid {
-                // True cancel: abort the runner via its published handle.
-                // Model stream + tool children stop; our task then closes
-                // the turn gracefully and the engine is kept. Only when the
-                // runner hasn't published yet (pre-drain) fall back to
-                // aborting the task itself.
+                let sid_owned = sid.to_string();
+                // Take the record out first so the picker flips running:false
+                // immediately and a racing resend can't double-insert.
                 let record = TASKS.lock().await.remove(sid);
-                // Mark explicit cancel ONLY when a turn was actually in flight:
-                // the supervisor consumes this single-use marker to suppress
-                // the continue/cancel ask (a cancel is a decision, not a
-                // stall). Marking with no turn running would wrongly suppress
+                let had_turn = record.is_some();
+                // Mark explicit cancel ONLY when a turn was actually in flight,
+                // tagged with that turn's generation so only its supervisor
+                // consumes it (a cancel is a decision, not a stall — but only
+                // for the turn it targeted, never for a later prompt).
+                // Marking with no turn running would wrongly suppress
                 // a future turn's ask.
-                if record.is_some() {
-                    CANCELLED.lock().await.insert(sid.to_string());
-                }
-                if let Some((h, slot)) = record {
-                    // Runner abort first: model stream + tool children die,
-                    // our task then closes the turn gracefully (record is
-                    // already out; its end-cleanup becomes a no-op).
-                    let runner_aborted = slot
-                        .lock()
-                        .ok()
-                        .and_then(|g| g.clone())
-                        .map(|a| {
-                            a.abort();
-                        })
-                        .is_some();
-                    if !runner_aborted {
-                        h.abort();
+                if let Some((h, slot, gen)) = record {
+                    CANCELLED.lock().await.insert(sid_owned.clone(), gen);
+                    // True cancel: abort the runner via its published handle.
+                    // Model stream + tool children stop; our task then closes
+                    // the turn gracefully (record is already out; its
+                    // end-cleanup becomes a no-op) and the engine is kept.
+                    if abort_slot_handle(&slot) {
+                        // Runner is dying; nothing more to do.
+                    } else {
+                        // Slot not published yet: the drain loop publishes it
+                        // just after the engine/agent build, which takes
+                        // seconds on a fresh session — so wait off the read
+                        // loop for a late publish. Aborting the outer task
+                        // while a runner is alive would orphan it (tool
+                        // children keep running invisibly, a pending ask_user
+                        // freeze leaks and parks every later tool), so the
+                        // fallback also drops the engine: the next message
+                        // rebuilds fresh instead of inheriting a torn-down
+                        // turn's state.
+                        tokio::spawn(async move {
+                            let mut runner_aborted = false;
+                            for _ in 0..40 {
+                                tokio::time::sleep(
+                                    std::time::Duration::from_millis(50),
+                                )
+                                .await;
+                                if h.is_finished() {
+                                    break;
+                                }
+                                if abort_slot_handle(&slot) {
+                                    runner_aborted = true;
+                                    break;
+                                }
+                            }
+                            if !runner_aborted && !h.is_finished() {
+                                h.abort();
+                                ENGINES.lock().await.remove(&sid_owned);
+                            }
+                        });
                     }
                 }
+                // Ack on this socket so the client can tell "turn killed"
+                // apart from "cancel lost on a dead socket" (which it then
+                // re-sends on reconnect).
+                let ack = serde_json::json!({
+                    "type": "cancelled",
+                    "session_id": sid,
+                    "cancelled": had_turn,
+                });
+                let mut sender = ws_sender.lock().await;
+                let _ = sender.send(Message::Text(ack.to_string().into())).await;
             }
             continue;
         }
