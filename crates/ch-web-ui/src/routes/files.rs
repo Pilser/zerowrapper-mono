@@ -102,11 +102,11 @@ pub async fn files_open(cx: &Cx) -> Result<Response> {
         })
         .unwrap_or("shared");
     // Also try shared as fallback (like whiteboard)
-    let mut files = ctx.db.system().open_files_list(sid).await.unwrap_or_default();
-    if files.is_empty() && sid != "shared" {
-        files = ctx.db.system().open_files_list("shared").await.unwrap_or_default();
+    let mut open_list = ctx.db.system().open_files_list(sid).await.unwrap_or_default();
+    if open_list.is_empty() && sid != "shared" {
+        open_list = ctx.db.system().open_files_list("shared").await.unwrap_or_default();
     }
-    let list: Vec<serde_json::Value> = files
+    let list: Vec<serde_json::Value> = open_list
         .iter()
         .map(|f| {
             serde_json::json!({
