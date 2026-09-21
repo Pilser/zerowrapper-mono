@@ -320,18 +320,20 @@ async fn api_files_close(cx: &Cx, body: Body) -> Result<Response> {
     let app: &AppContext = app_context(cx);
     let bytes = to_bytes(body, 100_000).await.unwrap_or_default();
     let req: serde_json::Value = serde_json::from_slice(&bytes).unwrap_or_default();
+    let q_file_id = query_value(cx, "file_id");
     let file_id = req
         .get("file_id")
         .and_then(|v| v.as_str())
-        .or_else(|| query_value(cx, "file_id").as_deref())
-        .unwrap_or("")
-        .to_string();
+        .map(|s| s.to_string())
+        .or(q_file_id)
+        .unwrap_or_default();
+    let q_sid = query_value(cx, "session_id");
     let sid = req
         .get("session_id")
         .and_then(|v| v.as_str())
-        .or_else(|| query_value(cx, "session_id").as_deref())
-        .unwrap_or("shared")
-        .to_string();
+        .map(|s| s.to_string())
+        .or(q_sid)
+        .unwrap_or_else(|| "shared".to_string());
     if file_id.is_empty() {
         return Ok(Response::builder()
             .status(StatusCode::BAD_REQUEST)

@@ -4311,6 +4311,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "imagesize"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "edcd27d72f2f071c64249075f42e205ff93c9a4c5f6c6da53e79ed9f9832c285"
+
+[[package]]
 name = "imgref"
 version = "1.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10534,6 +10540,7 @@ source = "git+https://github.com/Pilser/zerostack.git?rev=810188fd2dff0077d0b3d4
 dependencies = [
  "agent-client-protocol",
  "anyhow",
+ "base64 0.22.1",
  "blocking",
  "chrono",
  "clap",
@@ -10543,6 +10550,7 @@ dependencies = [
  "futures",
  "http 1.4.2",
  "ignore",
+ "imagesize",
  "include_dir",
  "mimalloc",
  "pulldown-cmark",

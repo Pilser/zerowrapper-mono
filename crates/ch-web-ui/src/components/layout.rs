@@ -17,7 +17,7 @@ use crate::assets::KATEX_CSS;
 #[layout("/")]
 pub async fn root_layout(cx: &Cx, slot: Result) -> Result {
     // Bare single-user page: no site title/brand/footer — static chrome only.
-    let ctx: &AppContext = app_context(cx);
+    let _ctx: &AppContext = app_context(cx);
 
     // Base-relative asset URLs so an embedded frontend (e.g. behind a tenant
     // prefix like /srv/<board>/) resolves them against the document base
