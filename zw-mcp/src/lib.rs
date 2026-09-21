@@ -7,6 +7,7 @@ pub mod srv;
 pub mod srv_help;
 pub mod inspect;
 pub mod inspect_cmd;
+pub mod show_file;
 
 use crate::dispatch::McpProviders;
 
