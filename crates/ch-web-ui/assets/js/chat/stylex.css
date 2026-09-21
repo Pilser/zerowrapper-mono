@@ -13,8 +13,16 @@
     margin: 0 auto 4px;
   }
 
+  .x19bbpc0 {
+    margin: 0 auto;
+  }
+
   .x1ghz6dp {
     margin: 0;
+  }
+
+  .x1v36x0e {
+    margin: 20px auto;
   }
 
   .xabx8x8 {
@@ -53,6 +61,10 @@
     padding: 12px 16px;
   }
 
+  .xc7ga6q {
+    padding: 12px;
+  }
+
   .xwvmjul {
     padding: 14px 16px 10px;
   }
@@ -77,8 +89,16 @@
     padding: 4px 10px;
   }
 
+  .xtdwleo {
+    padding: 4px 12px;
+  }
+
   .xsmg1hj {
     padding: 4px 2px;
+  }
+
+  .xdqdrvq {
+    padding: 4px 8px;
   }
 
   .xfawy5m {
@@ -87,6 +107,10 @@
 
   .xqy1keh {
     padding: 5px 11px;
+  }
+
+  .x1arfzav {
+    padding: 6px 12px;
   }
 
   .x10kg585 {
@@ -246,6 +270,10 @@
   .x1rea2x4 {
     overflow: visible;
   }
+
+  .x1hl2dhg {
+    text-decoration: none;
+  }
 }
 
 @layer priority4 {
@@ -319,6 +347,10 @@
 
   .x1ypgaag {
     background-color: #ff8c00;
+  }
+
+  .x42x0ya {
+    background-color: #000;
   }
 
   .x1sag07j {
@@ -413,6 +445,14 @@
     box-shadow: 0 2px 10px #00000014;
   }
 
+  .xjw6pgt {
+    box-shadow: 0 2px 12px #0000001a;
+  }
+
+  .x4k1kx4 {
+    box-shadow: 0 4px 16px #0003;
+  }
+
   .x1e9v2fp {
     box-shadow: 0 4px 24px #00000080;
   }
@@ -483,6 +523,10 @@
 
   .x175nh0r {
     color: var(--xortcnl);
+  }
+
+  .x1awj2ng {
+    color: #fff;
   }
 
   .x1jm3nie {
@@ -601,8 +645,24 @@
     font-size: 1.25rem;
   }
 
+  .xfifm61 {
+    font-size: 12px;
+  }
+
+  .xif65rj {
+    font-size: 14px;
+  }
+
+  .xosj86m {
+    font-size: 18px;
+  }
+
   .x1jchvi3 {
     font-size: 1rem;
+  }
+
+  .xwsyq91 {
+    font-size: 20px;
   }
 
   .x10p5zqr {
@@ -623,6 +683,10 @@
 
   .xl56j7k {
     justify-content: center;
+  }
+
+  .x1nhvcw1 {
+    justify-content: flex-start;
   }
 
   .x1qughib {
@@ -663,6 +727,14 @@
 
   .xo5v014 {
     line-height: 1;
+  }
+
+  .x1d3mw78 {
+    line-height: 16px;
+  }
+
+  .x19kjcj4 {
+    object-fit: contain;
   }
 
   .xg01cxk {
@@ -865,6 +937,14 @@
     z-index: 70;
   }
 
+  .xtea94d {
+    z-index: 71;
+  }
+
+  .x10svr67 {
+    z-index: 72;
+  }
+
   .x1q2oy4v {
     z-index: 9999;
   }
@@ -939,6 +1019,10 @@
     bottom: 150px;
   }
 
+  .xjnlgov {
+    bottom: 20px;
+  }
+
   .xy58vm5 {
     bottom: 24px;
   }
@@ -971,12 +1055,20 @@
     height: 30px;
   }
 
+  .x10w6t97 {
+    height: 32px;
+  }
+
   .xc9qbxq {
     height: 36px;
   }
 
   .xuoj239 {
     height: 3px;
+  }
+
+  .x1vqgdyp {
+    height: 40px;
   }
 
   .xn3w4p2 {
@@ -999,12 +1091,20 @@
     height: 8px;
   }
 
+  .xt7dq6l {
+    height: auto;
+  }
+
   .xu96u03 {
     left: 0;
   }
 
   .x1qpfodn {
     left: 16px;
+  }
+
+  .x1c42kn3 {
+    left: 20px;
   }
 
   .x1nrll8i {
@@ -1039,6 +1139,10 @@
     max-height: 46vh;
   }
 
+  .x12f24lm {
+    max-height: 70vh;
+  }
+
   .xqui1pq {
     max-height: 90vh;
   }
@@ -1047,8 +1151,16 @@
     max-height: none;
   }
 
+  .x193iq5w {
+    max-width: 100%;
+  }
+
   .x16em4ew {
     max-width: 240px;
+  }
+
+  .xrlsmeg {
+    max-width: 600px;
   }
 
   .xl4u9xm {
@@ -1071,12 +1183,28 @@
     min-height: 0;
   }
 
+  .x21xpn4 {
+    min-height: 32px;
+  }
+
+  .x1ba4aug {
+    min-height: 40px;
+  }
+
   .x8nclml {
     min-height: 64px;
   }
 
   .xeuugli {
     min-width: 0;
+  }
+
+  .xw2csxc {
+    overflow-x: auto;
+  }
+
+  .x6ikm8r {
+    overflow-x: hidden;
   }
 
   .x1odjw0f {
@@ -1093,6 +1221,10 @@
 
   .xn5hqff {
     right: 16px;
+  }
+
+  .xwukr4l {
+    right: auto;
   }
 
   .x13vifvy {
@@ -1113,6 +1245,10 @@
 
   .xwa60dl {
     top: 50%;
+  }
+
+  .x80663w {
+    top: auto;
   }
 
   .xh8yej3 {
