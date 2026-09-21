@@ -38,16 +38,17 @@ function ensureElements() {
     icon.innerHTML = '📁 <span class="file-viewer-badge">0</span>'
     icon.title = 'Files being worked on — click to open'
     // Permanent floating button like whiteboard: always visible, toggles drawer
+    // Positioned bottom-left, above whiteboard snap, always on top
+    icon.style.bottom = '20px'
+    icon.style.right = 'auto'
+    icon.style.left = '20px'
+    icon.style.zIndex = '72'
     icon.addEventListener('click', () => {
       const d = document.getElementById('file-viewer-drawer')
       if (d && !d.classList.contains('hidden')) closeDrawer()
       else openDrawer()
     })
     document.body.appendChild(icon)
-    // Position like whiteboard arrows: bottom-left, not covering snap at right
-    icon.style.bottom = '20px'
-    icon.style.right = 'auto'
-    icon.style.left = '20px'
   }
   if (!drawer) {
     drawer = document.createElement('div')
@@ -56,18 +57,24 @@ function ensureElements() {
     drawer.className = (drawerProps.className || '') + ' hidden'
     // @ts-ignore
     if (drawerProps.style) Object.assign(drawer.style, drawerProps.style)
+    // Use StyleX for inner elements via inline style from props
+    const headerProps = stylex.props(fv.header)
+    const titleProps = stylex.props(fv.title)
+    const tabsProps = stylex.props(fv.tabs)
+    const contentProps = stylex.props(fv.content)
+    const footerProps = stylex.props(fv.footer)
     drawer.innerHTML = `
-      <div class="file-viewer-header">
-        <span class="file-viewer-title">Files</span>
+      <div class="${headerProps.className || 'file-viewer-header'}" style="${headerProps.style ? Object.entries(headerProps.style).map(([k,v]) => `${k.replace(/[A-Z]/g, m => '-' + m.toLowerCase())}:${v}`).join(';') : ''}">
+        <span class="${titleProps.className || 'file-viewer-title'}" style="${titleProps.style ? Object.entries(titleProps.style).map(([k,v]) => `${k.replace(/[A-Z]/g, m => '-' + m.toLowerCase())}:${v}`).join(';') : ''}">Files</span>
         <span class="file-viewer-count"></span>
-        <button id="file-viewer-close" class="file-viewer-close">✕</button>
+        <button id="file-viewer-close" class="file-viewer-close" style="background:none; border:none; cursor:pointer; font-size:18px; padding:4px 8px;">✕</button>
       </div>
-      <div class="file-viewer-tabs"></div>
-      <div class="file-viewer-content"></div>
-      <div class="file-viewer-footer">
+      <div class="${tabsProps.className || 'file-viewer-tabs'}" style="${tabsProps.style ? Object.entries(tabsProps.style).map(([k,v]) => `${k.replace(/[A-Z]/g, m => '-' + m.toLowerCase())}:${v}`).join(';') : ''}"></div>
+      <div class="${contentProps.className || 'file-viewer-content'}" style="${contentProps.style ? Object.entries(contentProps.style).map(([k,v]) => `${k.replace(/[A-Z]/g, m => '-' + m.toLowerCase())}:${v}`).join(';') : ''}"></div>
+      <div class="${footerProps.className || 'file-viewer-footer'}" style="${footerProps.style ? Object.entries(footerProps.style).map(([k,v]) => `${k.replace(/[A-Z]/g, m => '-' + m.toLowerCase())}:${v}`).join(';') : ''}">
         <button id="file-viewer-prev">← Prev</button>
         <button id="file-viewer-next">Next →</button>
-        <a id="file-viewer-download" class="file-viewer-download" download>Download</a>
+        <a id="file-viewer-download" class="file-viewer-download" download style="padding:6px 12px; border-radius:8px; background:var(--color-bg-interactive); color:white; text-decoration:none;">Download</a>
       </div>
     `
     document.body.appendChild(drawer)
@@ -262,6 +269,24 @@ async function loadFile(index) {
     } else if (['ppt','pptx'].includes(ext)) {
       content.innerHTML = `<div>PPT preview — opening in viewer… <a href="${file.download_url}" download>Download</a></div>`
       // pptx-preview would go here if vendored
+    } else if (ext === 'md') {
+      const res = await fetch(url)
+      const text = await res.text()
+      try {
+        const { marked } = await import('marked')
+        const { render } = await import('./markdown.js')
+        const html = marked.parse(text.slice(0, 100000))
+        const div = document.createElement('div')
+        div.className = 'chat-markdown'
+        div.style.maxHeight = '75vh'
+        div.style.overflow = 'auto'
+        div.style.padding = '12px'
+        render(div, html)
+        content.innerHTML = ''
+        content.appendChild(div)
+      } catch {
+        content.innerHTML = `<pre style="white-space:pre-wrap; word-break:break-word; max-height:80vh; overflow:auto; background:var(--color-bg-weak); padding:12px; border-radius:8px;">${escapeHtml(text.slice(0, 50000))}</pre>`
+      }
     } else {
       // Plain text / other
       const res = await fetch(url)

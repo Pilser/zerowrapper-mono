@@ -45,6 +45,13 @@ var __export = (target, all) => {
     });
 };
 var __esm = (fn, res) => () => (fn && (res = fn(fn = 0)), res);
+var __require = /* @__PURE__ */ ((x) => typeof require !== "undefined" ? require : typeof Proxy !== "undefined" ? new Proxy(x, {
+  get: (a, b) => (typeof require !== "undefined" ? require : a)[b]
+}) : x)(function(x) {
+  if (typeof require !== "undefined")
+    return require.apply(this, arguments);
+  throw Error('Dynamic require of "' + x + '" is not supported');
+});
 
 // network.js
 var exports_network = {};
@@ -733,6 +740,12 @@ var init_mermaid_modal = __esm(() => {
 });
 
 // markdown.js
+var exports_markdown = {};
+__export(exports_markdown, {
+  highlight: () => highlight,
+  render: () => render,
+  wrapTables: () => wrapTables
+});
 import hljs from "highlight.js";
 import { marked } from "marked";
 import katex from "katex";
@@ -8333,6 +8346,10 @@ function ensureElements() {
       Object.assign(icon.style, iconProps.style);
     icon.innerHTML = '\uD83D\uDCC1 <span class="file-viewer-badge">0</span>';
     icon.title = "Files being worked on — click to open";
+    icon.style.bottom = "20px";
+    icon.style.right = "auto";
+    icon.style.left = "20px";
+    icon.style.zIndex = "72";
     icon.addEventListener("click", () => {
       const d = document.getElementById("file-viewer-drawer");
       if (d && !d.classList.contains("hidden"))
@@ -8341,9 +8358,6 @@ function ensureElements() {
         openDrawer();
     });
     document.body.appendChild(icon);
-    icon.style.bottom = "20px";
-    icon.style.right = "auto";
-    icon.style.left = "20px";
   }
   if (!drawer) {
     drawer = document.createElement("div");
@@ -8352,18 +8366,23 @@ function ensureElements() {
     drawer.className = (drawerProps.className || "") + " hidden";
     if (drawerProps.style)
       Object.assign(drawer.style, drawerProps.style);
+    const headerProps = props(fv.header);
+    const titleProps = props(fv.title);
+    const tabsProps = props(fv.tabs);
+    const contentProps = props(fv.content);
+    const footerProps = props(fv.footer);
     drawer.innerHTML = `
-      <div class="file-viewer-header">
-        <span class="file-viewer-title">Files</span>
+      <div class="${headerProps.className || "file-viewer-header"}" style="${headerProps.style ? Object.entries(headerProps.style).map(([k, v]) => `${k.replace(/[A-Z]/g, (m2) => "-" + m2.toLowerCase())}:${v}`).join(";") : ""}">
+        <span class="${titleProps.className || "file-viewer-title"}" style="${titleProps.style ? Object.entries(titleProps.style).map(([k, v]) => `${k.replace(/[A-Z]/g, (m2) => "-" + m2.toLowerCase())}:${v}`).join(";") : ""}">Files</span>
         <span class="file-viewer-count"></span>
-        <button id="file-viewer-close" class="file-viewer-close">✕</button>
+        <button id="file-viewer-close" class="file-viewer-close" style="background:none; border:none; cursor:pointer; font-size:18px; padding:4px 8px;">✕</button>
       </div>
-      <div class="file-viewer-tabs"></div>
-      <div class="file-viewer-content"></div>
-      <div class="file-viewer-footer">
+      <div class="${tabsProps.className || "file-viewer-tabs"}" style="${tabsProps.style ? Object.entries(tabsProps.style).map(([k, v]) => `${k.replace(/[A-Z]/g, (m2) => "-" + m2.toLowerCase())}:${v}`).join(";") : ""}"></div>
+      <div class="${contentProps.className || "file-viewer-content"}" style="${contentProps.style ? Object.entries(contentProps.style).map(([k, v]) => `${k.replace(/[A-Z]/g, (m2) => "-" + m2.toLowerCase())}:${v}`).join(";") : ""}"></div>
+      <div class="${footerProps.className || "file-viewer-footer"}" style="${footerProps.style ? Object.entries(footerProps.style).map(([k, v]) => `${k.replace(/[A-Z]/g, (m2) => "-" + m2.toLowerCase())}:${v}`).join(";") : ""}">
         <button id="file-viewer-prev">← Prev</button>
         <button id="file-viewer-next">Next →</button>
-        <a id="file-viewer-download" class="file-viewer-download" download>Download</a>
+        <a id="file-viewer-download" class="file-viewer-download" download style="padding:6px 12px; border-radius:8px; background:var(--color-bg-interactive); color:white; text-decoration:none;">Download</a>
       </div>
     `;
     document.body.appendChild(drawer);
@@ -8550,6 +8569,24 @@ async function loadFile(index) {
       }
     } else if (["ppt", "pptx"].includes(ext)) {
       content2.innerHTML = `<div>PPT preview — opening in viewer… <a href="${file.download_url}" download>Download</a></div>`;
+    } else if (ext === "md") {
+      const res = await fetch(url2);
+      const text = await res.text();
+      try {
+        const { marked: marked5 } = await import("marked");
+        const { render: render2 } = await Promise.resolve().then(() => (init_markdown(), exports_markdown));
+        const html = marked5.parse(text.slice(0, 1e5));
+        const div = document.createElement("div");
+        div.className = "chat-markdown";
+        div.style.maxHeight = "75vh";
+        div.style.overflow = "auto";
+        div.style.padding = "12px";
+        render2(div, html);
+        content2.innerHTML = "";
+        content2.appendChild(div);
+      } catch {
+        content2.innerHTML = `<pre style="white-space:pre-wrap; word-break:break-word; max-height:80vh; overflow:auto; background:var(--color-bg-weak); padding:12px; border-radius:8px;">${escapeHtml3(text.slice(0, 50000))}</pre>`;
+      }
     } else {
       const res = await fetch(url2);
       const text = await res.text();
@@ -8570,14 +8607,18 @@ function updateFiles(newFiles) {
   if (currentIndex >= files.length)
     currentIndex = 0;
   const hasNew = newFiles.some((f) => !prevIds.has(f.id));
-  const isFirstLoad = prevLen === 0 && newFiles.length > 0;
-  if (hasNew || isFirstLoad) {
+  const isNewFileAdded = hasNew && prevLen > 0;
+  if (isNewFileAdded) {
     currentIndex = 0;
     const drawer2 = document.getElementById("file-viewer-drawer");
     const isDrawerOpen = drawer2 && !drawer2.classList.contains("hidden");
-    if (!isDrawerOpen && newFiles.length > 0) {
+    if (!isDrawerOpen) {
       openDrawer();
     }
+  } else if (prevLen === 0 && newFiles.length > 0) {
+    currentIndex = 0;
+  } else if (hasNew) {
+    currentIndex = 0;
   }
   const ids = new Set(files.map((f) => f.id));
   for (const id of [...loaded]) {
