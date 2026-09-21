@@ -23,6 +23,17 @@ CREATE TABLE IF NOT EXISTS chat_messages (
 );
 CREATE INDEX IF NOT EXISTS idx_chat_messages_session ON chat_messages(session_id, id);
 
+CREATE TABLE IF NOT EXISTS file_views (
+    id            TEXT PRIMARY KEY,
+    original_path TEXT NOT NULL UNIQUE,
+    created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS open_files (
+    session_id TEXT NOT NULL,
+    file_id    TEXT NOT NULL,
+    opened_at  TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (session_id, file_id)
+);
 CREATE TABLE IF NOT EXISTS ask_requests (
     id         TEXT PRIMARY KEY,
     session_id TEXT NOT NULL,

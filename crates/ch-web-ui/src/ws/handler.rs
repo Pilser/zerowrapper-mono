@@ -13,6 +13,18 @@ use zw_mcp::inspect_cmd;
 const SHARED_ID_FALLBACK: &str = "shared";
 static FRONTEND_BASES: LazyLock<tokio::sync::Mutex<HashMap<String, String>>> =
     LazyLock::new(|| tokio::sync::Mutex::new(HashMap::new()));
+
+// File viewer: per-session open files, broadcast on show_file open/close.
+static FILE_VIEWER_TX: LazyLock<tokio::sync::broadcast::Sender<serde_json::Value>> =
+    LazyLock::new(|| tokio::sync::broadcast::channel::<serde_json::Value>(32).0);
+
+pub fn file_viewer_broadcast(session_id: &str, files: Vec<serde_json::Value>) {
+    let _ = FILE_VIEWER_TX.send(serde_json::json!({
+        "type": "file_viewer_update",
+        "session_id": session_id,
+        "files": files
+    }));
+}
 pub async fn frontend_base_for(session_id: &str) -> Option<String> {
     let m = FRONTEND_BASES.lock().await;
     if let Some(v) = m.get(session_id) { return Some(v.clone()); }

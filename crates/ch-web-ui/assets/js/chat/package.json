@@ -4,6 +4,9 @@
   "type": "module",
   "devDependencies": {
     "@stylexjs/stylex": "latest",
-    "@stylexjs/unplugin": "latest"
+    "@stylexjs/unplugin": "latest",
+    "pdfjs-dist": "^4.4.168",
+    "docx-preview": "^0.1.20",
+    "xlsx": "^0.18.5"
   }
 }
