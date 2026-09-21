@@ -44,7 +44,7 @@ async fn static_file(cx: &Cx, name: &str, mime: &str) -> Result<Response> {
         .unwrap())
 }
 
-#[route(GET "/files/show/{file_id}")]
+#[route(GET "/files/show/{file_hash}")]
 pub async fn files_show(cx: &Cx) -> Result<Response> {
     let ctx: &AppContext = app_context(cx);
     let file_id = path_param::<FileHash>(cx);

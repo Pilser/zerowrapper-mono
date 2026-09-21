@@ -283,18 +283,26 @@ export function updateFiles(newFiles) {
   const prevIds = new Set(files.map(f => f.id))
   files = [...newFiles]
   if (currentIndex >= files.length) currentIndex = 0
-  // Detect new file(s) added
+  // Detect new file(s) added — only auto-open when a *new* file appears
+  // after initial load. On refresh (prevLen==0), just show the icon, don't
+  // pop the drawer — user lands in chat and can open via button or when
+  // agent adds a new file.
   const hasNew = newFiles.some(f => !prevIds.has(f.id))
-  const isFirstLoad = prevLen === 0 && newFiles.length > 0
-  // If new file(s) added, surface to #1 and auto-open drawer like ask does
-  if (hasNew || isFirstLoad) {
+  const isNewFileAdded = hasNew && prevLen > 0
+  if (isNewFileAdded) {
     currentIndex = 0
-    // Auto-open drawer when agent pins a new file (user can close)
     const drawer = document.getElementById('file-viewer-drawer')
     const isDrawerOpen = drawer && !drawer.classList.contains('hidden')
-    if (!isDrawerOpen && newFiles.length > 0) {
+    if (!isDrawerOpen) {
       openDrawer()
     }
+  } else if (prevLen === 0 && newFiles.length > 0) {
+    // Initial load (refresh): don't auto-open, just update icon. User can
+    // open via floating button, or it will auto-open when agent adds next.
+    currentIndex = 0
+  } else if (hasNew) {
+    // Fallback: if somehow hasNew but prevLen==0 (should not happen), still surface
+    currentIndex = 0
   }
   // Only keep loaded set for files still present
   const ids = new Set(files.map(f => f.id))
