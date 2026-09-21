@@ -10530,7 +10530,7 @@ checksum = "e13c156562582aa81c60cb29407084cdb54c4164760106ab78e6c5b0858cf64e"
 [[package]]
 name = "zerostack"
 version = "1.8.4"
-source = "git+https://github.com/Pilser/zerostack.git?rev=b4073731f1d152265712ab2eca8ea2353acc720e#b4073731f1d152265712ab2eca8ea2353acc720e"
+source = "git+https://github.com/Pilser/zerostack.git?rev=810188fd2dff0077d0b3d4fee32815a223c213e2#810188fd2dff0077d0b3d4fee32815a223c213e2"
 dependencies = [
  "agent-client-protocol",
  "anyhow",
