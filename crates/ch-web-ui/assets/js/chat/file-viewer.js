@@ -263,7 +263,7 @@ export function updateFiles(newFiles) {
 
 export function init() {
   ensureElements()
-  // Poll for open files (fallback if WS missed)
+  // Poll for open files (fallback if WS missed) — 3s for near-immediate icon
   setInterval(async () => {
     try {
       const sid = localStorage.getItem('zerowrapper_session') || ''
@@ -273,5 +273,6 @@ export function init() {
       const j = await r.json()
       if (j.files) updateFiles(j.files)
     } catch {}
-  }, 10000)
+  }, 3000)
+  // Also try WS immediate via file_viewer_update (handled in connection.js)
 }

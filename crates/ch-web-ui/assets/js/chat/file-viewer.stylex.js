@@ -4,7 +4,7 @@ import { t } from './tokens.stylex.js';
 export const fv = stylex.create({
   icon: {
     position: 'fixed',
-    bottom: '20px',
+    bottom: '70px',
     right: '20px',
     zIndex: 70,
     width: '44px',

@@ -117,6 +117,7 @@ async fn dispatch_api(cx: &Cx, api: &str, body: Body) -> Result<Response> {
         "sessions" => api_sessions_list(cx).await,
         "ask_pending" => api_ask_pending(cx).await,
         "ask_answer" => api_ask_answer(cx, body).await,
+        "files_open" => api_files_open(cx).await,
         "agent_sessions" => Ok(Response::builder()
             .status(StatusCode::OK)
             .header("Content-Type", "application/json")
@@ -227,6 +228,32 @@ async fn api_ask_pending(cx: &Cx) -> Result<Response> {
         .body(Body::from(
             serde_json::json!({"ok": true, "pending": pending}).to_string(),
         ))
+        .unwrap())
+}
+
+async fn api_files_open(cx: &Cx) -> Result<Response> {
+    let app: &AppContext = app_context(cx);
+    let sid = sanitize_key(&query_value(cx, "session_id").unwrap_or_default());
+    let mut files = app.db.system().open_files_list(&sid).await.unwrap_or_default();
+    if files.is_empty() && sid != "shared" {
+        files = app.db.system().open_files_list("shared").await.unwrap_or_default();
+    }
+    let list: Vec<serde_json::Value> = files
+        .iter()
+        .map(|f| {
+            serde_json::json!({
+                "id": f.id,
+                "path": f.original_path,
+                "url": format!("/files/show/{}", f.id),
+                "download_url": format!("/files/show/{}?download=1", f.id),
+                "name": std::path::Path::new(&f.original_path).file_name().and_then(|n| n.to_str()).unwrap_or("file")
+            })
+        })
+        .collect();
+    Ok(Response::builder()
+        .status(StatusCode::OK)
+        .header("Content-Type", "application/json")
+        .body(Body::from(serde_json::json!({ "files": list }).to_string()))
         .unwrap())
 }
 

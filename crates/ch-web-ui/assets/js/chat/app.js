@@ -8159,6 +8159,376 @@ var init_whiteboard = __esm(() => {
   init_whiteboard_render();
 });
 
+// file-viewer.stylex.js
+var fv;
+var init_file_viewer_stylex = __esm(() => {
+  init_stylex();
+  init_tokens_stylex();
+  fv = create({
+    icon: {
+      position: "fixed",
+      bottom: "70px",
+      right: "20px",
+      zIndex: 70,
+      width: "44px",
+      height: "44px",
+      borderRadius: "50%",
+      backgroundColor: t.accent,
+      color: "white",
+      border: "none",
+      cursor: "pointer",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      fontSize: "20px",
+      boxShadow: "0 4px 16px rgba(0,0,0,0.2)"
+    },
+    drawer: {
+      position: "fixed",
+      inset: 0,
+      zIndex: 71,
+      backgroundColor: t.bg,
+      display: "flex",
+      flexDirection: "column"
+    },
+    header: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      padding: "12px 16px",
+      borderBottom: `1px solid ${t.borderWeak}`,
+      backgroundColor: t.bgWeak
+    },
+    title: {
+      fontSize: "14px",
+      fontWeight: 600,
+      color: t.textStrong,
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+      whiteSpace: "nowrap",
+      flex: 1
+    },
+    tabs: {
+      display: "flex",
+      gap: "8px",
+      padding: "8px 16px",
+      overflowX: "auto",
+      borderBottom: `1px solid ${t.borderWeak}`,
+      backgroundColor: t.bgWeak
+    },
+    tab: {
+      padding: "6px 12px",
+      borderRadius: "8px",
+      border: `1px solid ${t.borderWeak}`,
+      backgroundColor: t.bg,
+      color: t.text,
+      cursor: "pointer",
+      fontSize: "13px",
+      whiteSpace: "nowrap"
+    },
+    tabActive: {
+      backgroundColor: t.accent,
+      color: "white",
+      borderColor: t.accent
+    },
+    content: {
+      flex: 1,
+      overflowY: "auto",
+      overflowX: "hidden",
+      padding: "16px",
+      backgroundColor: t.bg,
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      justifyContent: "flex-start",
+      maxWidth: "100%",
+      boxSizing: "border-box"
+    },
+    mediaImage: {
+      maxWidth: "100%",
+      width: "auto",
+      height: "auto",
+      maxHeight: "70vh",
+      objectFit: "contain",
+      display: "block",
+      margin: "0 auto",
+      borderRadius: "8px",
+      boxShadow: "0 2px 12px rgba(0,0,0,0.1)"
+    },
+    mediaVideo: {
+      maxWidth: "100%",
+      width: "100%",
+      height: "auto",
+      maxHeight: "70vh",
+      objectFit: "contain",
+      display: "block",
+      borderRadius: "8px",
+      backgroundColor: "black"
+    },
+    mediaAudio: {
+      width: "100%",
+      maxWidth: "600px",
+      display: "block",
+      margin: "20px auto"
+    },
+    footer: {
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "center",
+      padding: "12px 16px",
+      borderTop: `1px solid ${t.borderWeak}`,
+      backgroundColor: t.bgWeak
+    }
+  });
+});
+
+// file-viewer.js
+var exports_file_viewer = {};
+__export(exports_file_viewer, {
+  init: () => init4,
+  updateFiles: () => updateFiles
+});
+function ensureElements() {
+  let icon = document.getElementById("file-viewer-icon");
+  let drawer = document.getElementById("file-viewer-drawer");
+  if (!icon) {
+    icon = document.createElement("button");
+    icon.id = "file-viewer-icon";
+    const iconProps = props(fv.icon);
+    icon.className = (iconProps.className || "") + " hidden";
+    if (iconProps.style)
+      Object.assign(icon.style, iconProps.style);
+    icon.innerHTML = '\uD83D\uDCC1 <span class="file-viewer-badge">0</span>';
+    icon.title = "Files being worked on";
+    icon.addEventListener("click", () => openDrawer());
+    document.body.appendChild(icon);
+  }
+  if (!drawer) {
+    drawer = document.createElement("div");
+    drawer.id = "file-viewer-drawer";
+    const drawerProps = props(fv.drawer);
+    drawer.className = (drawerProps.className || "") + " hidden";
+    if (drawerProps.style)
+      Object.assign(drawer.style, drawerProps.style);
+    drawer.innerHTML = `
+      <div class="file-viewer-header">
+        <span class="file-viewer-title">Files</span>
+        <span class="file-viewer-count"></span>
+        <button id="file-viewer-close" class="file-viewer-close">✕</button>
+      </div>
+      <div class="file-viewer-tabs"></div>
+      <div class="file-viewer-content"></div>
+      <div class="file-viewer-footer">
+        <button id="file-viewer-prev">← Prev</button>
+        <button id="file-viewer-next">Next →</button>
+        <a id="file-viewer-download" class="file-viewer-download" download>Download</a>
+      </div>
+    `;
+    document.body.appendChild(drawer);
+    drawer.querySelector("#file-viewer-close").addEventListener("click", () => closeDrawer());
+    drawer.querySelector("#file-viewer-prev").addEventListener("click", () => navigate(-1));
+    drawer.querySelector("#file-viewer-next").addEventListener("click", () => navigate(1));
+  }
+  return { icon, drawer };
+}
+function updateIcon() {
+  const { icon } = ensureElements();
+  if (files.length === 0) {
+    icon.classList.add("hidden");
+  } else {
+    icon.classList.remove("hidden");
+    const badge = icon.querySelector(".file-viewer-badge");
+    if (badge)
+      badge.textContent = files.length;
+  }
+}
+function openDrawer() {
+  const { drawer } = ensureElements();
+  drawer.classList.remove("hidden");
+  if (files.length > 0)
+    loadFile(currentIndex);
+}
+function closeDrawer() {
+  const { drawer } = ensureElements();
+  drawer.classList.add("hidden");
+}
+function navigate(dir) {
+  const newIndex = currentIndex + dir;
+  if (newIndex < 0 || newIndex >= files.length)
+    return;
+  currentIndex = newIndex;
+  loadFile(currentIndex);
+  updateTabs();
+}
+function updateTabs() {
+  const drawer = document.getElementById("file-viewer-drawer");
+  if (!drawer)
+    return;
+  const title = drawer.querySelector(".file-viewer-title");
+  if (title && files[currentIndex]) {
+    const fname = files[currentIndex].path.split("/").pop() || "File";
+    title.textContent = fname;
+    title.title = files[currentIndex].path;
+  }
+  const tabs = drawer.querySelector(".file-viewer-tabs");
+  const count = drawer.querySelector(".file-viewer-count");
+  if (count)
+    count.textContent = `${currentIndex + 1} / ${files.length}`;
+  if (tabs) {
+    tabs.innerHTML = "";
+    files.forEach((f, i) => {
+      const tab = document.createElement("button");
+      tab.className = "file-viewer-tab" + (i === currentIndex ? " active" : "");
+      tab.textContent = `${i + 1}. ${f.path.split("/").pop()}`;
+      tab.title = f.path;
+      tab.addEventListener("click", () => {
+        currentIndex = i;
+        loadFile(currentIndex);
+        updateTabs();
+      });
+      tabs.appendChild(tab);
+    });
+  }
+  const prev = drawer.querySelector("#file-viewer-prev");
+  const next = drawer.querySelector("#file-viewer-next");
+  if (prev)
+    prev.disabled = currentIndex === 0;
+  if (next)
+    next.disabled = currentIndex === files.length - 1;
+  const dl = drawer.querySelector("#file-viewer-download");
+  if (dl && files[currentIndex]) {
+    dl.href = files[currentIndex].download_url || files[currentIndex].url;
+    dl.download = files[currentIndex].path.split("/").pop() || "download";
+  }
+}
+async function loadFile(index) {
+  if (index < 0 || index >= files.length)
+    return;
+  const file = files[index];
+  const drawer = document.getElementById("file-viewer-drawer");
+  const content2 = drawer ? drawer.querySelector(".file-viewer-content") : null;
+  if (!content2)
+    return;
+  if (loaded.has(file.id)) {
+    return;
+  }
+  content2.innerHTML = '<div class="file-viewer-loading">Loading ' + file.path.split("/").pop() + "…</div>";
+  const ext = (file.path.split(".").pop() || "").toLowerCase();
+  const url2 = file.url;
+  try {
+    if (["jpg", "jpeg", "png", "gif", "webp", "svg", "bmp"].includes(ext)) {
+      content2.innerHTML = `<img src="${url2}" class="fv-media-image" style="max-width:100%; max-height:70vh; width:auto; height:auto; object-fit:contain; display:block; margin:0 auto; border-radius:8px;" />`;
+    } else if (["mp4", "webm", "mov"].includes(ext)) {
+      content2.innerHTML = `<video controls src="${url2}" style="max-width:100%; width:100%; height:auto; max-height:70vh; object-fit:contain; display:block; border-radius:8px; background:#000;"></video>`;
+    } else if (["mp3", "wav", "ogg", "m4a"].includes(ext)) {
+      content2.innerHTML = `<audio controls src="${url2}" style="width:100%; max-width:600px; display:block; margin:20px auto;"></audio>`;
+    } else if (ext === "pdf") {
+      if (window.pdfjsLib) {
+        content2.innerHTML = '<canvas id="pdf-canvas" style="max-width:100%; height:auto; display:block; margin:0 auto; border-radius:8px; box-shadow:0 2px 12px rgba(0,0,0,0.1);"></canvas>';
+        const pdf = await window.pdfjsLib.getDocument(url2).promise;
+        const page = await pdf.getPage(1);
+        const isMobile = window.innerWidth < 600;
+        const scale2 = isMobile ? 1 : 1.5;
+        const viewport = page.getViewport({ scale: scale2 });
+        const canvas2 = content2.querySelector("#pdf-canvas");
+        canvas2.width = viewport.width;
+        canvas2.height = viewport.height;
+        canvas2.style.width = "100%";
+        canvas2.style.maxWidth = viewport.width + "px";
+        canvas2.style.height = "auto";
+        await page.render({ canvasContext: canvas2.getContext("2d"), viewport }).promise;
+      } else {
+        content2.innerHTML = `<iframe src="${url2}" style="width:100%; height:70vh; border:none; border-radius:8px; display:block;" loading="lazy"></iframe>`;
+      }
+    } else if (["doc", "docx"].includes(ext)) {
+      if (window.docxPreview) {
+        const res = await fetch(url2);
+        const buf = await res.arrayBuffer();
+        content2.innerHTML = '<div id="docx-container"></div>';
+        await window.docxPreview.renderAsync(buf, content2.querySelector("#docx-container"));
+      } else {
+        content2.innerHTML = `<div>Doc preview not available. <a href="${file.download_url}" download>Download</a></div>`;
+      }
+    } else if (["xls", "xlsx", "csv"].includes(ext)) {
+      if (window.XLSX) {
+        const res = await fetch(url2);
+        const buf = await res.arrayBuffer();
+        const wb = window.XLSX.read(buf, { type: "array" });
+        let html = "";
+        wb.SheetNames.forEach((name) => {
+          const ws2 = wb.Sheets[name];
+          html += `<h3>${name}</h3>` + window.XLSX.utils.sheet_to_html(ws2);
+        });
+        content2.innerHTML = `<div style="overflow:auto; max-height:80vh;">${html}</div>`;
+      } else {
+        content2.innerHTML = `<div>Spreadsheet preview not available. <a href="${file.download_url}" download>Download</a></div>`;
+      }
+    } else if (["ppt", "pptx"].includes(ext)) {
+      content2.innerHTML = `<div>PPT preview — opening in viewer… <a href="${file.download_url}" download>Download</a></div>`;
+    } else {
+      const res = await fetch(url2);
+      const text = await res.text();
+      content2.innerHTML = `<pre style="white-space:pre-wrap; word-break:break-word; max-height:80vh; overflow:auto; background:var(--color-bg-weak); padding:12px; border-radius:8px;">${escapeHtml3(text.slice(0, 50000))}</pre>`;
+    }
+    loaded.add(file.id);
+  } catch (e) {
+    content2.innerHTML = `<div>Failed to load: ${e.message} <a href="${file.download_url}" download>Download</a></div>`;
+  }
+}
+function escapeHtml3(s) {
+  return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+function updateFiles(newFiles) {
+  const incomingIds = newFiles.map((f) => f.id).join(",");
+  const currentIds = files.map((f) => f.id).join(",");
+  const isSameOrder = incomingIds === currentIds;
+  const newFirstId = newFiles[0] ? newFiles[0].id : null;
+  const wasAlreadyLoaded = newFirstId ? loaded.has(newFirstId) : false;
+  files = [...newFiles];
+  if (currentIndex >= files.length)
+    currentIndex = 0;
+  if (newFirstId && files[0] && files[0].id === newFirstId && !isSameOrder) {
+    currentIndex = 0;
+  }
+  const ids = new Set(files.map((f) => f.id));
+  for (const id of [...loaded]) {
+    if (!ids.has(id))
+      loaded.delete(id);
+  }
+  updateIcon();
+  const drawer = document.getElementById("file-viewer-drawer");
+  if (drawer && !drawer.classList.contains("hidden") && files.length > 0) {
+    updateTabs();
+    if (wasAlreadyLoaded) {} else {
+      loadFile(currentIndex);
+    }
+  }
+}
+function init4() {
+  ensureElements();
+  setInterval(async () => {
+    try {
+      const sid = localStorage.getItem("zerowrapper_session") || "";
+      if (!sid)
+        return;
+      const r = await fetch(`/api/files/open?session_id=${encodeURIComponent(sid)}`);
+      if (!r.ok)
+        return;
+      const j = await r.json();
+      if (j.files)
+        updateFiles(j.files);
+    } catch {}
+  }, 3000);
+}
+var files, currentIndex = 0, loaded;
+var init_file_viewer = __esm(() => {
+  init_dom();
+  init_stylex();
+  init_file_viewer_stylex();
+  files = [];
+  loaded = new Set;
+});
+
 // ask.stylex.js
 var ak;
 var init_ask_stylex = __esm(() => {
@@ -8299,7 +8669,7 @@ var init_ask_stylex = __esm(() => {
 // ask-drawer.js
 var exports_ask_drawer = {};
 __export(exports_ask_drawer, {
-  init: () => init4,
+  init: () => init5,
   isOpen: () => isOpen2,
   openWith: () => openWith,
   setOpen: () => setOpen
@@ -8642,7 +9012,7 @@ async function pollPending() {
     }
   } catch {}
 }
-function init4() {
+function init5() {
   if (els.askCloseBtn)
     els.askCloseBtn.addEventListener("click", () => setOpen(false));
   if (els.askOverlay)
@@ -9546,6 +9916,15 @@ function handleMessage(e) {
             els.agentBanner.classList.remove("hidden");
         }
         break;
+      case "file_viewer_update": {
+        try {
+          Promise.resolve().then(() => (init_file_viewer(), exports_file_viewer)).then((m2) => {
+            if (m2 && m2.updateFiles)
+              m2.updateFiles(data.files || []);
+          }).catch(() => {});
+        } catch {}
+        break;
+      }
       case "ask_requested": {
         try {
           if (data.ask_id)
@@ -9909,7 +10288,7 @@ var cx11 = (...args) => props(...args).className || "";
 var lightbox = null;
 var loadingEl = null;
 var images = [];
-var currentIndex = 0;
+var currentIndex2 = 0;
 var touchStartX = 0;
 function ensureLightbox() {
   if (!lightbox) {
@@ -9941,15 +10320,15 @@ function ensureLightbox() {
       const btn = e.target.closest(".lb-prev, .lb-next");
       if (!btn)
         return;
-      btn.classList.contains("lb-prev") ? navigate(-1) : navigate(1);
+      btn.classList.contains("lb-prev") ? navigate2(-1) : navigate2(1);
     });
     document.addEventListener("keydown", (e) => {
       if (e.key === "Escape")
         close2();
       if (e.key === "ArrowLeft")
-        navigate(-1);
+        navigate2(-1);
       if (e.key === "ArrowRight")
-        navigate(1);
+        navigate2(1);
     });
     lightbox.addEventListener("touchstart", (e) => {
       touchStartX = e.changedTouches[0].screenX;
@@ -9957,9 +10336,9 @@ function ensureLightbox() {
     lightbox.addEventListener("touchend", (e) => {
       const delta = touchStartX - e.changedTouches[0].screenX;
       if (delta > 50)
-        navigate(1);
+        navigate2(1);
       else if (delta < -50)
-        navigate(-1);
+        navigate2(-1);
     }, { passive: true });
   }
   return lightbox;
@@ -9975,12 +10354,12 @@ function close2() {
     }
   }
 }
-function navigate(dir) {
-  const next = currentIndex + dir;
+function navigate2(dir) {
+  const next = currentIndex2 + dir;
   if (next < 0 || next >= images.length)
     return;
-  currentIndex = next;
-  loadImage(images[currentIndex]);
+  currentIndex2 = next;
+  loadImage(images[currentIndex2]);
   updateNavButtons();
 }
 function loadImage(src) {
@@ -10018,22 +10397,22 @@ function updateNavButtons() {
   const prev = lightbox.querySelector(".lb-prev");
   const next = lightbox.querySelector(".lb-next");
   if (prev)
-    prev.className = "lb-prev " + cx11(lb.navBtn, lb.prev, currentIndex <= 0 ? lb.navHidden : lb.navShown);
+    prev.className = "lb-prev " + cx11(lb.navBtn, lb.prev, currentIndex2 <= 0 ? lb.navHidden : lb.navShown);
   if (next)
-    next.className = "lb-next " + cx11(lb.navBtn, lb.next, currentIndex >= images.length - 1 ? lb.navHidden : lb.navShown);
+    next.className = "lb-next " + cx11(lb.navBtn, lb.next, currentIndex2 >= images.length - 1 ? lb.navHidden : lb.navShown);
 }
-function init5(messagesEl) {
+function init6(messagesEl) {
   messagesEl.addEventListener("click", (e) => {
     if (e.target.tagName === "IMG" && e.target.closest(".chat-markdown")) {
       const container2 = e.target.closest(".chat-markdown");
       const imgs = Array.from(container2.querySelectorAll("img"));
       images = imgs.map((img) => img.src);
-      currentIndex = imgs.indexOf(e.target);
-      if (currentIndex === -1)
-        currentIndex = 0;
+      currentIndex2 = imgs.indexOf(e.target);
+      if (currentIndex2 === -1)
+        currentIndex2 = 0;
       ensureLightbox();
       updateNavButtons();
-      loadImage(images[currentIndex]);
+      loadImage(images[currentIndex2]);
     }
   });
 }
@@ -10562,7 +10941,7 @@ async function newChat() {
   setOpen2(false);
   renderList();
 }
-function init6() {
+function init7() {
   if (els.menuBtn)
     els.menuBtn.addEventListener("click", toggle);
   if (els.drawerOverlay)
@@ -10727,7 +11106,7 @@ async function animatePickerChange(key, x, y) {
     }
   } catch {}
 }
-function init7() {
+function init8() {
   let current2 = "blue";
   try {
     current2 = localStorage.getItem(STORE_KEY) || "blue";
@@ -10800,7 +11179,7 @@ function logPendingResources() {
   const fonts = document.fonts ? document.fonts.status : "n/a";
   console.log("[resources] readyState:", document.readyState, "fonts:", fonts);
 }
-function init8() {
+function init9() {
   init();
   init2();
   logPendingResources();
@@ -10810,16 +11189,16 @@ function init8() {
   }
   if (!els.form)
     return;
-  init5(els.messages);
+  init6(els.messages);
   loadFromQuery();
   loadFromStorage();
   ensureSession();
   showBadge();
   connect2();
   refreshSessionList();
-  init6();
-  init4();
   init7();
+  init5();
+  init8();
   on("stateChange", (s) => {
     if (s === State.CONNECTED)
       syncCancelButton();
@@ -10832,8 +11211,8 @@ function init8() {
   if (els.uploadBtn && els.fileInput) {
     els.uploadBtn.addEventListener("click", () => els.fileInput.click());
     els.fileInput.addEventListener("change", async () => {
-      const files = Array.from(els.fileInput.files || []);
-      for (const file of files) {
+      const files2 = Array.from(els.fileInput.files || []);
+      for (const file of files2) {
         try {
           const info = await uploadFile(file);
           uploadState.pending.push(info);
@@ -11222,6 +11601,6 @@ function initSnap() {
 }
 
 // app-entry.js
-init8();
+init9();
 init3();
 initSnap();

@@ -223,6 +223,14 @@ function handleMessage(e) {
           else els.agentBanner.classList.remove('hidden')
         }
         break
+      case 'file_viewer_update': {
+        try {
+          import('./file-viewer.js').then((m) => {
+            if (m && m.updateFiles) m.updateFiles(data.files || [])
+          }).catch(() => {})
+        } catch {}
+        break
+      }
       case 'ask_requested': {
         // B: track pending ask so `Done` can be deferred; also show typing
         // for the continuation that will arrive after the human answers.

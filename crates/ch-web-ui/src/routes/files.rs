@@ -86,6 +86,45 @@ pub async fn files_show(cx: &Cx) -> Result<Response> {
     Ok(builder.body(Body::from(data)).unwrap())
 }
 
+#[route(GET "/api/files/open")]
+pub async fn files_open(cx: &Cx) -> Result<Response> {
+    let ctx: &AppContext = app_context(cx);
+    let query = topcoat::router::uri(cx).query().unwrap_or("");
+    let sid = query
+        .split('&')
+        .find_map(|p| {
+            let mut parts = p.splitn(2, '=');
+            if parts.next() == Some("session_id") {
+                parts.next()
+            } else {
+                None
+            }
+        })
+        .unwrap_or("shared");
+    // Also try shared as fallback (like whiteboard)
+    let mut files = ctx.db.system().open_files_list(sid).await.unwrap_or_default();
+    if files.is_empty() && sid != "shared" {
+        files = ctx.db.system().open_files_list("shared").await.unwrap_or_default();
+    }
+    let list: Vec<serde_json::Value> = files
+        .iter()
+        .map(|f| {
+            serde_json::json!({
+                "id": f.id,
+                "path": f.original_path,
+                "url": format!("/files/show/{}", f.id),
+                "download_url": format!("/files/show/{}?download=1", f.id),
+                "name": std::path::Path::new(&f.original_path).file_name().and_then(|n| n.to_str()).unwrap_or("file")
+            })
+        })
+        .collect();
+    Ok(Response::builder()
+        .status(StatusCode::OK)
+        .header("content-type", "application/json")
+        .body(Body::from(serde_json::json!({ "files": list }).to_string()))
+        .unwrap())
+}
+
 #[route(GET "/files/{file_hash}")]
 pub async fn files(cx: &Cx) -> Result<Response> {
     let ctx: &AppContext = app_context(cx);
