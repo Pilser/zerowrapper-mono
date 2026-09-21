@@ -64,6 +64,7 @@ function ensureElements() {
     drawer.className = (drawerProps.className || '') + ' hidden'
     // @ts-ignore
     if (drawerProps.style) Object.assign(drawer.style, drawerProps.style)
+    drawer.style.display = 'none'
     const headerProps = stylex.props(fv.header)
     const titleProps = stylex.props(fv.title)
     const countProps = stylex.props(fv.count)
@@ -149,6 +150,7 @@ function updateIcon() {
 function openDrawer() {
   const { drawer } = ensureElements()
   drawer.classList.remove('hidden')
+  drawer.style.display = 'flex'
   updateIcon()
   if (files.length > 0) {
     updateTabs()
@@ -159,6 +161,7 @@ function openDrawer() {
 function closeDrawer() {
   const { drawer } = ensureElements()
   drawer.classList.add('hidden')
+  drawer.style.display = 'none'
   updateIcon()
 }
 

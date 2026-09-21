@@ -445,7 +445,13 @@ function props(...styles) {
   }
   return result;
 }
-var styleq, hasRequiredStyleq, styleqExports, env;
+var styleq, hasRequiredStyleq, styleqExports, errorForFn = (name) => new Error(`Unexpected 'stylex.${name}' call at runtime. Styles must be compiled by '@stylexjs/babel-plugin'.`), create = function stylexCreate(_styles) {
+  throw errorForFn("create");
+}, defineVars = function stylexDefineVars(_styles) {
+  throw errorForFn("defineVars");
+}, keyframes = (_keyframes) => {
+  throw errorForFn("keyframes");
+}, env;
 var init_stylex = __esm(() => {
   styleq = {};
   styleqExports = /* @__PURE__ */ requireStyleq();
@@ -453,104 +459,129 @@ var init_stylex = __esm(() => {
 });
 
 // tokens.stylex.js
-var init_tokens_stylex = () => {};
+var t;
+var init_tokens_stylex = __esm(() => {
+  init_stylex();
+  t = defineVars({
+    bg: "var(--color-bg)",
+    bgWeak: "var(--color-bg-weak)",
+    bgWeakHover: "var(--color-bg-weak-hover)",
+    bgStrong: "var(--color-bg-strong)",
+    bgStrongHover: "var(--color-bg-strong-hover)",
+    bgInteractive: "var(--color-bg-interactive)",
+    bgInteractiveWeak: "var(--color-bg-interactive-weak)",
+    accentLighter: "var(--color-accent-lighter)",
+    accentDarker: "var(--color-accent-darker)",
+    accentNeon: "var(--color-accent-neon)",
+    text: "var(--color-text)",
+    textWeak: "var(--color-text-weak)",
+    textWeaker: "var(--color-text-weaker)",
+    textStrong: "var(--color-text-strong)",
+    textInverted: "var(--color-text-inverted)",
+    border: "var(--color-border)",
+    borderWeak: "var(--color-border-weak)",
+    statusSuccess: "var(--color-status-success)",
+    statusError: "var(--color-status-error)",
+    statusRunning: "var(--color-status-running)",
+    fontSans: "var(--font-sans)",
+    fontMono: "var(--font-mono)",
+    pileCardBg: "linear-gradient(180deg, var(--color-bg-weak), var(--color-bg))",
+    pileCardShadow: "0 3px 12px rgba(0,0,0,0.10), 0 0 0 1px var(--color-border-weak)",
+    pileCardRunningShadow: "0 4px 18px rgba(0,0,0,0.16), 0 0 0 1px var(--color-status-running)",
+    cdBarBg: "linear-gradient(90deg, var(--color-status-running), var(--color-status-success))",
+    dotsBg: "radial-gradient(circle, color-mix(in srgb, var(--color-bg-interactive) 38%, transparent) 1.7px, transparent 1.9px)",
+    dotsStreamBg: "radial-gradient(circle, var(--color-bg-interactive) 2.2px, transparent 2.4px)",
+    streamTint: "color-mix(in srgb, var(--color-bg-interactive) 14%, var(--color-bg))",
+    pickerBg: "color-mix(in srgb, var(--color-bg) 84%, transparent)",
+    pickerShadow: "0 2px 10px rgba(0,0,0,0.10)",
+    pillBg: "color-mix(in srgb, var(--color-bg) 82%, transparent)",
+    feedItemShadow: "0 4px 16px rgba(0,0,0,0.14)",
+    pillShadow: "0 6px 24px rgba(0,0,0,0.16)"
+  });
+});
 
 // mermaid.stylex.js
 var mm;
 var init_mermaid_stylex = __esm(() => {
+  init_stylex();
   init_tokens_stylex();
-  mm = {
+  mm = create({
     modal: {
-      kVAEAm: "xixxii4",
-      kpwlN0: "x10a8y8t",
-      kY2c9j: "x1q2oy4v",
-      kWkggS: "x1av4zun",
-      k1ekBW: "x19991ni",
-      kIyJzY: "x1rvut6x",
-      $$css: true
+      position: "fixed",
+      inset: 0,
+      zIndex: 9999,
+      backgroundColor: "rgba(0,0,0,0.85)",
+      transitionProperty: "opacity",
+      transitionDuration: "0.25s"
     },
-    modalClosed: {
-      kSiTet: "xg01cxk",
-      kfzvcC: "x47corl",
-      $$css: true
-    },
-    modalOpen: {
-      kSiTet: "x1hc1fzr",
-      kfzvcC: "x67bb7w",
-      $$css: true
-    },
+    modalClosed: { opacity: 0, pointerEvents: "none" },
+    modalOpen: { opacity: 1, pointerEvents: "auto" },
     stage: {
-      kzqmXN: "xh8yej3",
-      kZKoxP: "x5yr21d",
-      kVQacm: "xb3r6kr",
-      kkrTdU: "x1jm3nie",
-      kFalU9: "x5ve5x3",
-      kXgcvw: "xch2mbi",
-      $$css: true
+      width: "100%",
+      height: "100%",
+      overflow: "hidden",
+      cursor: "grab",
+      touchAction: "none",
+      ":active": { cursor: "grabbing" }
     },
     canvas: {
-      k3nNDw: "x1hj3fc7",
-      k6sLGO: "x1so62im",
-      $$css: true
+      transformOrigin: "0 0",
+      willChange: "transform"
     },
     canvasSvg: {
-      k1xSpc: "x1lliihq",
-      ks0D6T: "x1x1rfll",
-      kskxy: "x7ab17h",
-      kVQacm: "x1rea2x4",
-      kWkggS: "x7b40fa",
-      kGVxlE: "x1e9v2fp",
-      $$css: true
+      display: "block",
+      maxWidth: "none",
+      maxHeight: "none",
+      overflow: "visible",
+      backgroundColor: t.bgWeak,
+      boxShadow: "0 4px 24px rgba(0,0,0,0.5)"
     },
     close: {
-      kVAEAm: "x10l6tqk",
-      k87sOh: "xomnu4r",
-      kCIrl2: "xn5hqff",
-      kzqmXN: "x14qfxbe",
-      kZKoxP: "xc9qbxq",
-      kaIpWk: "x16rqkct",
-      ksu8eU: "xng3xce",
-      kWkggS: "x1kl6yg8",
-      kMwMTN: "xfungia",
-      kGuDYH: "x1603h9y",
-      kkrTdU: "x1ypdohk",
-      k1xSpc: "x78zum5",
-      kGNEyG: "x6s0dn4",
-      kjj79g: "xl56j7k",
-      k1ekBW: "x15406qy",
-      kIyJzY: "x13dflua",
-      kY2c9j: "xhtitgo",
-      kGzVvX: "x1l7f9c6",
-      $$css: true
+      position: "absolute",
+      top: "16px",
+      right: "16px",
+      width: "36px",
+      height: "36px",
+      borderRadius: "50%",
+      borderStyle: "none",
+      backgroundColor: t.bgInteractiveWeak,
+      color: "#fff",
+      fontSize: "1.25rem",
+      cursor: "pointer",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      transitionProperty: "background-color",
+      transitionDuration: "0.2s",
+      zIndex: 2,
+      ":hover": { backgroundColor: t.bgInteractive }
     },
     controls: {
-      kVAEAm: "x10l6tqk",
-      krVfgx: "xy58vm5",
-      kbCHJM: "x1nrll8i",
-      k3aq6I: "xuuh30",
-      k1xSpc: "x78zum5",
-      kOIVth: "x167g77z",
-      kY2c9j: "xhtitgo",
-      $$css: true
+      position: "absolute",
+      bottom: "24px",
+      left: "50%",
+      transform: "translateX(-50%)",
+      display: "flex",
+      gap: "8px",
+      zIndex: 2
     },
     btn: {
-      kzqmXN: "x14qfxbe",
-      kZKoxP: "xc9qbxq",
-      kaIpWk: "x16rqkct",
-      ksu8eU: "xng3xce",
-      kWkggS: "x1kl6yg8",
-      kMwMTN: "xfungia",
-      kGuDYH: "x1gqo1bu",
-      kkrTdU: "x1ypdohk",
-      k1xSpc: "x78zum5",
-      kGNEyG: "x6s0dn4",
-      kjj79g: "xl56j7k",
-      k1ekBW: "x15406qy",
-      kIyJzY: "x13dflua",
-      kGzVvX: "x1l7f9c6",
-      $$css: true
+      width: "36px",
+      height: "36px",
+      borderRadius: "50%",
+      borderStyle: "none",
+      backgroundColor: t.bgInteractiveWeak,
+      color: "#fff",
+      fontSize: "1.15rem",
+      cursor: "pointer",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      transitionProperty: "background-color",
+      transitionDuration: "0.2s",
+      ":hover": { backgroundColor: t.bgInteractive }
     }
-  };
+  });
 });
 
 // mermaid-modal.js
@@ -612,9 +643,7 @@ function ensure() {
     e.preventDefault();
     const rect = stage.getBoundingClientRect();
     zoomAt(e.deltaY < 0 ? 1.12 : 1 / 1.12, e.clientX - rect.left, e.clientY - rect.top);
-  }, {
-    passive: false
-  });
+  }, { passive: false });
   stage.addEventListener("pointerdown", onDown);
   stage.addEventListener("pointermove", onMove);
   stage.addEventListener("pointerup", onUp);
@@ -643,17 +672,9 @@ function resetView() {
 function onDown(e) {
   if (e.target.closest(".mm-btn, .mm-close"))
     return;
-  pointers.set(e.pointerId, {
-    x: e.clientX,
-    y: e.clientY
-  });
+  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
   if (pointers.size === 1) {
-    drag = {
-      x: e.clientX,
-      y: e.clientY,
-      tx,
-      ty
-    };
+    drag = { x: e.clientX, y: e.clientY, tx, ty };
     stage.setPointerCapture(e.pointerId);
   } else if (pointers.size === 2) {
     drag = null;
@@ -664,10 +685,7 @@ function onDown(e) {
 function onMove(e) {
   if (!pointers.has(e.pointerId))
     return;
-  pointers.set(e.pointerId, {
-    x: e.clientX,
-    y: e.clientY
-  });
+  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
   if (pointers.size === 2) {
     const [a, b] = Array.from(pointers.values());
     const d = Math.hypot(a.x - b.x, a.y - b.y);
@@ -5854,167 +5872,146 @@ var init_motion_fx = __esm(() => {
 // piles/piles.stylex.js
 var p;
 var init_piles_stylex = __esm(() => {
+  init_stylex();
   init_tokens_stylex();
-  p = {
+  p = create({
     card: {
-      kaIpWk: "xgqmno8",
-      kKwaWg: "x1y279fn",
-      kGVxlE: "xyajat9",
-      kVQacm: "xb3r6kr",
-      k6sLGO: "x1q1rmc8",
-      $$css: true
+      borderRadius: "16px",
+      backgroundImage: t.pileCardBg,
+      boxShadow: t.pileCardShadow,
+      overflow: "hidden",
+      willChange: "transform, opacity"
     },
     cardRunning: {
-      kGVxlE: "xzx866d",
-      $$css: true
+      boxShadow: t.pileCardRunningShadow
     },
     head: {
-      k1xSpc: "x78zum5",
-      kGNEyG: "x6s0dn4",
-      kOIVth: "x167g77z",
-      kzqmXN: "xh8yej3",
-      kmVPX3: "xhrpmxf",
-      kWkggS: "xjbqb8w",
-      kKwaWg: "x18o3ruo",
-      kMzoRj: "xc342km",
-      ksu8eU: "xng3xce",
-      kkrTdU: "x1ypdohk",
-      kGuDYH: "xboafo0",
-      kLWn49: "xfrs9s4",
-      kMwMTN: "x1wp7847",
-      k9WMMc: "xdpxx8g",
-      $$css: true
+      display: "flex",
+      alignItems: "center",
+      gap: "8px",
+      width: "100%",
+      padding: "7px 12px",
+      backgroundColor: "transparent",
+      backgroundImage: "none",
+      borderWidth: 0,
+      borderStyle: "none",
+      cursor: "pointer",
+      fontSize: "0.75rem",
+      lineHeight: 1.45,
+      color: t.textStrong,
+      textAlign: "left"
     },
     icon: {
-      kGuDYH: "x1ksoetq",
-      kLWn49: "xo5v014",
-      kmuXW: "x2lah0s",
-      k1xSpc: "x1rg5ohu",
-      k6sLGO: "x1so62im",
-      $$css: true
+      fontSize: "1.05rem",
+      lineHeight: 1,
+      flexShrink: 0,
+      display: "inline-block",
+      willChange: "transform"
     },
     title: {
-      k63SB2: "x1xlr1w8",
-      kMwMTN: "x1wp7847",
-      khDVqt: "xuxw1ft",
-      $$css: true
+      fontWeight: 700,
+      color: t.textStrong,
+      whiteSpace: "nowrap"
     },
     count: {
-      kMv6JI: "xnhzrae",
-      kGuDYH: "x12lo8hy",
-      k63SB2: "x1xlr1w8",
-      kMwMTN: "x1fuqind",
-      kWkggS: "x6eb63x",
-      kaIpWk: "x1e6avla",
-      kmVPX3: "xl7t7w5",
-      kLWn49: "x1dbl2gt",
-      kmuXW: "x2lah0s",
-      $$css: true
+      fontFamily: t.fontMono,
+      fontSize: "0.6875rem",
+      fontWeight: 700,
+      color: t.bg,
+      backgroundColor: t.statusRunning,
+      borderRadius: "999px",
+      padding: "1px 8px",
+      lineHeight: 1.6,
+      flexShrink: 0
     },
     countDone: {
-      kWkggS: "xw3j01q",
-      $$css: true
+      backgroundColor: t.statusSuccess
     },
     preview: {
-      kMwMTN: "x9g7u3q",
-      khDVqt: "xuxw1ft",
-      kVQacm: "xb3r6kr",
-      kg5iWk: "xlyipyv",
-      k7Eaqz: "xeuugli",
-      kUk6DE: "x98rzlu",
-      $$css: true
+      color: t.text,
+      whiteSpace: "nowrap",
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+      minWidth: 0,
+      flex: 1
     },
     chev: {
-      koQZXg: "x8x9d4c",
-      kMwMTN: "xh1wwo8",
-      k1xSpc: "x3nfvp2",
-      k1ekBW: "x11xpdln",
-      kIyJzY: "xx6bhzk",
-      kAMwcw: "xwji4o3",
-      kmuXW: "x2lah0s",
-      $$css: true
+      marginLeft: "auto",
+      color: t.textWeak,
+      display: "inline-flex",
+      transitionProperty: "transform",
+      transitionDuration: "0.15s",
+      transitionTimingFunction: "ease",
+      flexShrink: 0
     },
     chevOpen: {
-      k3aq6I: "x19jd1h0",
-      $$css: true
+      transform: "rotate(180deg)"
     },
     body: {
-      kmVPX3: "x1xyxd1",
-      $$css: true
+      padding: "2px 12px 10px"
     },
     bodyClosed: {
-      k1xSpc: "x1s85apg",
-      $$css: true
+      display: "none"
     },
     bodyOpen: {
-      k1xSpc: "x1lliihq",
-      $$css: true
+      display: "block"
     },
     thinkPre: {
-      kGuDYH: "xboafo0",
-      kMv6JI: "xnhzrae",
-      kLWn49: "x1jjo3f5",
-      kogj98: "x1ghz6dp",
-      khDVqt: "x126k92a",
-      kTgw9: "x13faqbe",
-      kMwMTN: "x9g7u3q",
-      kskxy: "x1983irj",
-      kORKVm: "x1odjw0f",
-      kWkggS: "xkdfcq9",
-      kaIpWk: "xur7f20",
-      kmVPX3: "x1160tuk",
-      $$css: true
+      fontSize: "0.75rem",
+      fontFamily: t.fontMono,
+      lineHeight: 1.55,
+      margin: 0,
+      whiteSpace: "pre-wrap",
+      wordBreak: "break-word",
+      color: t.text,
+      maxHeight: "220px",
+      overflowY: "auto",
+      backgroundColor: t.bg,
+      borderRadius: "8px",
+      padding: "8px 10px"
     },
     toolOut: {
-      kGuDYH: "xboafo0",
-      kMwMTN: "x9g7u3q",
-      keoZOQ: "x1k70j0n",
-      $$css: true
+      fontSize: "0.75rem",
+      color: t.text,
+      marginTop: "6px"
     },
     det: {
-      keoZOQ: "x1k70j0n",
-      $$css: true
+      marginTop: "6px"
     },
     sum: {
-      kGuDYH: "xboafo0",
-      kMwMTN: "x9g7u3q",
-      kkrTdU: "x1ypdohk",
-      $$css: true
+      fontSize: "0.75rem",
+      color: t.text,
+      cursor: "pointer"
     },
     cdTrack: {
-      kZKoxP: "xuoj239",
-      kaIpWk: "x1e6avla",
-      kWkggS: "x2tzy6w",
-      kogj98: "x1n1yzln",
-      kVQacm: "xb3r6kr",
-      $$css: true
+      height: "3px",
+      borderRadius: "999px",
+      backgroundColor: t.borderWeak,
+      margin: "0 10px 6px",
+      overflow: "hidden"
     },
     trackHidden: {
-      k1xSpc: "x1s85apg",
-      $$css: true
+      display: "none"
     },
     cdBar: {
-      kZKoxP: "x5yr21d",
-      kzqmXN: "xh8yej3",
-      kaIpWk: "x1e6avla",
-      kKwaWg: "x9q9wxs",
-      k3nNDw: "x1nf803f",
-      $$css: true
+      height: "100%",
+      width: "100%",
+      borderRadius: "999px",
+      backgroundImage: t.cdBarBg,
+      transformOrigin: "left center"
     },
     cdLabel: {
-      kMv6JI: "xnhzrae",
-      kGuDYH: "x2ohwh0",
-      kMwMTN: "xh1wwo8",
-      koQZXg: "x8x9d4c",
-      kmuXW: "x2lah0s",
-      $$css: true
+      fontFamily: t.fontMono,
+      fontSize: "0.625rem",
+      color: t.textWeak,
+      marginLeft: "auto",
+      flexShrink: 0
     },
     labelWarm: {
-      kMwMTN: "x175nh0r",
-      k63SB2: "x1xlr1w8",
-      $$css: true
+      color: t.statusError,
+      fontWeight: 700
     }
-  };
+  });
 });
 
 // piles/think.js
@@ -6064,9 +6061,7 @@ function createThinkPile(opts = {}) {
   paint();
   if (live) {
     try {
-      popIn(card, {
-        index: opts.index || 0
-      });
+      popIn(card, { index: opts.index || 0 });
     } catch {}
     try {
       shimmerCtl = shimmer(previewEl || card);
@@ -6122,9 +6117,7 @@ function createThinkPile(opts = {}) {
   };
 }
 function renderStaticThink(container2, text, count) {
-  const pile = createThinkPile({
-    live: false
-  });
+  const pile = createThinkPile({ live: false });
   const t2 = typeof text === "string" ? text : "";
   if (t2) {
     const pre = pile.row.querySelector("pre");
@@ -6500,18 +6493,11 @@ function attachOutput(body, output) {
     out.appendChild(det);
   }
 }
-function createToolPile({
-  name,
-  args,
-  note
-}, opts = {}) {
+function createToolPile({ name, args, note }, opts = {}) {
   const live = opts.live !== false;
   const index = opts.index || "";
   const resolvedNote = resolveNote(name, args, note);
-  const {
-    icon,
-    label
-  } = pileIdentity(name, args, resolvedNote || note);
+  const { icon, label } = pileIdentity(name, args, resolvedNote || note);
   const card = document.createElement("div");
   card.className = cx3(p.card, p.cardRunning);
   const headBtn = document.createElement("button");
@@ -6560,9 +6546,7 @@ function createToolPile({
   let stopCd = () => {};
   if (live) {
     try {
-      popIn(card, {
-        index
-      });
+      popIn(card, { index });
     } catch {}
     try {
       stopFloat = floatLoop(iconEl, 2.5, 2);
@@ -6642,14 +6626,7 @@ function createToolPile({
 }
 function renderStaticTool(container2, tool, index = "") {
   const t2 = tool || {};
-  const pile = createToolPile({
-    name: t2.name,
-    args: t2.args,
-    note: t2.note
-  }, {
-    live: false,
-    index
-  });
+  const pile = createToolPile({ name: t2.name, args: t2.args, note: t2.note }, { live: false, index });
   pile.done(typeof t2.output === "string" ? t2.output : "");
   container2.appendChild(pile.row);
   return pile.row;
@@ -6666,77 +6643,72 @@ var init_tool = __esm(() => {
 // overlay.stylex.js
 var ov;
 var init_overlay_stylex = __esm(() => {
+  init_stylex();
   init_tokens_stylex();
-  ov = {
+  ov = create({
     feed: {
-      kVAEAm: "xixxii4",
-      kCIrl2: "x44moml",
-      krVfgx: "xqvrlgc",
-      kY2c9j: "x1aciyhk",
-      k1xSpc: "x78zum5",
-      kXwgrk: "xdt5ytf",
-      kOIVth: "x17d4w8g",
-      ks0D6T: "x16em4ew",
-      kfzvcC: "x47corl",
-      $$css: true
+      position: "fixed",
+      right: "14px",
+      bottom: "150px",
+      zIndex: 60,
+      display: "flex",
+      flexDirection: "column",
+      gap: "6px",
+      maxWidth: "240px",
+      pointerEvents: "none"
     },
     feedHidden: {
-      k1xSpc: "x1s85apg",
-      $$css: true
+      display: "none"
     },
     item: {
-      k1xSpc: "x78zum5",
-      kGNEyG: "x6s0dn4",
-      kOIVth: "x1j9xkj6",
-      kmVPX3: "xqy1keh",
-      kaIpWk: "x1e6avla",
-      kWkggS: "x1p9hars",
-      k6WDB: "x1dmgsgi",
-      kMzoRj: "xmkeg23",
-      ksu8eU: "x1y0btm7",
-      kVAM5u: "x1d54n62",
-      kGVxlE: "x1cdf4h9",
-      kGuDYH: "x12lo8hy",
-      kMwMTN: "x1wp7847",
-      khDVqt: "xuxw1ft",
-      kVQacm: "xb3r6kr",
-      kg5iWk: "xlyipyv",
-      k6sLGO: "x1q1rmc8",
-      $$css: true
+      display: "flex",
+      alignItems: "center",
+      gap: "7px",
+      padding: "5px 11px",
+      borderRadius: "999px",
+      backgroundColor: t.pickerBg,
+      backdropFilter: "blur(8px)",
+      borderWidth: "1px",
+      borderStyle: "solid",
+      borderColor: t.borderWeak,
+      boxShadow: t.feedItemShadow,
+      fontSize: "0.6875rem",
+      color: t.textStrong,
+      whiteSpace: "nowrap",
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+      willChange: "transform, opacity"
     },
     pill: {
-      kVAEAm: "xixxii4",
-      kbCHJM: "x1nrll8i",
-      krVfgx: "x1gldvzx",
-      k3aq6I: "xuuh30",
-      kY2c9j: "x1aciyhk",
-      k1xSpc: "x78zum5",
-      kGNEyG: "x6s0dn4",
-      kOIVth: "x167g77z",
-      kmVPX3: "x10kg585",
-      kaIpWk: "x1e6avla",
-      kWkggS: "x1ugzkzr",
-      k6WDB: "x1dmgsgi",
-      kMzoRj: "xmkeg23",
-      ksu8eU: "x1y0btm7",
-      kVAM5u: "x1wz1ty9",
-      kGVxlE: "x1d1ogee",
-      kGuDYH: "xboafo0",
-      kMwMTN: "x9g7u3q",
-      kfzvcC: "x47corl",
-      k6sLGO: "x1q1rmc8",
-      $$css: true
+      position: "fixed",
+      left: "50%",
+      bottom: "86px",
+      transform: "translateX(-50%)",
+      zIndex: 60,
+      display: "flex",
+      alignItems: "center",
+      gap: "8px",
+      padding: "6px 14px",
+      borderRadius: "999px",
+      backgroundColor: t.pillBg,
+      backdropFilter: "blur(8px)",
+      borderWidth: "1px",
+      borderStyle: "solid",
+      borderColor: t.border,
+      boxShadow: t.pillShadow,
+      fontSize: "0.75rem",
+      color: t.text,
+      pointerEvents: "none",
+      willChange: "transform, opacity"
     },
     pillHidden: {
-      k1xSpc: "x1s85apg",
-      $$css: true
+      display: "none"
     },
     icon: {
-      kGuDYH: "x1jchvi3",
-      kLWn49: "xo5v014",
-      $$css: true
+      fontSize: "1rem",
+      lineHeight: 1
     }
-  };
+  });
 });
 
 // overlay.js
@@ -6768,12 +6740,7 @@ function show() {
 function pulse(el) {
   try {
     if (typeof import_motion2.animate === "function") {
-      import_motion2.animate(el, {
-        scale: [1, 1.18, 1]
-      }, {
-        duration: 0.4,
-        ease: "circOut"
-      });
+      import_motion2.animate(el, { scale: [1, 1.18, 1] }, { duration: 0.4, ease: "circOut" });
     }
   } catch {}
 }
@@ -6836,13 +6803,7 @@ function feed(icon, text) {
     box.prepend(item);
     try {
       if (typeof import_motion2.animate === "function") {
-        import_motion2.animate(item, {
-          opacity: [0, 1],
-          x: [14, 0]
-        }, {
-          duration: 0.3,
-          ease: "circOut"
-        });
+        import_motion2.animate(item, { opacity: [0, 1], x: [14, 0] }, { duration: 0.3, ease: "circOut" });
       }
     } catch {}
     setTimeout(() => {
@@ -6888,35 +6849,38 @@ var init_overlay = __esm(() => {
 });
 
 // bg.stylex.js
-var bg;
+var pulse2, bg;
 var init_bg_stylex = __esm(() => {
+  init_stylex();
   init_tokens_stylex();
-  bg = {
+  pulse2 = keyframes({
+    "0%": { filter: "brightness(1)" },
+    "50%": { filter: "brightness(1.25)" },
+    "100%": { filter: "brightness(1)" }
+  });
+  bg = create({
     layer: {
-      kVAEAm: "xixxii4",
-      kpwlN0: "x10a8y8t",
-      kY2c9j: "x8knxv4",
-      kfzvcC: "x47corl",
-      kgSjnq: "x5szi4u",
-      k1ekBW: "x19ujeh9",
-      kIyJzY: "x97pzxe",
-      kAMwcw: "xwji4o3",
-      $$css: true
+      position: "fixed",
+      inset: 0,
+      zIndex: -1,
+      pointerEvents: "none",
+      backgroundSize: "22px 22px",
+      transitionProperty: "background-image, background-color",
+      transitionDuration: "0.6s",
+      transitionTimingFunction: "ease"
     },
     dots: {
-      kKwaWg: "x4kj3jz",
-      $$css: true
+      backgroundImage: t.dotsBg
     },
     streaming: {
-      kWkggS: "xme2h1a",
-      kKwaWg: "xhm5xna",
-      kKVMdj: "x1ggsj",
-      k44tkh: "x18hd8ej",
-      kyAemX: "x4hg4is",
-      ko0y90: "xa4qsjk",
-      $$css: true
+      backgroundColor: t.streamTint,
+      backgroundImage: t.dotsStreamBg,
+      animationName: pulse2,
+      animationDuration: "1.6s",
+      animationTimingFunction: "ease-in-out",
+      animationIterationCount: "infinite"
     }
-  };
+  });
 });
 
 // bg.js
@@ -6943,65 +6907,66 @@ var init_bg = __esm(() => {
 });
 
 // activity.stylex.js
-var a;
+var textPulse, a;
 var init_activity_stylex = __esm(() => {
+  init_stylex();
   init_tokens_stylex();
-  a = {
+  textPulse = keyframes({
+    "0%": { opacity: 1 },
+    "100%": { opacity: 1 },
+    "50%": { opacity: 0.6 }
+  });
+  a = create({
     turnActivity: {
-      kB7OPa: "x9f619",
-      kzqmXN: "xh8yej3",
-      ks0D6T: "xl4u9xm",
-      kogj98: "x1v1cunt",
-      k1xSpc: "x78zum5",
-      kXwgrk: "xdt5ytf",
-      kOIVth: "x167g77z",
-      $$css: true
+      boxSizing: "border-box",
+      width: "100%",
+      maxWidth: "64rem",
+      margin: "0 auto 4px",
+      display: "flex",
+      flexDirection: "column",
+      gap: "8px"
     },
     streamRipple: {
-      kVAEAm: "x7wzq59",
-      krVfgx: "x1ey2m1c",
-      kY2c9j: "x1u8a7rm",
-      k1xSpc: "x78zum5",
-      kjj79g: "xl56j7k",
-      kGNEyG: "x6s0dn4",
-      kOIVth: "x1af02g3",
-      kmVPX3: "x1b4vry6",
-      kfzvcC: "x47corl",
-      $$css: true
+      position: "sticky",
+      bottom: 0,
+      zIndex: 5,
+      display: "flex",
+      justifyContent: "center",
+      alignItems: "center",
+      gap: "14px",
+      padding: "10px 0",
+      pointerEvents: "none"
     },
     rippleText: {
-      kGuDYH: "x1jchvi3",
-      k63SB2: "x1s688f",
-      kMwMTN: "x9g7u3q",
-      kKVMdj: "x16lng38",
-      k44tkh: "x1sbju2s",
-      kyAemX: "x4hg4is",
-      ko0y90: "xa4qsjk",
-      $$css: true
+      fontSize: "1rem",
+      fontWeight: 600,
+      color: t.text,
+      animationName: textPulse,
+      animationDuration: "1.4s",
+      animationTimingFunction: "ease-in-out",
+      animationIterationCount: "infinite"
     },
     rippleContainer: {
-      kVAEAm: "x1n2onr6",
-      kzqmXN: "x13ie5k6",
-      kZKoxP: "xnnlda6",
-      kmuXW: "x2lah0s",
-      $$css: true
+      position: "relative",
+      width: "130px",
+      height: "56px",
+      flexShrink: 0
     },
     ripple: {
-      kVAEAm: "x10l6tqk",
-      k87sOh: "xxk6nc9",
-      kbCHJM: "xu96u03",
-      kzqmXN: "x1pju0fl",
-      kZKoxP: "x10wjd1d",
-      kaIpWk: "x16rqkct",
-      kMzoRj: "xf0lols",
-      ksu8eU: "x1y0btm7",
-      kVAM5u: "x1fxipln",
-      kSiTet: "xg01cxk",
-      k6sLGO: "x1q1rmc8",
-      kGVxlE: "xlgt5cz",
-      $$css: true
+      position: "absolute",
+      top: "3px",
+      left: 0,
+      width: "50px",
+      height: "50px",
+      borderRadius: "50%",
+      borderWidth: "5px",
+      borderStyle: "solid",
+      borderColor: t.bgInteractive,
+      opacity: 0,
+      willChange: "transform, opacity",
+      boxShadow: "0 0 16px color-mix(in srgb, var(--color-bg-interactive) 50%, transparent)"
     }
-  };
+  });
 });
 
 // activity.js
@@ -7043,9 +7008,7 @@ function pushThought(text) {
   if (!b)
     return;
   if (!thinkOpen || !thinkOpen.row.isConnected) {
-    thinkOpen = createThinkPile({
-      index: pileCount
-    });
+    thinkOpen = createThinkPile({ index: pileCount });
     b.appendChild(thinkOpen.row);
     pileCount += 1;
     try {
@@ -7067,19 +7030,10 @@ function pushToolCall(id, name, args) {
   settleThink();
   const note = args && typeof args.note === "string" ? args.note : "";
   toolSeq += 1;
-  const pile = createToolPile({
-    name,
-    args,
-    note
-  }, {
-    index: toolSeq
-  });
+  const pile = createToolPile({ name, args, note }, { index: toolSeq });
   b.appendChild(pile.row);
   pileCount += 1;
-  pending.push({
-    id: id || "",
-    done: pile.done
-  });
+  pending.push({ id: id || "", done: pile.done });
   try {
     const idn = pileIdentity(name, args, note);
     status(idn.icon, idn.label + "…");
@@ -7162,9 +7116,7 @@ function renderStaticTrace(container2, trace) {
       const row = renderStaticThink(wrap, thinking, trace.thought_count);
       if (row) {
         try {
-          revealOnView(row, {
-            index: idx++
-          });
+          revealOnView(row, { index: idx++ });
         } catch {}
       }
     } catch {}
@@ -7174,9 +7126,7 @@ function renderStaticTrace(container2, trace) {
       const row = renderStaticTool(wrap, t2 || {}, idx);
       if (row) {
         try {
-          revealOnView(row, {
-            index: idx++
-          });
+          revealOnView(row, { index: idx++ });
         } catch {}
       }
     } catch {}
@@ -7202,135 +7152,110 @@ var init_activity = __esm(() => {
 });
 
 // messages.stylex.js
-var cx7 = (...args) => props(...args).className || "", m, rowClass = (role) => cx7(m.row, role === "user" && m.rowUser, role === "assistant" && m.rowAssistant), avatarClass = (role) => "msg-avatar " + cx7(m.avatar, role === "user" ? m.avatarUser : m.avatarAssistant), contentClass = (role, markdown) => "msg-content " + (markdown ? "chat-markdown " : "") + cx7(m.content, role === "user" ? m.contentUser : role === "assistant" ? m.contentAssistant : null);
+var cx7 = (...args) => props(...args).className || "", slideIn, m, rowClass = (role) => cx7(m.row, role === "user" && m.rowUser, role === "assistant" && m.rowAssistant), avatarClass = (role) => "msg-avatar " + cx7(m.avatar, role === "user" ? m.avatarUser : m.avatarAssistant), contentClass = (role, markdown) => "msg-content " + (markdown ? "chat-markdown " : "") + cx7(m.content, role === "user" ? m.contentUser : role === "assistant" ? m.contentAssistant : null);
 var init_messages_stylex = __esm(() => {
   init_stylex();
   init_tokens_stylex();
-  m = {
+  slideIn = keyframes({
+    from: { opacity: 0, transform: "translateY(8px)" },
+    to: { opacity: 1, transform: "translateY(0)" }
+  });
+  m = create({
     row: {
-      k1xSpc: "x78zum5",
-      kXwgrk: "xdt5ytf",
-      k1K539: "x1yztbdb",
-      kKVMdj: "xhpbw76",
-      k44tkh: "x5hsz1j",
-      kyAemX: "xa3vuyk",
-      $$css: true
+      display: "flex",
+      flexDirection: "column",
+      marginBottom: "16px",
+      animationName: slideIn,
+      animationDuration: "0.2s",
+      animationTimingFunction: "ease-out"
     },
-    rowUser: {
-      kGNEyG: "xuk3077",
-      $$css: true
-    },
-    rowAssistant: {
-      kGNEyG: "x6s0dn4",
-      $$css: true
-    },
+    rowUser: { alignItems: "flex-end" },
+    rowAssistant: { alignItems: "center" },
     avatar: {
-      kzqmXN: "xvy4d1p",
-      kZKoxP: "xxk0z11",
-      kaIpWk: "x16rqkct",
-      k1xSpc: "x78zum5",
-      kGNEyG: "x6s0dn4",
-      kjj79g: "xl56j7k",
-      k1K539: "x12nagc",
-      $$css: true
+      width: "24px",
+      height: "24px",
+      borderRadius: "50%",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      marginBottom: "4px"
     },
     avatarUser: {
-      kWkggS: "x57rt1s",
-      kMzoRj: "xmkeg23",
-      ksu8eU: "x1y0btm7",
-      kVAM5u: "x1d54n62",
-      kMwMTN: "x1xw57gy",
-      $$css: true
+      backgroundColor: t.bgInteractive,
+      borderWidth: "1px",
+      borderStyle: "solid",
+      borderColor: t.borderWeak,
+      color: t.textInverted
     },
     avatarAssistant: {
-      kWkggS: "x7b40fa",
-      kMzoRj: "xmkeg23",
-      ksu8eU: "x1y0btm7",
-      kVAM5u: "x1d54n62",
-      kMwMTN: "xh1wwo8",
-      $$css: true
+      backgroundColor: t.bgWeak,
+      borderWidth: "1px",
+      borderStyle: "solid",
+      borderColor: t.borderWeak,
+      color: t.textWeak
     },
     content: {
-      kmVPX3: "x1iwkndl",
-      kGuDYH: "xkpwil5",
-      kLWn49: "x4q1cud",
-      kHjlTd: "x1mzt3pk",
-      kaIpWk: "x1q4ynmn",
-      kzqmXN: "xh8yej3",
-      kB7OPa: "x9f619",
-      $$css: true
+      padding: "12px 16px",
+      fontSize: "0.875rem",
+      lineHeight: "1.75",
+      overflowWrap: "break-word",
+      borderRadius: "10px",
+      width: "100%",
+      boxSizing: "border-box"
     },
     contentUser: {
-      kMzoRj: "xmkeg23",
-      ksu8eU: "x1y0btm7",
-      kVAM5u: "x1d54n62",
-      kMwMTN: "x1xw57gy",
-      k63SB2: "x10p5zqr",
-      kWkggS: "x57rt1s",
-      kYm2EN: "x1nhu2vm",
-      ks0D6T: "x1lke7as",
-      kzqmXN: "x14atkfc",
-      $$css: true
+      borderWidth: "1px",
+      borderStyle: "solid",
+      borderColor: t.borderWeak,
+      color: t.textInverted,
+      fontWeight: 450,
+      backgroundColor: t.bgInteractive,
+      borderBottomRightRadius: "4px",
+      maxWidth: "75%",
+      width: "auto"
     },
     contentAssistant: {
-      kMzoRj: "xmkeg23",
-      ksu8eU: "x1y0btm7",
-      kVAM5u: "x1d54n62",
-      kMwMTN: "x9g7u3q",
-      kWkggS: "xkdfcq9",
-      kqGeR4: "x1orjc0r",
-      ks0D6T: "xl4u9xm",
-      $$css: true
+      borderWidth: "1px",
+      borderStyle: "solid",
+      borderColor: t.borderWeak,
+      color: t.text,
+      backgroundColor: t.bg,
+      borderBottomLeftRadius: "4px",
+      maxWidth: "64rem"
     },
     chip: {
-      k1xSpc: "x3nfvp2",
-      kGNEyG: "x6s0dn4",
-      kOIVth: "x17d4w8g",
-      kmVPX3: "x1v9t41d",
-      kaIpWk: "x1kogg8i",
-      kMzoRj: "xmkeg23",
-      ksu8eU: "x1y0btm7",
-      kVAM5u: "x1d54n62",
-      kWkggS: "x7b40fa",
-      kGuDYH: "xboafo0",
-      k1K539: "x12nagc",
-      $$css: true
+      display: "inline-flex",
+      alignItems: "center",
+      gap: "6px",
+      padding: "4px 10px",
+      borderRadius: "6px",
+      borderWidth: "1px",
+      borderStyle: "solid",
+      borderColor: t.borderWeak,
+      backgroundColor: t.bgWeak,
+      fontSize: "0.75rem",
+      marginBottom: "4px"
     },
-    chipName: {
-      kMwMTN: "x1wp7847",
-      $$css: true
-    },
-    chipSize: {
-      kMwMTN: "xh1wwo8",
-      kGuDYH: "x2ohwh0",
-      $$css: true
-    },
+    chipName: { color: t.textStrong },
+    chipSize: { color: t.textWeak, fontSize: "0.625rem" },
     chipIcon: {
-      k1xSpc: "x3nfvp2",
-      kGNEyG: "x6s0dn4",
-      kmuXW: "x2lah0s",
-      kMwMTN: "xh1wwo8",
-      $$css: true
+      display: "inline-flex",
+      alignItems: "center",
+      flexShrink: 0,
+      color: t.textWeak
     },
     removeBtn: {
-      kWkggS: "xjbqb8w",
-      ksu8eU: "xng3xce",
-      kkrTdU: "x1ypdohk",
-      kMwMTN: "x175nh0r",
-      kGuDYH: "xkpwil5",
-      kmVPX3: "x1717udv",
-      kLWn49: "xo5v014",
-      $$css: true
+      backgroundColor: "transparent",
+      borderStyle: "none",
+      cursor: "pointer",
+      color: t.statusError,
+      fontSize: "0.875rem",
+      padding: 0,
+      lineHeight: 1
     },
-    textTop: {
-      kogj98: "xabx8x8",
-      $$css: true
-    },
-    textPlain: {
-      kogj98: "x1ghz6dp",
-      $$css: true
-    }
-  };
+    textTop: { margin: "6px 0 0" },
+    textPlain: { margin: 0 }
+  });
 });
 
 // streaming.js
@@ -7742,13 +7667,14 @@ function fetchHistory() {
   const sid = localStorage.getItem("zerowrapper_session") || "";
   if (!sid)
     return;
-  const urls = ["/api/history?session_id=" + encodeURIComponent(sid), "?api=history&session_id=" + encodeURIComponent(sid)];
+  const urls = [
+    "/api/history?session_id=" + encodeURIComponent(sid),
+    "?api=history&session_id=" + encodeURIComponent(sid)
+  ];
   const tryFetch = (i) => {
     if (i >= urls.length)
       return Promise.resolve(null);
-    return fetch(urls[i], {
-      signal: abortController.signal
-    }).then((r) => r.ok ? r.json() : tryFetch(i + 1)).catch(() => tryFetch(i + 1));
+    return fetch(urls[i], { signal: abortController.signal }).then((r) => r.ok ? r.json() : tryFetch(i + 1)).catch(() => tryFetch(i + 1));
   };
   return tryFetch(0).then((data) => {
     if (!data)
@@ -8282,191 +8208,180 @@ var init_whiteboard = __esm(() => {
 // file-viewer.stylex.js
 var fv;
 var init_file_viewer_stylex = __esm(() => {
+  init_stylex();
   init_tokens_stylex();
-  fv = {
+  fv = create({
     icon: {
-      kVAEAm: "xixxii4",
-      krVfgx: "xjnlgov",
-      kbCHJM: "x1c42kn3",
-      kCIrl2: "xwukr4l",
-      k87sOh: "x80663w",
-      kY2c9j: "x10svr67",
-      kzqmXN: "x187nhsf",
-      kZKoxP: "xn3w4p2",
-      kaIpWk: "x16rqkct",
-      kWkggS: "x57rt1s",
-      kMwMTN: "x1awj2ng",
-      kkrTdU: "x1ypdohk",
-      k1xSpc: "x78zum5",
-      kGNEyG: "x6s0dn4",
-      kjj79g: "xl56j7k",
-      kGuDYH: "xwsyq91",
-      kGVxlE: "x4k1kx4",
-      $$css: true
+      position: "fixed",
+      bottom: "20px",
+      left: "20px",
+      right: "auto",
+      top: "auto",
+      zIndex: 72,
+      width: "44px",
+      height: "44px",
+      borderRadius: "50%",
+      backgroundColor: t.bgInteractive,
+      color: "white",
+      border: "none",
+      cursor: "pointer",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      fontSize: "20px",
+      boxShadow: "0 4px 16px rgba(0,0,0,0.2)"
     },
     iconOpen: {
-      kY2c9j: "x10svr67",
-      $$css: true
+      zIndex: 72
     },
     drawer: {
-      kVAEAm: "xixxii4",
-      kpwlN0: "x10a8y8t",
-      kY2c9j: "xtea94d",
-      kWkggS: "xkdfcq9",
-      k1xSpc: "x78zum5",
-      kXwgrk: "xdt5ytf",
-      $$css: true
+      position: "fixed",
+      inset: 0,
+      zIndex: 71,
+      backgroundColor: t.bg,
+      display: "flex",
+      flexDirection: "column"
     },
     header: {
-      k1xSpc: "x78zum5",
-      kGNEyG: "x6s0dn4",
-      kOIVth: "x167g77z",
-      kmVPX3: "x1arfzav",
-      kWkggS: "x7b40fa",
-      kAzted: "x1ba4aug",
-      kZKoxP: "x1vqgdyp",
-      kmuXW: "x2lah0s",
-      $$css: true
+      display: "flex",
+      alignItems: "center",
+      gap: "8px",
+      padding: "6px 12px",
+      borderBottom: `1px solid ${t.borderWeak}`,
+      backgroundColor: t.bgWeak,
+      minHeight: "40px",
+      height: "40px",
+      flexShrink: 0
     },
     title: {
-      kGuDYH: "xif65rj",
-      k63SB2: "x1s688f",
-      kMwMTN: "x1wp7847",
-      kVQacm: "xb3r6kr",
-      kg5iWk: "xlyipyv",
-      khDVqt: "xuxw1ft",
-      kUk6DE: "x98rzlu",
-      k7Eaqz: "xeuugli",
-      $$css: true
+      fontSize: "14px",
+      fontWeight: 600,
+      color: t.textStrong,
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+      whiteSpace: "nowrap",
+      flex: 1,
+      minWidth: 0
     },
     count: {
-      kGuDYH: "xfifm61",
-      kMwMTN: "xh1wwo8",
-      khDVqt: "xuxw1ft",
-      kmuXW: "x2lah0s",
-      $$css: true
+      fontSize: "12px",
+      color: t.textWeak,
+      whiteSpace: "nowrap",
+      flexShrink: 0
     },
     tabs: {
-      k1xSpc: "x78zum5",
-      kOIVth: "x17d4w8g",
-      kmVPX3: "xtdwleo",
-      kXHlph: "xw2csxc",
-      kWkggS: "x7b40fa",
-      kAzted: "x21xpn4",
-      kZKoxP: "x10w6t97",
-      kGNEyG: "x6s0dn4",
-      kmuXW: "x2lah0s",
-      $$css: true
+      display: "flex",
+      gap: "6px",
+      padding: "4px 12px",
+      overflowX: "auto",
+      borderBottom: `1px solid ${t.borderWeak}`,
+      backgroundColor: t.bgWeak,
+      minHeight: "32px",
+      height: "32px",
+      alignItems: "center",
+      flexShrink: 0
     },
     tab: {
-      kmVPX3: "x1v9t41d",
-      kaIpWk: "xur7f20",
-      kWkggS: "xkdfcq9",
-      kMwMTN: "x9g7u3q",
-      kkrTdU: "x1ypdohk",
-      kGuDYH: "xfifm61",
-      khDVqt: "xuxw1ft",
-      kmuXW: "x2lah0s",
-      kLWn49: "x1d3mw78",
-      $$css: true
+      padding: "4px 10px",
+      borderRadius: "8px",
+      border: `1px solid ${t.borderWeak}`,
+      backgroundColor: t.bg,
+      color: t.text,
+      cursor: "pointer",
+      fontSize: "12px",
+      whiteSpace: "nowrap",
+      flexShrink: 0,
+      lineHeight: "16px"
     },
     tabActive: {
-      kWkggS: "x57rt1s",
-      kMwMTN: "x1awj2ng",
-      kVAM5u: "x1fxipln",
-      $$css: true
+      backgroundColor: t.bgInteractive,
+      color: "white",
+      borderColor: t.bgInteractive
     },
     controls: {
-      k1xSpc: "x78zum5",
-      kOIVth: "x17d4w8g",
-      kGNEyG: "x6s0dn4",
-      kmuXW: "x2lah0s",
-      $$css: true
+      display: "flex",
+      gap: "6px",
+      alignItems: "center",
+      flexShrink: 0
     },
     controlBtn: {
-      kmVPX3: "x1v9t41d",
-      kaIpWk: "xur7f20",
-      kWkggS: "xkdfcq9",
-      kMwMTN: "x9g7u3q",
-      kkrTdU: "x1ypdohk",
-      kGuDYH: "xfifm61",
-      kLWn49: "x1d3mw78",
-      khDVqt: "xuxw1ft",
-      $$css: true
+      padding: "4px 10px",
+      borderRadius: "8px",
+      border: `1px solid ${t.borderWeak}`,
+      backgroundColor: t.bg,
+      color: t.text,
+      cursor: "pointer",
+      fontSize: "12px",
+      lineHeight: "16px",
+      whiteSpace: "nowrap"
     },
     downloadBtn: {
-      kmVPX3: "x1v9t41d",
-      kaIpWk: "xur7f20",
-      kWkggS: "x57rt1s",
-      kMwMTN: "x1awj2ng",
-      kybGjl: "x1hl2dhg",
-      kGuDYH: "xfifm61",
-      kLWn49: "x1d3mw78",
-      khDVqt: "xuxw1ft",
-      k1xSpc: "x3nfvp2",
-      kGNEyG: "x6s0dn4",
-      kjj79g: "xl56j7k",
-      $$css: true
+      padding: "4px 10px",
+      borderRadius: "8px",
+      backgroundColor: t.bgInteractive,
+      color: "white",
+      textDecoration: "none",
+      fontSize: "12px",
+      lineHeight: "16px",
+      whiteSpace: "nowrap",
+      display: "inline-flex",
+      alignItems: "center",
+      justifyContent: "center"
     },
     closeBtn: {
-      kWkggS: "xjbqb8w",
-      kkrTdU: "x1ypdohk",
-      kGuDYH: "xosj86m",
-      kmVPX3: "xdqdrvq",
-      kMwMTN: "x9g7u3q",
-      kmuXW: "x2lah0s",
-      $$css: true
+      backgroundColor: "transparent",
+      border: "none",
+      cursor: "pointer",
+      fontSize: "18px",
+      padding: "4px 8px",
+      color: t.text,
+      flexShrink: 0
     },
     content: {
-      kUk6DE: "x98rzlu",
-      kORKVm: "x1odjw0f",
-      kXHlph: "x6ikm8r",
-      kmVPX3: "xc7ga6q",
-      kWkggS: "xkdfcq9",
-      k1xSpc: "x78zum5",
-      kXwgrk: "xdt5ytf",
-      kGNEyG: "x6s0dn4",
-      kjj79g: "x1nhvcw1",
-      ks0D6T: "x193iq5w",
-      kB7OPa: "x9f619",
-      kAzted: "x2lwn1j",
-      $$css: true
+      flex: 1,
+      overflowY: "auto",
+      overflowX: "hidden",
+      padding: "12px",
+      backgroundColor: t.bg,
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      justifyContent: "flex-start",
+      maxWidth: "100%",
+      boxSizing: "border-box",
+      minHeight: 0
     },
     mediaImage: {
-      ks0D6T: "x193iq5w",
-      kzqmXN: "x14atkfc",
-      kZKoxP: "xt7dq6l",
-      kskxy: "x12f24lm",
-      kVIFPx: "x19kjcj4",
-      k1xSpc: "x1lliihq",
-      kogj98: "x19bbpc0",
-      kaIpWk: "xur7f20",
-      kGVxlE: "xjw6pgt",
-      $$css: true
+      maxWidth: "100%",
+      width: "auto",
+      height: "auto",
+      maxHeight: "70vh",
+      objectFit: "contain",
+      display: "block",
+      margin: "0 auto",
+      borderRadius: "8px",
+      boxShadow: "0 2px 12px rgba(0,0,0,0.1)"
     },
     mediaVideo: {
-      ks0D6T: "x193iq5w",
-      kzqmXN: "xh8yej3",
-      kZKoxP: "xt7dq6l",
-      kskxy: "x12f24lm",
-      kVIFPx: "x19kjcj4",
-      k1xSpc: "x1lliihq",
-      kaIpWk: "xur7f20",
-      kWkggS: "x42x0ya",
-      $$css: true
+      maxWidth: "100%",
+      width: "100%",
+      height: "auto",
+      maxHeight: "70vh",
+      objectFit: "contain",
+      display: "block",
+      borderRadius: "8px",
+      backgroundColor: "black"
     },
     mediaAudio: {
-      kzqmXN: "xh8yej3",
-      ks0D6T: "xrlsmeg",
-      k1xSpc: "x1lliihq",
-      kogj98: "x1v36x0e",
-      $$css: true
+      width: "100%",
+      maxWidth: "600px",
+      display: "block",
+      margin: "20px auto"
     },
     footer: {
-      k1xSpc: "x1s85apg",
-      $$css: true
+      display: "none"
     }
-  };
+  });
 });
 
 // file-viewer.js
@@ -8515,6 +8430,7 @@ function ensureElements() {
     drawer.className = (drawerProps.className || "") + " hidden";
     if (drawerProps.style)
       Object.assign(drawer.style, drawerProps.style);
+    drawer.style.display = "none";
     const headerProps = props(fv.header);
     const titleProps = props(fv.title);
     const countProps = props(fv.count);
@@ -8561,15 +8477,10 @@ function ensureElements() {
       }
     });
   }
-  return {
-    icon,
-    drawer
-  };
+  return { icon, drawer };
 }
 function updateIcon() {
-  const {
-    icon
-  } = ensureElements();
+  const { icon } = ensureElements();
   icon.classList.remove("hidden");
   icon.style.display = "flex";
   icon.style.bottom = "20px";
@@ -8596,10 +8507,9 @@ function updateIcon() {
   }
 }
 function openDrawer() {
-  const {
-    drawer
-  } = ensureElements();
+  const { drawer } = ensureElements();
   drawer.classList.remove("hidden");
+  drawer.style.display = "flex";
   updateIcon();
   if (files.length > 0) {
     updateTabs();
@@ -8607,10 +8517,9 @@ function openDrawer() {
   }
 }
 function closeDrawer() {
-  const {
-    drawer
-  } = ensureElements();
+  const { drawer } = ensureElements();
   drawer.classList.add("hidden");
+  drawer.style.display = "none";
   updateIcon();
 }
 function navigate(dir) {
@@ -8665,17 +8574,10 @@ function updateTabs() {
           const sid = localStorage.getItem("zerowrapper_session") || "shared";
           await fetch(`/api/files/close`, {
             method: "POST",
-            headers: {
-              "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-              file_id: f.id,
-              session_id: sid
-            })
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ file_id: f.id, session_id: sid })
           });
-          await fetch(`?api=files_close&file_id=${encodeURIComponent(f.id)}&session_id=${encodeURIComponent(sid)}`, {
-            method: "POST"
-          }).catch(() => {});
+          await fetch(`?api=files_close&file_id=${encodeURIComponent(f.id)}&session_id=${encodeURIComponent(sid)}`, { method: "POST" }).catch(() => {});
         } catch {}
         files = files.filter((x) => x.id !== f.id);
         loaded.delete(f.id);
@@ -8752,9 +8654,7 @@ async function loadFile(index) {
         const page = await pdf.getPage(1);
         const isMobile = window.innerWidth < 600;
         const scale2 = isMobile ? 1 : 1.5;
-        const viewport = page.getViewport({
-          scale: scale2
-        });
+        const viewport = page.getViewport({ scale: scale2 });
         const canvas2 = content2.querySelector("#pdf-canvas");
         if (canvas2) {
           canvas2.width = viewport.width;
@@ -8762,10 +8662,7 @@ async function loadFile(index) {
           canvas2.style.width = "100%";
           canvas2.style.maxWidth = viewport.width + "px";
           canvas2.style.height = "auto";
-          await page.render({
-            canvasContext: canvas2.getContext("2d"),
-            viewport
-          }).promise;
+          await page.render({ canvasContext: canvas2.getContext("2d"), viewport }).promise;
         }
       } else {
         content2.innerHTML = `<iframe src="${url2}" style="width:100%; height:70vh; border:none; border-radius:8px; display:block;" loading="lazy"></iframe>`;
@@ -8783,9 +8680,7 @@ async function loadFile(index) {
       if (window.XLSX) {
         const res = await fetch(url2);
         const buf = await res.arrayBuffer();
-        const wb = window.XLSX.read(buf, {
-          type: "array"
-        });
+        const wb = window.XLSX.read(buf, { type: "array" });
         let html = "";
         wb.SheetNames.forEach((name) => {
           const ws2 = wb.Sheets[name];
@@ -8801,12 +8696,8 @@ async function loadFile(index) {
       const res = await fetch(url2);
       const text = await res.text();
       try {
-        const {
-          marked: marked5
-        } = await import("marked");
-        const {
-          render: render2
-        } = await Promise.resolve().then(() => (init_markdown(), exports_markdown));
+        const { marked: marked5 } = await import("marked");
+        const { render: render2 } = await Promise.resolve().then(() => (init_markdown(), exports_markdown));
         const html = marked5.parse(text.slice(0, 1e5));
         const div = document.createElement("div");
         div.className = "chat-markdown";
@@ -8878,9 +8769,7 @@ function updateFiles(newFiles) {
   }
 }
 function init4() {
-  const {
-    drawer
-  } = ensureElements();
+  const { drawer } = ensureElements();
   if (drawer)
     drawer.classList.add("hidden");
   updateIcon();
@@ -8909,217 +8798,138 @@ var init_file_viewer = __esm(() => {
 // ask.stylex.js
 var ak;
 var init_ask_stylex = __esm(() => {
+  init_stylex();
   init_tokens_stylex();
-  ak = {
+  ak = create({
     card: {
-      kMzoRj: "xmkeg23",
-      ksu8eU: "x1y0btm7",
-      kVAM5u: "x1d54n62",
-      kaIpWk: "xixl9f9",
-      kmVPX3: "x6yrr3s",
-      kWkggS: "x7b40fa",
-      k1xSpc: "x78zum5",
-      kXwgrk: "xdt5ytf",
-      kOIVth: "x167g77z",
-      kGVxlE: "xsyyb4p",
-      $$css: true
+      borderWidth: "1px",
+      borderStyle: "solid",
+      borderColor: t.borderWeak,
+      borderRadius: "14px",
+      padding: "10px 12px",
+      backgroundColor: t.bgWeak,
+      display: "flex",
+      flexDirection: "column",
+      gap: "8px",
+      boxShadow: "0 2px 10px rgba(0,0,0,0.08)"
     },
-    wizardCard: {
-      kAzted: "x2lwn1j",
-      $$css: true
-    },
+    wizardCard: { minHeight: 0 },
     systemBanner: {
-      kaIpWk: "xixl9f9",
-      kmVPX3: "x6yrr3s",
-      kKwaWg: "x1y279fn",
-      kMzoRj: "xmkeg23",
-      ksu8eU: "x1y0btm7",
-      kVAM5u: "x1wz1ty9",
-      kGVxlE: "xsyyb4p",
-      $$css: true
+      borderRadius: "14px",
+      padding: "10px 12px",
+      backgroundImage: t.pileCardBg,
+      borderWidth: "1px",
+      borderStyle: "solid",
+      borderColor: t.border,
+      boxShadow: "0 2px 10px rgba(0,0,0,0.08)"
     },
-    systemTitle: {
-      kGuDYH: "x1qzg9v8",
-      k63SB2: "xuv8nkb",
-      kMwMTN: "x1wp7847",
-      $$css: true
-    },
-    systemSub: {
-      kGuDYH: "xboafo0",
-      kMwMTN: "x9g7u3q",
-      keoZOQ: "xr9ek0c",
-      kLWn49: "x1evy7pa",
-      $$css: true
-    },
-    objective: {
-      kGuDYH: "x1sfrptf",
-      kMwMTN: "xh1wwo8",
-      $$css: true
-    },
+    systemTitle: { fontSize: "0.85rem", fontWeight: 800, color: t.textStrong },
+    systemSub: { fontSize: "0.75rem", color: t.text, marginTop: "2px", lineHeight: "1.5" },
+    objective: { fontSize: "0.7rem", color: t.textWeak },
     textarea: {
-      kzqmXN: "xh8yej3",
-      kB7OPa: "x9f619",
-      kGuDYH: "xgommxb",
-      kaIpWk: "xur7f20",
-      kmVPX3: "x18tqr4w",
-      kMzoRj: "xmkeg23",
-      ksu8eU: "x1y0btm7",
-      kVAM5u: "x1d54n62",
-      kWkggS: "xkdfcq9",
-      kMwMTN: "x1wp7847",
-      kMv6JI: "xjb2p0i",
-      k8Qsv1: "xz3dijg",
-      kH8XJS: "xjn0ezo",
-      $$css: true
+      width: "100%",
+      boxSizing: "border-box",
+      fontSize: "0.8rem",
+      borderRadius: "8px",
+      padding: "6px 8px",
+      borderWidth: "1px",
+      borderStyle: "solid",
+      borderColor: t.borderWeak,
+      backgroundColor: t.bg,
+      color: t.textStrong,
+      fontFamily: "inherit",
+      "::placeholder": { color: t.textWeak, opacity: 0.9 }
     },
-    answer: {
-      kAzted: "x8nclml",
-      kMzoRj: "xdh2fpr",
-      kGuDYH: "x1qzg9v8",
-      $$css: true
-    },
-    pills: {
-      k1xSpc: "x78zum5",
-      kwnvtZ: "x1a02dak",
-      kOIVth: "x17d4w8g",
-      $$css: true
-    },
+    answer: { minHeight: "64px", borderWidth: "2px", fontSize: "0.85rem" },
+    pills: { display: "flex", flexWrap: "wrap", gap: "6px" },
     pillBase: {
-      kmVPX3: "x10kg585",
-      kaIpWk: "x1e6avla",
-      kkrTdU: "x1ypdohk",
-      kGuDYH: "xp1qmoa",
-      k63SB2: "x1s688f",
-      kMzoRj: "xmkeg23",
-      ksu8eU: "x1y0btm7",
-      k1ekBW: "x18dpk69",
-      kIyJzY: "xgdialr",
-      kAMwcw: "xwji4o3",
-      kwmNyF: "x14ow2ja",
-      $$css: true
+      padding: "6px 14px",
+      borderRadius: "999px",
+      cursor: "pointer",
+      fontSize: "0.78rem",
+      fontWeight: 600,
+      borderWidth: "1px",
+      borderStyle: "solid",
+      transitionProperty: "transform, background-color",
+      transitionDuration: "0.12s",
+      transitionTimingFunction: "ease",
+      ":hover": { transform: "translateY(-1px)" }
     },
-    pillIdle: {
-      kWkggS: "xkdfcq9",
-      kMwMTN: "x1wp7847",
-      kVAM5u: "x1wz1ty9",
-      $$css: true
-    },
+    pillIdle: { backgroundColor: t.bg, color: t.textStrong, borderColor: t.border },
     pillSelected: {
-      kWkggS: "x57rt1s",
-      kMwMTN: "x1xw57gy",
-      kVAM5u: "x9r1u3d",
-      $$css: true
+      backgroundColor: t.bgInteractive,
+      color: t.textInverted,
+      borderColor: "transparent"
     },
     wizardHeader: {
-      k1xSpc: "x78zum5",
-      kGNEyG: "x6s0dn4",
-      kjj79g: "x1qughib",
-      kGuDYH: "xboafo0",
-      k63SB2: "x1s688f",
-      kMwMTN: "x1wp7847",
-      kmVPX3: "xsmg1hj",
-      $$css: true
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      fontSize: "0.75rem",
+      fontWeight: 600,
+      color: t.textStrong,
+      padding: "4px 2px"
     },
-    dots: {
-      k1xSpc: "x78zum5",
-      kOIVth: "x17d4w8g",
-      kGNEyG: "x6s0dn4",
-      $$css: true
-    },
+    dots: { display: "flex", gap: "6px", alignItems: "center" },
     dotBase: {
-      kzqmXN: "x1xc55vz",
-      kZKoxP: "xdk7pt",
-      kaIpWk: "x16rqkct",
-      kMzoRj: "xmkeg23",
-      ksu8eU: "x1y0btm7",
-      kmVPX3: "x1717udv",
-      kkrTdU: "x1ypdohk",
-      $$css: true
+      width: "8px",
+      height: "8px",
+      borderRadius: "50%",
+      borderWidth: "1px",
+      borderStyle: "solid",
+      padding: 0,
+      cursor: "pointer"
     },
-    dotIdle: {
-      kWkggS: "x7b40fa",
-      kVAM5u: "x1wz1ty9",
-      $$css: true
-    },
-    dotActive: {
-      kWkggS: "x57rt1s",
-      kVAM5u: "x1fxipln",
-      $$css: true
-    },
-    dotAnswered: {
-      kWkggS: "xw3j01q",
-      kVAM5u: "x1czwg3k",
-      $$css: true
-    },
+    dotIdle: { backgroundColor: t.bgWeak, borderColor: t.border },
+    dotActive: { backgroundColor: t.bgInteractive, borderColor: t.bgInteractive },
+    dotAnswered: { backgroundColor: t.statusSuccess, borderColor: t.statusSuccess },
     qLabel: {
-      kGuDYH: "x1sfrptf",
-      k63SB2: "x1s688f",
-      kMwMTN: "xh1wwo8",
-      kP9fke: "xtvhhri",
-      kb6lSQ: "x3gc2hl",
-      $$css: true
+      fontSize: "0.7rem",
+      fontWeight: 600,
+      color: t.textWeak,
+      textTransform: "uppercase",
+      letterSpacing: "0.03em"
     },
     wizardNav: {
-      k1xSpc: "x78zum5",
-      kGNEyG: "x6s0dn4",
-      kjj79g: "x1qughib",
-      kOIVth: "x167g77z",
-      kmVPX3: "xztvwtv",
-      $$css: true
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: "8px",
+      padding: "4px 0"
     },
     navBase: {
-      kmVPX3: "x10kg585",
-      kaIpWk: "x1e6avla",
-      kkrTdU: "x1ypdohk",
-      kGuDYH: "xp1qmoa",
-      k63SB2: "x1s688f",
-      kMzoRj: "xmkeg23",
-      ksu8eU: "x1y0btm7",
-      kWCcOm: "x1lfpgzf",
-      kYPGJ8: "x1s07b3s",
-      $$css: true
+      padding: "6px 14px",
+      borderRadius: "999px",
+      cursor: "pointer",
+      fontSize: "0.78rem",
+      fontWeight: 600,
+      borderWidth: "1px",
+      borderStyle: "solid",
+      ":disabled": { opacity: 0.4, cursor: "not-allowed" }
     },
-    navIdle: {
-      kWkggS: "xkdfcq9",
-      kMwMTN: "x1wp7847",
-      kVAM5u: "x1wz1ty9",
-      $$css: true
-    },
+    navIdle: { backgroundColor: t.bg, color: t.textStrong, borderColor: t.border },
     navPrimary: {
-      kWkggS: "x57rt1s",
-      kMwMTN: "x1xw57gy",
-      kVAM5u: "x9r1u3d",
-      $$css: true
+      backgroundColor: t.bgInteractive,
+      color: t.textInverted,
+      borderColor: "transparent"
     },
-    navCount: {
-      kGuDYH: "xboafo0",
-      k63SB2: "x1s688f",
-      kMwMTN: "xh1wwo8",
-      $$css: true
-    },
+    navCount: { fontSize: "0.75rem", fontWeight: 600, color: t.textWeak },
     banner: {
-      kGuDYH: "xboafo0",
-      kMwMTN: "xh1wwo8",
-      kmVPX3: "x18tqr4w",
-      k9WMMc: "x2b8uid",
-      kWkggS: "x7b40fa",
-      kaIpWk: "xur7f20",
-      $$css: true
+      fontSize: "0.75rem",
+      color: t.textWeak,
+      padding: "6px 8px",
+      textAlign: "center",
+      backgroundColor: t.bgWeak,
+      borderRadius: "8px"
     },
-    reviewQ: {
-      kGuDYH: "xgommxb",
-      k63SB2: "x1s688f",
-      kMwMTN: "x1wp7847",
-      $$css: true
-    },
+    reviewQ: { fontSize: "0.8rem", fontWeight: 600, color: t.textStrong },
     reviewA: {
-      kGuDYH: "xgommxb",
-      kMwMTN: "x9g7u3q",
-      khDVqt: "x126k92a",
-      kTgw9: "x13faqbe",
-      $$css: true
+      fontSize: "0.8rem",
+      color: t.text,
+      whiteSpace: "pre-wrap",
+      wordBreak: "break-word"
     }
-  };
+  });
 });
 
 // ask-drawer.js
@@ -9350,11 +9160,7 @@ function openWith(ask) {
     }))
   };
   wizardIndex = 0;
-  pendingQueue = [{
-    ask_id: current.ask_id,
-    kind: current.kind,
-    questions: qs
-  }];
+  pendingQueue = [{ ask_id: current.ask_id, kind: current.kind, questions: qs }];
   setStatus("");
   renderWizard();
   setOpen(true);
@@ -9389,18 +9195,13 @@ async function submit() {
     question: q.question,
     answer: q.answer || ""
   }));
-  const body2 = JSON.stringify({
-    id: current.ask_id,
-    answers
-  });
+  const body2 = JSON.stringify({ id: current.ask_id, answers });
   setStatus("Submitting…");
   for (const url2 of ["/api/ask/answer", "?api=ask_answer"]) {
     try {
       const r = await fetch(url2, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
+        headers: { "Content-Type": "application/json" },
         body: body2
       });
       const j = await r.json().catch(() => ({}));
@@ -9409,11 +9210,7 @@ async function submit() {
         const done = current;
         const resolvedId = done ? done.ask_id : "";
         try {
-          window.dispatchEvent(new CustomEvent("askResolved", {
-            detail: {
-              ask_id: resolvedId
-            }
-          }));
+          window.dispatchEvent(new CustomEvent("askResolved", { detail: { ask_id: resolvedId } }));
         } catch {}
         current = null;
         pendingQueue = pendingQueue.filter((x) => x.ask_id !== resolvedId);
@@ -9423,12 +9220,7 @@ async function submit() {
           try {
             qs = Array.isArray(next.questions) ? next.questions : JSON.parse(next.questions || "[]");
           } catch {}
-          setTimeout(() => openWith({
-            ask_id: next.ask_id,
-            session_id: next.session_id,
-            questions: qs,
-            kind: next.kind
-          }), 300);
+          setTimeout(() => openWith({ ask_id: next.ask_id, session_id: next.session_id, questions: qs, kind: next.kind }), 300);
         }
         setTimeout(() => {
           setOpen(false);
@@ -9469,12 +9261,7 @@ async function pollPending() {
           try {
             qs = typeof x.questions === "string" ? JSON.parse(x.questions) : Array.isArray(x.questions) ? x.questions : [];
           } catch {}
-          return {
-            ask_id: x.id,
-            session_id: x.session_id,
-            questions: qs,
-            kind: x.kind || "model"
-          };
+          return { ask_id: x.id, session_id: x.session_id, questions: qs, kind: x.kind || "model" };
         });
         if (list.length > 0 && !isOpen2()) {
           const first = list[0];
@@ -9482,12 +9269,7 @@ async function pollPending() {
           try {
             questions = typeof first.questions === "string" ? JSON.parse(first.questions) : Array.isArray(first.questions) ? first.questions : [];
           } catch {}
-          openWith({
-            ask_id: first.id,
-            session_id: first.session_id,
-            questions,
-            kind: first.kind || "model"
-          });
+          openWith({ ask_id: first.id, session_id: first.session_id, questions, kind: first.kind || "model" });
         } else if (list.length > 1 && isOpen2() && current) {
           setStatus(list.length + " pending asks — finish current to see next");
         }
@@ -10083,9 +9865,7 @@ async function uploadFile(file) {
     formData.append("file", file);
     const res = await fetch("?api=upload", {
       method: "POST",
-      headers: {
-        "X-Filename": file.name
-      },
+      headers: { "X-Filename": file.name },
       body: file
     });
     const data = await res.json();
@@ -10733,116 +10513,77 @@ init_messages();
 init_stylex();
 
 // lightbox.stylex.js
+init_stylex();
 init_tokens_stylex();
-var lb = {
+var lb = create({
   box: {
-    kVAEAm: "xixxii4",
-    kpwlN0: "x10a8y8t",
-    kY2c9j: "x1q2oy4v",
-    kWkggS: "x1av4zun",
-    k1xSpc: "x78zum5",
-    kGNEyG: "x6s0dn4",
-    kjj79g: "xl56j7k",
-    k1ekBW: "x19991ni",
-    kIyJzY: "x1rvut6x",
-    kkrTdU: "xzuqxi3",
-    $$css: true
+    position: "fixed",
+    inset: 0,
+    zIndex: 9999,
+    backgroundColor: "rgba(0,0,0,0.85)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    transitionProperty: "opacity",
+    transitionDuration: "0.25s",
+    cursor: "zoom-out"
   },
-  boxClosed: {
-    kSiTet: "xg01cxk",
-    kfzvcC: "x47corl",
-    $$css: true
-  },
-  boxOpen: {
-    kSiTet: "x1hc1fzr",
-    kfzvcC: "x67bb7w",
-    $$css: true
-  },
+  boxClosed: { opacity: 0, pointerEvents: "none" },
+  boxOpen: { opacity: 1, pointerEvents: "auto" },
   img: {
-    ks0D6T: "x95b5qq",
-    kskxy: "xqui1pq",
-    kaIpWk: "xur7f20",
-    kGVxlE: "x1e9v2fp",
-    $$css: true
+    maxWidth: "90vw",
+    maxHeight: "90vh",
+    borderRadius: "8px",
+    boxShadow: "0 4px 24px rgba(0,0,0,0.5)"
   },
-  imgShown: {
-    k1xSpc: "x1lliihq",
-    $$css: true
-  },
-  imgHidden: {
-    k1xSpc: "x1s85apg",
-    $$css: true
-  },
-  loading: {
-    kMwMTN: "xto31z9",
-    kGuDYH: "xkpwil5",
-    $$css: true
-  },
-  loadingShown: {
-    k1xSpc: "x1lliihq",
-    $$css: true
-  },
-  loadingHidden: {
-    k1xSpc: "x1s85apg",
-    $$css: true
-  },
+  imgShown: { display: "block" },
+  imgHidden: { display: "none" },
+  loading: { color: "rgba(255,255,255,0.6)", fontSize: "0.875rem" },
+  loadingShown: { display: "block" },
+  loadingHidden: { display: "none" },
   navBtn: {
-    kVAEAm: "x10l6tqk",
-    k87sOh: "xwa60dl",
-    k3aq6I: "x1cb1t30",
-    kY2c9j: "x1vjfegm",
-    kzqmXN: "x187nhsf",
-    kZKoxP: "xn3w4p2",
-    kaIpWk: "x16rqkct",
-    ksu8eU: "xng3xce",
-    kWkggS: "x1kl6yg8",
-    kMwMTN: "xfungia",
-    kGuDYH: "x1603h9y",
-    kkrTdU: "x1ypdohk",
-    kGNEyG: "x6s0dn4",
-    kjj79g: "xl56j7k",
-    k1ekBW: "x15406qy",
-    kIyJzY: "x13dflua",
-    kGzVvX: "x1l7f9c6",
-    $$css: true
+    position: "absolute",
+    top: "50%",
+    transform: "translateY(-50%)",
+    zIndex: 1,
+    width: "44px",
+    height: "44px",
+    borderRadius: "50%",
+    borderStyle: "none",
+    backgroundColor: t.bgInteractiveWeak,
+    color: "#fff",
+    fontSize: "1.25rem",
+    cursor: "pointer",
+    alignItems: "center",
+    justifyContent: "center",
+    transitionProperty: "background-color",
+    transitionDuration: "0.2s",
+    ":hover": { backgroundColor: t.bgInteractive }
   },
-  navShown: {
-    k1xSpc: "x78zum5",
-    $$css: true
-  },
-  navHidden: {
-    k1xSpc: "x1s85apg",
-    $$css: true
-  },
-  prev: {
-    kbCHJM: "x1qpfodn",
-    $$css: true
-  },
-  next: {
-    kCIrl2: "xn5hqff",
-    $$css: true
-  },
+  navShown: { display: "flex" },
+  navHidden: { display: "none" },
+  prev: { left: "16px" },
+  next: { right: "16px" },
   close: {
-    kVAEAm: "x10l6tqk",
-    k87sOh: "xomnu4r",
-    kCIrl2: "xn5hqff",
-    kzqmXN: "x14qfxbe",
-    kZKoxP: "xc9qbxq",
-    kaIpWk: "x16rqkct",
-    ksu8eU: "xng3xce",
-    kWkggS: "x1kl6yg8",
-    kMwMTN: "xfungia",
-    kGuDYH: "x1603h9y",
-    kkrTdU: "x1ypdohk",
-    k1xSpc: "x78zum5",
-    kGNEyG: "x6s0dn4",
-    kjj79g: "xl56j7k",
-    k1ekBW: "x15406qy",
-    kIyJzY: "x13dflua",
-    kGzVvX: "x1l7f9c6",
-    $$css: true
+    position: "absolute",
+    top: "16px",
+    right: "16px",
+    width: "36px",
+    height: "36px",
+    borderRadius: "50%",
+    borderStyle: "none",
+    backgroundColor: t.bgInteractiveWeak,
+    color: "#fff",
+    fontSize: "1.25rem",
+    cursor: "pointer",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    transitionProperty: "background-color",
+    transitionDuration: "0.2s",
+    ":hover": { backgroundColor: t.bgInteractive }
   }
-};
+});
 
 // lightbox.js
 var cx11 = (...args) => props(...args).className || "";
@@ -10893,18 +10634,14 @@ function ensureLightbox() {
     });
     lightbox.addEventListener("touchstart", (e) => {
       touchStartX = e.changedTouches[0].screenX;
-    }, {
-      passive: true
-    });
+    }, { passive: true });
     lightbox.addEventListener("touchend", (e) => {
       const delta = touchStartX - e.changedTouches[0].screenX;
       if (delta > 50)
         navigate2(1);
       else if (delta < -50)
         navigate2(-1);
-    }, {
-      passive: true
-    });
+    }, { passive: true });
   }
   return lightbox;
 }
@@ -10992,307 +10729,246 @@ init_messages();
 init_stylex();
 
 // drawer.stylex.js
+init_stylex();
 init_tokens_stylex();
-var d = {
+var d = create({
   overlay: {
-    kVAEAm: "xixxii4",
-    kpwlN0: "x10a8y8t",
-    kWkggS: "x1sag07j",
-    kY2c9j: "x1aciyhk",
-    $$css: true
+    position: "fixed",
+    inset: 0,
+    backgroundColor: "rgba(0,0,0,0.35)",
+    zIndex: 60
   },
   overlayHidden: {
-    k1xSpc: "x1s85apg",
-    $$css: true
+    display: "none"
   },
   panel: {
-    kVAEAm: "xixxii4",
-    k87sOh: "x13vifvy",
-    kbCHJM: "xu96u03",
-    kZKoxP: "xtdtrs8",
-    kzqmXN: "xfwccr8",
-    kY2c9j: "x13mdkc",
-    k1xSpc: "x78zum5",
-    kXwgrk: "xdt5ytf",
-    kWkggS: "xkdfcq9",
-    kWqL5O: "xs1s249",
-    kSWEuD: "x32b0ac",
-    k26BEO: "x14zxu76",
-    kGVxlE: "x1nunbel",
-    k1ekBW: "x11xpdln",
-    kIyJzY: "x1rvut6x",
-    kAMwcw: "xwji4o3",
-    $$css: true
+    position: "fixed",
+    top: 0,
+    left: 0,
+    height: "100dvh",
+    width: "min(320px, 85vw)",
+    zIndex: 61,
+    display: "flex",
+    flexDirection: "column",
+    backgroundColor: t.bg,
+    borderRightWidth: "1px",
+    borderRightStyle: "solid",
+    borderRightColor: t.borderWeak,
+    boxShadow: "8px 0 24px rgba(0,0,0,0.18)",
+    transitionProperty: "transform",
+    transitionDuration: "0.25s",
+    transitionTimingFunction: "ease"
   },
   panelClosed: {
-    k3aq6I: "x5fxwdf",
-    $$css: true
+    transform: "translateX(-105%)"
   },
   panelOpen: {
-    k3aq6I: "x1c071of",
-    $$css: true
+    transform: "none"
   },
   header: {
-    k1xSpc: "x78zum5",
-    kGNEyG: "x6s0dn4",
-    kjj79g: "x1qughib",
-    kmVPX3: "xwvmjul",
-    $$css: true
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: "14px 16px 10px"
   },
   title: {
-    kGuDYH: "x1qzg9v8",
-    k63SB2: "x1s688f",
-    kMwMTN: "x1wp7847",
-    $$css: true
+    fontSize: "0.85rem",
+    fontWeight: 600,
+    color: t.textStrong
   },
   closeBtn: {
-    k1xSpc: "x78zum5",
-    kGNEyG: "x6s0dn4",
-    kjj79g: "xl56j7k",
-    kzqmXN: "x1849jeq",
-    kZKoxP: "x1gnnpzl",
-    kaIpWk: "xur7f20",
-    kkrTdU: "x1ypdohk",
-    kMzoRj: "xmkeg23",
-    ksu8eU: "x1y0btm7",
-    kVAM5u: "x1d54n62",
-    kWkggS: "x7b40fa",
-    kMwMTN: "xh1wwo8",
-    $$css: true
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: "30px",
+    height: "30px",
+    borderRadius: "8px",
+    cursor: "pointer",
+    borderWidth: "1px",
+    borderStyle: "solid",
+    borderColor: t.borderWeak,
+    backgroundColor: t.bgWeak,
+    color: t.textWeak
   },
   actions: {
-    kmVPX3: "x39muk0",
-    $$css: true
+    padding: "0 16px 8px"
   },
   newBtn: {
-    k1xSpc: "x78zum5",
-    kGNEyG: "x6s0dn4",
-    kOIVth: "x167g77z",
-    kzqmXN: "xh8yej3",
-    kmVPX3: "x153ncpu",
-    kaIpWk: "x1q4ynmn",
-    kkrTdU: "x1ypdohk",
-    kMv6JI: "xjb2p0i",
-    kGuDYH: "xgommxb",
-    kMzoRj: "xmkeg23",
-    ksu8eU: "x1y0btm7",
-    kVAM5u: "x1d54n62",
-    kWkggS: "x7b40fa",
-    kMwMTN: "x1wp7847",
-    kGzVvX: "xes8ofb",
-    $$css: true
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+    width: "100%",
+    padding: "8px 12px",
+    borderRadius: "10px",
+    cursor: "pointer",
+    fontFamily: "inherit",
+    fontSize: "0.8rem",
+    borderWidth: "1px",
+    borderStyle: "solid",
+    borderColor: t.borderWeak,
+    backgroundColor: t.bgWeak,
+    color: t.textStrong,
+    ":hover": { backgroundColor: t.bgWeakHover }
   },
   label: {
-    kmVPX3: "x1olomkg",
-    kGuDYH: "x1sfrptf",
-    kP9fke: "xtvhhri",
-    kb6lSQ: "x1dgsrnt",
-    kMwMTN: "xh1wwo8",
-    $$css: true
+    padding: "8px 16px 4px",
+    fontSize: "0.7rem",
+    textTransform: "uppercase",
+    letterSpacing: "0.06em",
+    color: t.textWeak
   },
   list: {
-    kUk6DE: "x98rzlu",
-    kAzted: "x2lwn1j",
-    kORKVm: "x1odjw0f",
-    kmVPX3: "xn7r4s3",
-    k1xSpc: "x78zum5",
-    kXwgrk: "xdt5ytf",
-    kOIVth: "x195vfkc",
-    $$css: true
+    flex: 1,
+    minHeight: 0,
+    overflowY: "auto",
+    padding: "0 8px 8px",
+    display: "flex",
+    flexDirection: "column",
+    gap: "2px"
   },
   item: {
-    k1xSpc: "x1lliihq",
-    kzqmXN: "xh8yej3",
-    k9WMMc: "xdpxx8g",
-    kkrTdU: "x1ypdohk",
-    kMv6JI: "xjb2p0i",
-    kmVPX3: "x1160tuk",
-    kaIpWk: "x1q4ynmn",
-    kMzoRj: "xmkeg23",
-    ksu8eU: "x1y0btm7",
-    kVAM5u: "x9r1u3d",
-    kWkggS: "xjbqb8w",
-    kMwMTN: "x1wp7847",
-    kGzVvX: "x1bmhxhq",
-    $$css: true
+    display: "block",
+    width: "100%",
+    textAlign: "left",
+    cursor: "pointer",
+    fontFamily: "inherit",
+    padding: "8px 10px",
+    borderRadius: "10px",
+    borderWidth: "1px",
+    borderStyle: "solid",
+    borderColor: "transparent",
+    backgroundColor: "transparent",
+    color: t.textStrong,
+    ":hover": { backgroundColor: t.bgWeak }
   },
   itemActive: {
-    kWkggS: "x7b40fa",
-    kVAM5u: "x1d54n62",
-    $$css: true
+    backgroundColor: t.bgWeak,
+    borderColor: t.borderWeak
   },
   itemTitle: {
-    k1xSpc: "x1lliihq",
-    kGuDYH: "xgommxb",
-    khDVqt: "xuxw1ft",
-    kVQacm: "xb3r6kr",
-    kg5iWk: "xlyipyv",
-    $$css: true
+    display: "block",
+    fontSize: "0.8rem",
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+    textOverflow: "ellipsis"
   },
   itemMeta: {
-    k1xSpc: "x1lliihq",
-    kGuDYH: "x191ayms",
-    keoZOQ: "xr9ek0c",
-    khDVqt: "xuxw1ft",
-    kVQacm: "xb3r6kr",
-    kg5iWk: "xlyipyv",
-    kMwMTN: "xh1wwo8",
-    $$css: true
+    display: "block",
+    fontSize: "0.68rem",
+    marginTop: "2px",
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    color: t.textWeak
   },
   empty: {
-    kGuDYH: "xp1qmoa",
-    kMwMTN: "xh1wwo8",
-    kmVPX3: "x7z7khe",
-    $$css: true
+    fontSize: "0.78rem",
+    color: t.textWeak,
+    padding: "10px"
   },
   usage: {
-    kEafiO: "x178xt8z",
-    kPef9Z: "x13fuv20",
-    kLZC3w: "x1uasxvk",
-    kmVPX3: "x1v56k37",
-    kskxy: "xghzxso",
-    kORKVm: "x1odjw0f",
-    k1xSpc: "x78zum5",
-    kXwgrk: "xdt5ytf",
-    kOIVth: "x1v2ro7d",
-    $$css: true
+    borderTopWidth: "1px",
+    borderTopStyle: "solid",
+    borderTopColor: t.borderWeak,
+    padding: "12px 16px 16px",
+    maxHeight: "46vh",
+    overflowY: "auto",
+    display: "flex",
+    flexDirection: "column",
+    gap: "12px"
   },
-  detailSection: {
-    k1xSpc: "x78zum5",
-    kXwgrk: "xdt5ytf",
-    kOIVth: "x1nejdyq",
-    $$css: true
-  },
+  detailSection: { display: "flex", flexDirection: "column", gap: "5px" },
   detailTitle: {
-    kGuDYH: "x9cxo5s",
-    k63SB2: "x1xlr1w8",
-    kP9fke: "xtvhhri",
-    kb6lSQ: "x9pfba7",
-    kMwMTN: "xk67k7n",
-    $$css: true
+    fontSize: "0.62rem",
+    fontWeight: 700,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    color: t.textWeaker
   },
   detailHead: {
-    k1xSpc: "x78zum5",
-    kGNEyG: "x6s0dn4",
-    kjj79g: "x1qughib",
-    kOIVth: "x167g77z",
-    $$css: true
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: "8px"
   },
   detailModel: {
-    kGuDYH: "xp1qmoa",
-    k63SB2: "x1s688f",
-    kMwMTN: "x1wp7847",
-    kVQacm: "xb3r6kr",
-    kg5iWk: "xlyipyv",
-    khDVqt: "xuxw1ft",
-    $$css: true
+    fontSize: "0.78rem",
+    fontWeight: 600,
+    color: t.textStrong,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap"
   },
   badge: {
-    k1xSpc: "x3nfvp2",
-    kGNEyG: "x6s0dn4",
-    kmuXW: "x2lah0s",
-    kmVPX3: "x7bhtc1",
-    kaIpWk: "x1e6avla",
-    kGuDYH: "x1gy93pe",
-    k63SB2: "x1xlr1w8",
-    kP9fke: "xtvhhri",
-    kb6lSQ: "x1dgsrnt",
-    $$css: true
+    display: "inline-flex",
+    alignItems: "center",
+    flexShrink: 0,
+    padding: "1px 7px",
+    borderRadius: "999px",
+    fontSize: "0.58rem",
+    fontWeight: 700,
+    textTransform: "uppercase",
+    letterSpacing: "0.06em"
   },
-  badgeRunning: {
-    kWkggS: "x1kl6yg8",
-    kMwMTN: "x2b4slt",
-    $$css: true
-  },
-  badgeIdle: {
-    kWkggS: "x7b40fa",
-    kMwMTN: "xh1wwo8",
-    $$css: true
-  },
+  badgeRunning: { backgroundColor: t.bgInteractiveWeak, color: t.bgInteractive },
+  badgeIdle: { backgroundColor: t.bgWeak, color: t.textWeak },
   detailRow: {
-    k1xSpc: "x78zum5",
-    kGNEyG: "x1pha0wt",
-    kjj79g: "x1qughib",
-    kOIVth: "x883omv",
-    kGuDYH: "x1iuv88s",
-    $$css: true
+    display: "flex",
+    alignItems: "baseline",
+    justifyContent: "space-between",
+    gap: "10px",
+    fontSize: "0.72rem"
   },
-  detailLabel: {
-    kMwMTN: "xh1wwo8",
-    kmuXW: "x2lah0s",
-    $$css: true
-  },
+  detailLabel: { color: t.textWeak, flexShrink: 0 },
   detailNum: {
-    kMwMTN: "x1wp7847",
-    kMv6JI: "xnhzrae",
-    kGuDYH: "x1sfrptf",
-    k9WMMc: "x1hr2gdg",
-    kVQacm: "xb3r6kr",
-    kg5iWk: "xlyipyv",
-    khDVqt: "xuxw1ft",
-    $$css: true
+    color: t.textStrong,
+    fontFamily: t.fontMono,
+    fontSize: "0.7rem",
+    textAlign: "right",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap"
   },
   bar: {
-    kZKoxP: "xols6we",
-    kaIpWk: "x1e6avla",
-    kWkggS: "x7b40fa",
-    kVQacm: "xb3r6kr",
-    $$css: true
+    height: "6px",
+    borderRadius: "999px",
+    backgroundColor: t.bgWeak,
+    overflow: "hidden"
   },
-  barFill: {
-    kZKoxP: "x5yr21d",
-    kaIpWk: "x1e6avla",
-    kWkggS: "x57rt1s",
-    $$css: true
-  },
-  barFillWarn: {
-    kWkggS: "x1l2c5m2",
-    $$css: true
-  },
+  barFill: { height: "100%", borderRadius: "999px", backgroundColor: t.bgInteractive },
+  barFillWarn: { backgroundColor: t.statusError },
   dirText: {
-    kGuDYH: "x191ayms",
-    kMwMTN: "xh1wwo8",
-    kMv6JI: "xnhzrae",
-    kVQacm: "xb3r6kr",
-    kg5iWk: "xlyipyv",
-    khDVqt: "xuxw1ft",
-    ksoyAI: "xzyj77d",
-    k9WMMc: "xdpxx8g",
-    $$css: true
+    fontSize: "0.68rem",
+    color: t.textWeak,
+    fontFamily: t.fontMono,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+    direction: "rtl",
+    textAlign: "left"
   },
-  extrasActions: {
-    k1xSpc: "x78zum5",
-    kOIVth: "x167g77z",
-    kmVPX3: "x123tcd6",
-    $$css: true
-  },
+  extrasActions: { display: "flex", gap: "8px", padding: "8px 16px 2px" },
   actionBtn: {
-    kUk6DE: "x98rzlu",
-    k1xSpc: "x78zum5",
-    kGNEyG: "x6s0dn4",
-    kjj79g: "xl56j7k",
-    kOIVth: "x17d4w8g",
-    kmVPX3: "x2lkgqm",
-    kaIpWk: "x1q4ynmn",
-    kkrTdU: "x1ypdohk",
-    kMv6JI: "xjb2p0i",
-    kGuDYH: "x1iuv88s",
-    k63SB2: "x1s688f",
-    kMzoRj: "xmkeg23",
-    ksu8eU: "x1y0btm7",
-    kVAM5u: "x1d54n62",
-    kWkggS: "x7b40fa",
-    kMwMTN: "x1wp7847",
-    kGzVvX: "xes8ofb",
-    $$css: true
+    flex: 1,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "6px",
+    padding: "7px 10px",
+    borderRadius: "10px",
+    cursor: "pointer",
+    fontFamily: "inherit",
+    fontSize: "0.72rem",
+    fontWeight: 600,
+    borderWidth: "1px",
+    borderStyle: "solid",
+    borderColor: t.borderWeak,
+    backgroundColor: t.bgWeak,
+    color: t.textStrong,
+    ":hover": { backgroundColor: t.bgWeakHover }
   },
-  actionIcon: {
-    k1xSpc: "x3nfvp2",
-    kGNEyG: "x6s0dn4",
-    kmuXW: "x2lah0s",
-    $$css: true
-  }
-};
+  actionIcon: { display: "inline-flex", alignItems: "center", flexShrink: 0 }
+});
 
 // drawer.js
 var cx13 = (...args) => props(...args).className || "";
@@ -11305,7 +10981,16 @@ function paintShell(open2) {
   }
 }
 function paintStatic() {
-  const pairs = [["drawer-header", d.header], ["drawer-title", d.title], ["drawer-close-btn", d.closeBtn], ["drawer-actions", d.actions], ["drawer-new-btn", d.newBtn], ["drawer-sessions-label", d.label], ["drawer-list", d.list], ["drawer-usage", d.usage]];
+  const pairs = [
+    ["drawer-header", d.header],
+    ["drawer-title", d.title],
+    ["drawer-close-btn", d.closeBtn],
+    ["drawer-actions", d.actions],
+    ["drawer-new-btn", d.newBtn],
+    ["drawer-sessions-label", d.label],
+    ["drawer-list", d.list],
+    ["drawer-usage", d.usage]
+  ];
   for (const [id, style] of pairs) {
     const el3 = document.getElementById(id);
     if (el3)
@@ -11516,11 +11201,7 @@ function buildExtras() {
     b.innerHTML = '<span class="' + cx13(d.actionIcon) + '">' + svg2 + "</span><span>" + label + "</span>";
     b.addEventListener("click", () => {
       try {
-        document.dispatchEvent(new CustomEvent(event, {
-          detail: {
-            session_id: state2.sessionId
-          }
-        }));
+        document.dispatchEvent(new CustomEvent(event, { detail: { session_id: state2.sessionId } }));
       } catch {}
     });
     extras.appendChild(b);
@@ -11541,9 +11222,7 @@ async function switchSession(id) {
   state2.sessionId = id;
   saveToStorage();
   els.messages.innerHTML = "";
-  const {
-    fetchHistory: fetchHistory2
-  } = await Promise.resolve().then(() => (init_messages(), exports_messages));
+  const { fetchHistory: fetchHistory2 } = await Promise.resolve().then(() => (init_messages(), exports_messages));
   const whiteboard = await Promise.resolve().then(() => (init_whiteboard(), exports_whiteboard));
   disconnect2();
   connect2();
@@ -11593,88 +11272,68 @@ init_ask_drawer();
 init_stylex();
 
 // theme-picker.stylex.js
+init_stylex();
 init_tokens_stylex();
-var tp = {
+var tp = create({
   wrap: {
-    kVAEAm: "xixxii4",
-    k87sOh: "x1tk7jg1",
-    kCIrl2: "xlftelb",
-    kY2c9j: "x6y048q",
-    k1xSpc: "x78zum5",
-    kGNEyG: "x6s0dn4",
-    kOIVth: "x167g77z",
-    kmVPX3: "xfawy5m",
-    kaIpWk: "x1e6avla",
-    kWkggS: "x1p9hars",
-    k6WDB: "x1dmgsgi",
-    kMzoRj: "xmkeg23",
-    ksu8eU: "x1y0btm7",
-    kVAM5u: "x1d54n62",
-    kGVxlE: "x1yuphrw",
-    $$css: true
+    position: "fixed",
+    top: "12px",
+    right: "12px",
+    zIndex: 70,
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+    padding: "4px",
+    borderRadius: "999px",
+    backgroundColor: t.pickerBg,
+    backdropFilter: "blur(8px)",
+    borderWidth: "1px",
+    borderStyle: "solid",
+    borderColor: t.borderWeak,
+    boxShadow: t.pickerShadow
   },
   list: {
-    k1xSpc: "x78zum5",
-    kOIVth: "x167g77z",
-    kB88ic: "xe8uvvx",
-    kogj98: "x1ghz6dp",
-    kmVPX3: "x1717udv",
-    $$css: true
+    display: "flex",
+    gap: "8px",
+    listStyle: "none",
+    margin: 0,
+    padding: 0
   },
   listCollapsed: {
-    k1xSpc: "x1s85apg",
-    $$css: true
+    display: "none"
   },
   toggle: {
-    kzqmXN: "x17z2i9w",
-    kZKoxP: "x17rw0jw",
-    kaIpWk: "x16rqkct",
-    kMzoRj: "xdh2fpr",
-    ksu8eU: "x1y0btm7",
-    kVAM5u: "x1kr5jqu",
-    kkrTdU: "x1ypdohk",
-    kmuXW: "x2lah0s",
-    kGVxlE: "xwwkjtv",
-    $$css: true
+    width: "22px",
+    height: "22px",
+    borderRadius: "50%",
+    borderWidth: "2px",
+    borderStyle: "solid",
+    borderColor: t.bg,
+    cursor: "pointer",
+    flexShrink: 0,
+    boxShadow: `0 0 0 1px ${t.borderWeak}`
   },
   item: {
-    kzqmXN: "xw4jnvo",
-    kZKoxP: "x1qx5ct2",
-    kaIpWk: "x16rqkct",
-    ksu8eU: "xng3xce",
-    kkrTdU: "x1ypdohk",
-    kMeerF: "x1de99jn",
-    k3XXqK: "xaatb59",
-    kjBf7l: "x1uczgqu",
-    kInvED: "x1hl8ikr",
-    kmVPX3: "x1717udv",
-    $$css: true
+    width: "20px",
+    height: "20px",
+    borderRadius: "50%",
+    borderStyle: "none",
+    cursor: "pointer",
+    outlineWidth: "2px",
+    outlineStyle: "solid",
+    outlineColor: "transparent",
+    outlineOffset: "2px",
+    padding: 0
   },
   itemSelected: {
-    kjBf7l: "xjk4q4j",
-    $$css: true
+    outlineColor: t.textStrong
   },
-  cBlue: {
-    kWkggS: "x1efvng4",
-    $$css: true
-  },
-  cPink: {
-    kWkggS: "x1uwg1uw",
-    $$css: true
-  },
-  cSun: {
-    kWkggS: "x1yjhq7t",
-    $$css: true
-  },
-  cMint: {
-    kWkggS: "x3s7cit",
-    $$css: true
-  },
-  cOrange: {
-    kWkggS: "x1ypgaag",
-    $$css: true
-  }
-};
+  cBlue: { backgroundColor: "#3b82f6" },
+  cPink: { backgroundColor: "#ec4899" },
+  cSun: { backgroundColor: "#eab308" },
+  cMint: { backgroundColor: "#10b981" },
+  cOrange: { backgroundColor: "#ff8c00" }
+});
 var ACCENT_STYLE = {
   blue: tp.cBlue,
   pink: tp.cPink,
@@ -11685,27 +11344,13 @@ var ACCENT_STYLE = {
 
 // theme-picker.js
 var cx14 = (...args) => props(...args).className || "";
-var ACCENTS = [{
-  key: "blue",
-  label: "Blue",
-  color: "#3b82f6"
-}, {
-  key: "pink",
-  label: "Pink",
-  color: "#ec4899"
-}, {
-  key: "sun",
-  label: "Sun",
-  color: "#eab308"
-}, {
-  key: "mint",
-  label: "Mint",
-  color: "#10b981"
-}, {
-  key: "orange",
-  label: "Orange",
-  color: "#ff8c00"
-}];
+var ACCENTS = [
+  { key: "blue", label: "Blue", color: "#3b82f6" },
+  { key: "pink", label: "Pink", color: "#ec4899" },
+  { key: "sun", label: "Sun", color: "#eab308" },
+  { key: "mint", label: "Mint", color: "#10b981" },
+  { key: "orange", label: "Orange", color: "#ff8c00" }
+];
 var STORE_KEY = "zerowrapper_accent";
 var wrapEl = null;
 var toggleEl = null;
@@ -11721,10 +11366,7 @@ function apply2(key) {
     else
       root.style.setProperty("--color-bg-interactive", cur.color);
   } catch {}
-  itemEls.forEach(({
-    el: el3,
-    key: ak2
-  }) => {
+  itemEls.forEach(({ el: el3, key: ak2 }) => {
     el3.className = cx14(tp.item, ACCENT_STYLE[ak2], ak2 === k && tp.itemSelected);
   });
   if (toggleEl)
@@ -11743,17 +11385,9 @@ async function animatePickerChange(key, x, y) {
     const av = m2.animateView || m2.default && m2.default.animateView || typeof window !== "undefined" && window.Motion && window.Motion.animateView;
     if (typeof av === "function" && typeof document.startViewTransition === "function") {
       const update = () => doApply();
-      const vt = av(update, {
-        duration: 0.4,
-        ease: [0.28, 0.02, 0.1, 0.99]
-      });
+      const vt = av(update, { duration: 0.4, ease: [0.28, 0.02, 0.1, 0.99] });
       if (vt && typeof vt.new === "function") {
-        await vt.new({
-          clipPath: [`circle(0% at ${x}px ${y}px)`, `circle(150% at ${x}px ${y}px)`]
-        }, {
-          duration: 0.7,
-          ease: "easeIn"
-        });
+        await vt.new({ clipPath: [`circle(0% at ${x}px ${y}px)`, `circle(150% at ${x}px ${y}px)`] }, { duration: 0.7, ease: "easeIn" });
         return;
       }
       await vt.finished.catch(() => {});
@@ -11813,10 +11447,7 @@ function init8() {
       });
       li.appendChild(btn);
       list.appendChild(li);
-      itemEls.push({
-        el: btn,
-        key: a2.key
-      });
+      itemEls.push({ el: btn, key: a2.key });
     }
     toggle2.addEventListener("click", (e) => {
       e.stopPropagation();
