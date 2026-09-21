@@ -11292,6 +11292,7 @@ function init8() {
 }
 
 // main.js
+init_file_viewer();
 init_bg();
 function logPendingResources() {
   const entries = performance.getEntriesByType("resource");
@@ -11323,6 +11324,7 @@ function init9() {
   refreshSessionList();
   init7();
   init5();
+  init4();
   init8();
   on("stateChange", (s) => {
     if (s === State.CONNECTED)

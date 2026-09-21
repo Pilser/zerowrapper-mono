@@ -10,6 +10,7 @@ import { uploadFile, createAttachmentChip, uploadState } from './file-upload.js'
 import * as drawer from './drawer.js'
 import * as askDrawer from './ask-drawer.js'
 import * as themePicker from './theme-picker.js'
+import * as fileViewer from './file-viewer.js'
 import * as bg from './bg.js'
 
 function logPendingResources() {
@@ -48,6 +49,7 @@ export function init() {
   refreshSessionList()
   drawer.init()
   askDrawer.init()
+  fileViewer.init()
   themePicker.init()
   // Send→cancel window: after any (re)connect, ask the server whether this
   // session has a turn in flight and show the matching button. Turn end
