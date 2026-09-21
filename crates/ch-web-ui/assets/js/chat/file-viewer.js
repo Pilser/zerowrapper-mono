@@ -32,13 +32,22 @@ function ensureElements() {
     icon = document.createElement('button')
     icon.id = 'file-viewer-icon'
     const iconProps = stylex.props(fv.icon)
-    icon.className = (iconProps.className || '') + ' hidden'
+    icon.className = iconProps.className || ''
     // @ts-ignore
     if (iconProps.style) Object.assign(icon.style, iconProps.style)
     icon.innerHTML = '📁 <span class="file-viewer-badge">0</span>'
-    icon.title = 'Files being worked on'
-    icon.addEventListener('click', () => openDrawer())
+    icon.title = 'Files being worked on — click to open'
+    // Permanent floating button like whiteboard: always visible, toggles drawer
+    icon.addEventListener('click', () => {
+      const d = document.getElementById('file-viewer-drawer')
+      if (d && !d.classList.contains('hidden')) closeDrawer()
+      else openDrawer()
+    })
     document.body.appendChild(icon)
+    // Position like whiteboard arrows: bottom-left, not covering snap at right
+    icon.style.bottom = '20px'
+    icon.style.right = 'auto'
+    icon.style.left = '20px'
   }
   if (!drawer) {
     drawer = document.createElement('div')
@@ -71,12 +80,24 @@ function ensureElements() {
 
 function updateIcon() {
   const { icon } = ensureElements()
-  if (files.length === 0) {
-    icon.classList.add('hidden')
+  // Always visible, like whiteboard arrows — shows count, pulsing when files open
+  icon.classList.remove('hidden')
+  const badge = icon.querySelector('.file-viewer-badge')
+  if (badge) badge.textContent = files.length
+  if (files.length > 0) {
+    icon.style.opacity = '1'
+    icon.title = files.length + ' file(s) — click to open viewer'
   } else {
-    icon.classList.remove('hidden')
-    const badge = icon.querySelector('.file-viewer-badge')
-    if (badge) badge.textContent = files.length
+    icon.style.opacity = '0.6'
+    icon.title = 'No files pinned — agent will show files here'
+  }
+  // Change icon based on drawer open/closed
+  const drawer = document.getElementById('file-viewer-drawer')
+  const isOpen = drawer && !drawer.classList.contains('hidden')
+  if (isOpen) {
+    icon.innerHTML = '✕ <span class="file-viewer-badge">' + files.length + '</span>'
+  } else {
+    icon.innerHTML = '📁 <span class="file-viewer-badge">' + files.length + '</span>'
   }
 }
 
@@ -114,16 +135,48 @@ function updateTabs() {
   if (tabs) {
     tabs.innerHTML = ''
     files.forEach((f, i) => {
-      const tab = document.createElement('button')
+      const tab = document.createElement('div')
       tab.className = 'file-viewer-tab' + (i === currentIndex ? ' active' : '')
-      // Show file name with icon, carry full path in title
-      tab.textContent = `${i+1}. ${f.path.split('/').pop()}`
-      tab.title = f.path
-      tab.addEventListener('click', () => {
+      const label = document.createElement('button')
+      label.className = 'file-viewer-tab-label'
+      label.textContent = `${i+1}. ${f.path.split('/').pop()}`
+      label.title = f.path
+      label.addEventListener('click', () => {
         currentIndex = i
         loadFile(currentIndex)
         updateTabs()
       })
+      const closeBtn = document.createElement('button')
+      closeBtn.className = 'file-viewer-tab-close'
+      closeBtn.textContent = '×'
+      closeBtn.title = 'Remove from viewer'
+      closeBtn.addEventListener('click', async (e) => {
+        e.stopPropagation()
+        try {
+          const sid = localStorage.getItem('zerowrapper_session') || 'shared'
+          await fetch(`/api/files/close`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ file_id: f.id, session_id: sid })
+          })
+          // Also try ?api= for embeds
+          await fetch(`?api=files_close&file_id=${encodeURIComponent(f.id)}&session_id=${encodeURIComponent(sid)}`, { method: 'POST' }).catch(()=>{})
+        } catch {}
+        // Optimistically remove from UI
+        files = files.filter(x => x.id !== f.id)
+        loaded.delete(f.id)
+        if (currentIndex >= files.length) currentIndex = Math.max(0, files.length - 1)
+        updateIcon()
+        updateTabs()
+        if (files.length === 0) {
+          const content = document.querySelector('.file-viewer-content')
+          if (content) content.innerHTML = '<div class="file-viewer-empty">No files pinned</div>'
+        } else {
+          loadFile(currentIndex)
+        }
+      })
+      tab.appendChild(label)
+      tab.appendChild(closeBtn)
       tabs.appendChild(tab)
     })
   }
@@ -226,22 +279,22 @@ function escapeHtml(s) {
 }
 
 export function updateFiles(newFiles) {
-  // Backend returns DESC (most recent first), so recent is already #1.
-  // If same file shown again, backend surfaced it to top via REPLACE.
-  // Detect if incoming list is same as current (by ids) to avoid flicker.
-  const incomingIds = newFiles.map(f => f.id).join(',')
-  const currentIds = files.map(f => f.id).join(',')
-  const isSameOrder = incomingIds === currentIds
-  // Check if a file was surfaced (same id moved to front)
-  const newFirstId = newFiles[0] ? newFiles[0].id : null
-  const wasAlreadyLoaded = newFirstId ? loaded.has(newFirstId) : false
+  const prevLen = files.length
+  const prevIds = new Set(files.map(f => f.id))
   files = [...newFiles]
   if (currentIndex >= files.length) currentIndex = 0
-  // If a file was surfaced to #1, reset to show it
-  if (newFirstId && files[0] && files[0].id === newFirstId && !isSameOrder) {
+  // Detect new file(s) added
+  const hasNew = newFiles.some(f => !prevIds.has(f.id))
+  const isFirstLoad = prevLen === 0 && newFiles.length > 0
+  // If new file(s) added, surface to #1 and auto-open drawer like ask does
+  if (hasNew || isFirstLoad) {
     currentIndex = 0
-    // If it was already loaded, keep loaded, just switch tab
-    // If not loaded, it will load on next open
+    // Auto-open drawer when agent pins a new file (user can close)
+    const drawer = document.getElementById('file-viewer-drawer')
+    const isDrawerOpen = drawer && !drawer.classList.contains('hidden')
+    if (!isDrawerOpen && newFiles.length > 0) {
+      openDrawer()
+    }
   }
   // Only keep loaded set for files still present
   const ids = new Set(files.map(f => f.id))

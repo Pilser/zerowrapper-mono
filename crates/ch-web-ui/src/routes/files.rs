@@ -86,6 +86,70 @@ pub async fn files_show(cx: &Cx) -> Result<Response> {
     Ok(builder.body(Body::from(data)).unwrap())
 }
 
+#[route(POST "/api/files/close")]
+pub async fn files_close(cx: &Cx) -> Result<Response> {
+    use topcoat::router::{to_bytes, Body as ReqBody};
+    let ctx: &AppContext = app_context(cx);
+    let body = to_bytes(ReqBody::from(vec![]), 100_000).await.unwrap_or_default();
+    // Try to read body as JSON, fallback to query param
+    let req: serde_json::Value = serde_json::from_slice(&body).unwrap_or_default();
+    let file_id = req
+        .get("file_id")
+        .and_then(|v| v.as_str())
+        .or_else(|| {
+            topcoat::router::uri(cx)
+                .query()
+                .unwrap_or("")
+                .split('&')
+                .find_map(|p| {
+                    let mut parts = p.splitn(2, '=');
+                    if parts.next() == Some("file_id") {
+                        parts.next()
+                    } else {
+                        None
+                    }
+                })
+        })
+        .unwrap_or("")
+        .to_string();
+    let sid = req
+        .get("session_id")
+        .and_then(|v| v.as_str())
+        .or_else(|| {
+            topcoat::router::uri(cx)
+                .query()
+                .unwrap_or("")
+                .split('&')
+                .find_map(|p| {
+                    let mut parts = p.splitn(2, '=');
+                    if parts.next() == Some("session_id") {
+                        parts.next()
+                    } else {
+                        None
+                    }
+                })
+        })
+        .unwrap_or("shared")
+        .to_string();
+    if file_id.is_empty() {
+        return Ok(Response::builder()
+            .status(StatusCode::BAD_REQUEST)
+            .header("content-type", "application/json")
+            .body(Body::from(serde_json::json!({"error": "missing file_id"}).to_string()))
+            .unwrap());
+    }
+    let _ = ctx.db.system().open_file_remove(&sid, &file_id).await;
+    // Also try shared fallback
+    if sid != "shared" {
+        let _ = ctx.db.system().open_file_remove("shared", &file_id).await;
+    }
+    Ok(Response::builder()
+        .status(StatusCode::OK)
+        .header("content-type", "application/json")
+        .body(Body::from(serde_json::json!({"ok": true}).to_string()))
+        .unwrap())
+}
+
 #[route(GET "/api/files/open")]
 pub async fn files_open(cx: &Cx) -> Result<Response> {
     let ctx: &AppContext = app_context(cx);
