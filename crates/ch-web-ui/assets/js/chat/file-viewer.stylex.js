@@ -233,9 +233,12 @@ export const fv = stylex.create({
     width: '100%',
     maxWidth: '100%',
     overflow: 'auto',
-    backgroundColor: t.bgWeak,
+    backgroundColor: '#ffffff',
+    color: '#111',
     borderRadius: '8px',
     boxSizing: 'border-box',
+    display: 'flex',
+    justifyContent: 'center',
   },
   pdfWrap: {
     width: '100%',

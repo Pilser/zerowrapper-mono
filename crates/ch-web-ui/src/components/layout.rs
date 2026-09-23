@@ -18,6 +18,8 @@ use crate::assets::PDF_WORKER_JS;
 use crate::assets::DOCX_JS;
 use crate::assets::XLSX_JS;
 use crate::assets::PPTX_JS;
+use crate::assets::JSZIP_JS;
+use crate::assets::JSZIP_SHIM;
 
 #[layout("/")]
 pub async fn root_layout(cx: &Cx, slot: Result) -> Result {
@@ -54,6 +56,9 @@ pub async fn root_layout(cx: &Cx, slot: Result) -> Result {
     let docx_url = format!("/_topcoat/assets/{}", bundled_asset(cx, DOCX_JS).name());
     let xlsx_url = format!("/_topcoat/assets/{}", bundled_asset(cx, XLSX_JS).name());
     let pptx_url = format!("/_topcoat/assets/{}", bundled_asset(cx, PPTX_JS).name());
+    // jszip: UMD classic script + ESM shim (docx-preview imports 'jszip').
+    let jszip_url = format!("/_topcoat/assets/{}", bundled_asset(cx, JSZIP_JS).name());
+    let jszip_shim_url = format!("/_topcoat/assets/{}", bundled_asset(cx, JSZIP_SHIM).name());
 
     // Base href = the directory of the request path, so relative URLs resolve
     // correctly whether the page is served at `/` or under a tenant prefix.
@@ -110,10 +115,11 @@ pub async fn root_layout(cx: &Cx, slot: Result) -> Result {
                         "katex": katex_url,
                         "mermaid": mermaid_url,
                         "pdfjs-dist": pdf_url,
-                        "docx-preview": docx_url
+                        "docx-preview": docx_url,
+                        "jszip": jszip_shim_url
                     });
                     let map = serde_json::json!({ "imports": imports });
-                    format!(r#"<script type="importmap">{}</script><script>window.__zwPdfWorker = "{}";</script><script src="{}"></script><script src="{}"></script><script type="module">import m from "{}"; window.mermaid = m.default || m; if (window.mermaid.initialize) {{ try {{ window.mermaid.initialize({{startOnLoad:false}}) }} catch(e) {{}} }}</script>"#, map, pdf_worker_url, xlsx_url, pptx_url, mermaid_url)
+                    format!(r#"<script type="importmap">{}</script><script>window.__zwPdfWorker = "{}";</script><script src="{}"></script><script src="{}"></script><script src="{}"></script><script type="module">import m from "{}"; window.mermaid = m.default || m; if (window.mermaid.initialize) {{ try {{ window.mermaid.initialize({{startOnLoad:false}}) }} catch(e) {{}} }}</script>"#, map, pdf_worker_url, jszip_url, xlsx_url, pptx_url, mermaid_url)
                 })) }
                 <script type="module" src=(app_js_url)></script>
             </body>

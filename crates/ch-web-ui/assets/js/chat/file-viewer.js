@@ -17,8 +17,14 @@ import { render as renderMarkdown } from './markdown.js'
 let files = [] // [{id, path, url, download_url, name}]
 let currentIndex = 0
 let loaded = new Set()
+let locked = false // when true, ignore incoming updates + pause polling
+let lastSig = '' // signature of last applied file list (skip no-op refreshes)
 let _pdfjsP = null
 let _docxP = null
+
+function filesSig(arr) {
+  return (arr || []).map((f) => f.id + ':' + f.path).join('|')
+}
 
 const PDF_MAX_PAGES = 40
 
@@ -162,6 +168,12 @@ function ensureElements() {
     next.type = 'button'
     const download = el('a', [fv.downloadBtn], { id: 'file-viewer-download', textContent: 'Download' })
     download.setAttribute('download', '')
+    const refresh = el('button', [fv.controlBtn], { id: 'file-viewer-refresh', textContent: '⟳' })
+    refresh.type = 'button'
+    refresh.title = 'Reload current file'
+    const lock = el('button', [fv.controlBtn], { id: 'file-viewer-lock', textContent: '🔓 Live' })
+    lock.type = 'button'
+    lock.title = 'Lock the view (pause auto-refresh) so reading is not interrupted'
     const remove = el('button', [fv.removeBtn], { id: 'file-viewer-remove', textContent: 'Remove' })
     remove.type = 'button'
     remove.title = 'Remove current file from viewer'
@@ -169,7 +181,7 @@ function ensureElements() {
     close.type = 'button'
     close.title = 'Close viewer'
 
-    controls.append(prev, next, download, remove, close)
+    controls.append(prev, next, refresh, download, lock, remove, close)
     header.append(title, count, controls)
 
     const tabs = el('div', [fv.tabs])
@@ -198,6 +210,16 @@ function ensureElements() {
       if (target.closest('#file-viewer-next')) {
         e.preventDefault()
         navigate(1)
+        return
+      }
+      if (target.closest('#file-viewer-refresh')) {
+        e.preventDefault()
+        if (files[currentIndex]) loadFile(currentIndex)
+        return
+      }
+      if (target.closest('#file-viewer-lock')) {
+        e.preventDefault()
+        toggleLock()
         return
       }
       if (target.closest('#file-viewer-remove')) {
@@ -254,6 +276,12 @@ function navigate(dir) {
   updateTabs()
 }
 
+function toggleLock() {
+  locked = !locked
+  updateTabs()
+  updateIcon()
+}
+
 async function removeFile(id) {
   const sid = getSessionId()
   try {
@@ -272,6 +300,7 @@ async function removeFile(id) {
 
   files = files.filter((x) => x.id !== id)
   loaded.delete(id)
+  lastSig = filesSig(files)
   if (currentIndex >= files.length) currentIndex = Math.max(0, files.length - 1)
   updateIcon()
   updateTabs()
@@ -341,6 +370,15 @@ function updateTabs() {
   }
   const remove = drawer.querySelector('#file-viewer-remove')
   if (remove) remove.style.display = files.length ? '' : 'none'
+  const lock = drawer.querySelector('#file-viewer-lock')
+  if (lock) {
+    lock.textContent = locked ? '🔒 Locked' : '🔓 Live'
+    lock.title = locked
+      ? 'View locked — auto-refresh paused. Click to resume live updates.'
+      : 'Live — click to lock the view and pause auto-refresh.'
+    lock.style.borderColor = locked ? 'var(--color-status-running)' : 'var(--color-border-weak)'
+    lock.style.color = locked ? 'var(--color-status-running)' : 'var(--color-text)'
+  }
   const dl = drawer.querySelector('#file-viewer-download')
   if (dl && files[currentIndex]) {
     dl.href = files[currentIndex].download_url || files[currentIndex].url
@@ -402,15 +440,22 @@ async function renderDocx(url, content) {
   })
 }
 
+const SHEET_CSS =
+  '.fv-sheet table{border-collapse:collapse;width:auto;max-width:100%;font-size:12px;color:#111;background:#fff;}' +
+  '.fv-sheet td,.fv-sheet th{border:1px solid #c9ccd1;padding:2px 8px;white-space:nowrap;vertical-align:top;}' +
+  '.fv-sheet tr:first-child td{background:#f3f4f6;font-weight:600;}' +
+  '.fv-sheet h3{margin:10px 0 4px;font-size:13px;color:#333;font-weight:600;}'
+
 function renderXlsx(buf, content) {
   const XLSX = window.XLSX
   if (!XLSX) throw new Error('xlsx not loaded')
   const wb = XLSX.read(buf, { type: 'array' })
   const wrap = el('div', [fv.sheetWrap])
-  let html = ''
+  wrap.className += ' fv-sheet'
+  let html = `<style>${SHEET_CSS}</style>`
   wb.SheetNames.forEach((name) => {
-    html += `<h3 style="margin:8px 0 4px;font-size:13px;">${escapeHtml(name)}</h3>`
-    html += XLSX.utils.sheet_to_html(wb.Sheets[name])
+    html += `<h3>${escapeHtml(name)}</h3>`
+    html += XLSX.utils.sheet_to_html(wb.Sheets[name], { editable: false })
   })
   wrap.innerHTML = html
   content.innerHTML = ''
@@ -422,9 +467,11 @@ async function renderPptx(url, content) {
   if (!pptxPreview || !pptxPreview.init) throw new Error('pptx-preview not loaded')
   const buf = await (await fetch(url)).arrayBuffer()
   const wrap = el('div', [fv.pptxWrap])
+  // White backdrop so slides don't render on the dark theme background.
+  wrap.style.backgroundColor = '#ffffff'
   content.innerHTML = ''
   content.appendChild(wrap)
-  const width = Math.max(320, Math.min(content.clientWidth || 900, 1200))
+  const width = Math.max(320, Math.min(content.clientWidth || 900, 1280))
   const previewer = pptxPreview.init(wrap, {
     width,
     height: Math.round(width * 0.5625),
@@ -515,9 +562,23 @@ function escapeHtml(s) {
 // --- Public API ------------------------------------------------------------
 
 export function updateFiles(newFiles) {
+  // Locked: freeze the view entirely — ignore incoming updates so reading is
+  // never interrupted (scroll/zoom stays put).
+  if (locked) return
+
+  const incoming = newFiles || []
+  const sig = filesSig(incoming)
+  // No-op refresh: same files as last time → don't reload/re-render content.
+  // This is what stopped the 3s poll from yanking pdf/md/mermaid back to top.
+  if (sig === lastSig) {
+    updateIcon()
+    return
+  }
+  lastSig = sig
+
   const prevLen = files.length
   const prevIds = new Set(files.map((f) => f.id))
-  files = [...(newFiles || [])]
+  files = [...incoming]
   if (currentIndex >= files.length) currentIndex = 0
 
   const hasNew = files.some((f) => !prevIds.has(f.id))
@@ -574,6 +635,7 @@ export function init() {
 
   // Poll for open files (fallback if a WS update was missed).
   setInterval(async () => {
+    if (locked) return
     try {
       const sid = getSessionId()
       if (!sid) return

@@ -8519,9 +8519,12 @@ var init_file_viewer_stylex = __esm(() => {
       kzqmXN: "xh8yej3",
       ks0D6T: "x193iq5w",
       kVQacm: "xysyzu8",
-      kWkggS: "x7b40fa",
+      kWkggS: "x1c5tqo3",
+      kMwMTN: "x1votaj3",
       kaIpWk: "xur7f20",
       kB7OPa: "x9f619",
+      k1xSpc: "x78zum5",
+      kjj79g: "xl56j7k",
       $$css: true
     },
     pdfWrap: {
@@ -8600,6 +8603,9 @@ __export(exports_file_viewer, {
   updateFiles: () => updateFiles
 });
 import { marked as marked5 } from "marked";
+function filesSig(arr) {
+  return (arr || []).map((f) => f.id + ":" + f.path).join("|");
+}
 function getSessionId() {
   try {
     return localStorage.getItem("zerowrapper_session") || "shared";
@@ -8731,6 +8737,18 @@ function ensureElements() {
       textContent: "Download"
     });
     download.setAttribute("download", "");
+    const refresh = el3("button", [fv.controlBtn], {
+      id: "file-viewer-refresh",
+      textContent: "⟳"
+    });
+    refresh.type = "button";
+    refresh.title = "Reload current file";
+    const lock = el3("button", [fv.controlBtn], {
+      id: "file-viewer-lock",
+      textContent: "\uD83D\uDD13 Live"
+    });
+    lock.type = "button";
+    lock.title = "Lock the view (pause auto-refresh) so reading is not interrupted";
     const remove = el3("button", [fv.removeBtn], {
       id: "file-viewer-remove",
       textContent: "Remove"
@@ -8743,7 +8761,7 @@ function ensureElements() {
     });
     close2.type = "button";
     close2.title = "Close viewer";
-    controls.append(prev, next, download, remove, close2);
+    controls.append(prev, next, refresh, download, lock, remove, close2);
     header.append(title, count, controls);
     const tabs = el3("div", [fv.tabs]);
     tabs.className += " file-viewer-tabs";
@@ -8769,6 +8787,17 @@ function ensureElements() {
       if (target2.closest("#file-viewer-next")) {
         e.preventDefault();
         navigate(1);
+        return;
+      }
+      if (target2.closest("#file-viewer-refresh")) {
+        e.preventDefault();
+        if (files[currentIndex])
+          loadFile(currentIndex);
+        return;
+      }
+      if (target2.closest("#file-viewer-lock")) {
+        e.preventDefault();
+        toggleLock();
         return;
       }
       if (target2.closest("#file-viewer-remove")) {
@@ -8830,6 +8859,11 @@ function navigate(dir) {
   loadFile(currentIndex);
   updateTabs();
 }
+function toggleLock() {
+  locked = !locked;
+  updateTabs();
+  updateIcon();
+}
 async function removeFile(id) {
   const sid = getSessionId();
   try {
@@ -8851,6 +8885,7 @@ async function removeFile(id) {
   } catch {}
   files = files.filter((x) => x.id !== id);
   loaded.delete(id);
+  lastSig = filesSig(files);
   if (currentIndex >= files.length)
     currentIndex = Math.max(0, files.length - 1);
   updateIcon();
@@ -8924,6 +8959,13 @@ function updateTabs() {
   const remove = drawer.querySelector("#file-viewer-remove");
   if (remove)
     remove.style.display = files.length ? "" : "none";
+  const lock = drawer.querySelector("#file-viewer-lock");
+  if (lock) {
+    lock.textContent = locked ? "\uD83D\uDD12 Locked" : "\uD83D\uDD13 Live";
+    lock.title = locked ? "View locked — auto-refresh paused. Click to resume live updates." : "Live — click to lock the view and pause auto-refresh.";
+    lock.style.borderColor = locked ? "var(--color-status-running)" : "var(--color-border-weak)";
+    lock.style.color = locked ? "var(--color-status-running)" : "var(--color-text)";
+  }
   const dl = drawer.querySelector("#file-viewer-download");
   if (dl && files[currentIndex]) {
     dl.href = files[currentIndex].download_url || files[currentIndex].url;
@@ -8999,10 +9041,13 @@ function renderXlsx(buf, content2) {
     type: "array"
   });
   const wrap = el3("div", [fv.sheetWrap]);
-  let html = "";
+  wrap.className += " fv-sheet";
+  let html = `<style>${SHEET_CSS}</style>`;
   wb.SheetNames.forEach((name) => {
-    html += `<h3 style="margin:8px 0 4px;font-size:13px;">${escapeHtml3(name)}</h3>`;
-    html += XLSX.utils.sheet_to_html(wb.Sheets[name]);
+    html += `<h3>${escapeHtml3(name)}</h3>`;
+    html += XLSX.utils.sheet_to_html(wb.Sheets[name], {
+      editable: false
+    });
   });
   wrap.innerHTML = html;
   content2.innerHTML = "";
@@ -9014,9 +9059,10 @@ async function renderPptx(url2, content2) {
     throw new Error("pptx-preview not loaded");
   const buf = await (await fetch(url2)).arrayBuffer();
   const wrap = el3("div", [fv.pptxWrap]);
+  wrap.style.backgroundColor = "#ffffff";
   content2.innerHTML = "";
   content2.appendChild(wrap);
-  const width = Math.max(320, Math.min(content2.clientWidth || 900, 1200));
+  const width = Math.max(320, Math.min(content2.clientWidth || 900, 1280));
   const previewer = pptxPreview.init(wrap, {
     width,
     height: Math.round(width * 0.5625),
@@ -9091,9 +9137,18 @@ function escapeHtml3(s) {
   return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 function updateFiles(newFiles) {
+  if (locked)
+    return;
+  const incoming = newFiles || [];
+  const sig = filesSig(incoming);
+  if (sig === lastSig) {
+    updateIcon();
+    return;
+  }
+  lastSig = sig;
   const prevLen = files.length;
   const prevIds = new Set(files.map((f) => f.id));
-  files = [...newFiles || []];
+  files = [...incoming];
   if (currentIndex >= files.length)
     currentIndex = 0;
   const hasNew = files.some((f) => !prevIds.has(f.id));
@@ -9148,6 +9203,8 @@ function init4() {
       clearInterval(snapTick);
   }, 250);
   setInterval(async () => {
+    if (locked)
+      return;
     try {
       const sid = getSessionId();
       if (!sid)
@@ -9161,7 +9218,7 @@ function init4() {
     } catch {}
   }, 3000);
 }
-var files, currentIndex = 0, loaded, _pdfjsP = null, _docxP = null, PDF_MAX_PAGES = 40, _snapObserver = null;
+var files, currentIndex = 0, loaded, locked = false, lastSig = "", _pdfjsP = null, _docxP = null, PDF_MAX_PAGES = 40, _snapObserver = null, SHEET_CSS = ".fv-sheet table{border-collapse:collapse;width:auto;max-width:100%;font-size:12px;color:#111;background:#fff;}.fv-sheet td,.fv-sheet th{border:1px solid #c9ccd1;padding:2px 8px;white-space:nowrap;vertical-align:top;}.fv-sheet tr:first-child td{background:#f3f4f6;font-weight:600;}.fv-sheet h3{margin:10px 0 4px;font-size:13px;color:#333;font-weight:600;}";
 var init_file_viewer = __esm(() => {
   init_stylex();
   init_file_viewer_stylex();

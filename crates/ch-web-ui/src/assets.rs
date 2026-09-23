@@ -20,3 +20,7 @@ pub static PDF_WORKER_JS: Asset = asset!("assets/js/chat/pdf.worker.min.mjs");
 pub static DOCX_JS: Asset = asset!("assets/js/chat/docx-preview.mjs");
 pub static XLSX_JS: Asset = asset!("assets/js/chat/xlsx.full.min.js");
 pub static PPTX_JS: Asset = asset!("assets/js/chat/pptx-preview.umd.js");
+/// jszip is UMD-only; loaded as a classic script and re-exported to ESM via
+/// the shim so docx-preview's `import JSZip from 'jszip'` resolves.
+pub static JSZIP_JS: Asset = asset!("assets/js/chat/jszip.min.js");
+pub static JSZIP_SHIM: Asset = asset!("assets/js/chat/jszip.shim.mjs");
