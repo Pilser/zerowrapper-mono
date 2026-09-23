@@ -13,6 +13,11 @@ use crate::assets::MARKED_JS;
 use crate::assets::HIGHLIGHT_JS;
 use crate::assets::KATEX_JS;
 use crate::assets::KATEX_CSS;
+use crate::assets::PDF_JS;
+use crate::assets::PDF_WORKER_JS;
+use crate::assets::DOCX_JS;
+use crate::assets::XLSX_JS;
+use crate::assets::PPTX_JS;
 
 #[layout("/")]
 pub async fn root_layout(cx: &Cx, slot: Result) -> Result {
@@ -40,6 +45,15 @@ pub async fn root_layout(cx: &Cx, slot: Result) -> Result {
     let highlight_url = format!("/_topcoat/assets/{}", bundled_asset(cx, HIGHLIGHT_JS).name());
     let katex_url = format!("/_topcoat/assets/{}", bundled_asset(cx, KATEX_JS).name());
     let katex_css_url = format!("/_topcoat/assets/{}", bundled_asset(cx, KATEX_CSS).name());
+    // File-viewer renderers (vendored dist). pdfjs + docx-preview are ESM,
+    // resolved through the import map; pdf worker URL is exposed as a global;
+    // xlsx + pptx are UMD and set window.XLSX / window.pptxPreview via a
+    // classic script tag.
+    let pdf_url = format!("/_topcoat/assets/{}", bundled_asset(cx, PDF_JS).name());
+    let pdf_worker_url = format!("/_topcoat/assets/{}", bundled_asset(cx, PDF_WORKER_JS).name());
+    let docx_url = format!("/_topcoat/assets/{}", bundled_asset(cx, DOCX_JS).name());
+    let xlsx_url = format!("/_topcoat/assets/{}", bundled_asset(cx, XLSX_JS).name());
+    let pptx_url = format!("/_topcoat/assets/{}", bundled_asset(cx, PPTX_JS).name());
 
     // Base href = the directory of the request path, so relative URLs resolve
     // correctly whether the page is served at `/` or under a tenant prefix.
@@ -94,10 +108,12 @@ pub async fn root_layout(cx: &Cx, slot: Result) -> Result {
                         "marked": marked_url,
                         "highlight.js": highlight_url,
                         "katex": katex_url,
-                        "mermaid": mermaid_url
+                        "mermaid": mermaid_url,
+                        "pdfjs-dist": pdf_url,
+                        "docx-preview": docx_url
                     });
                     let map = serde_json::json!({ "imports": imports });
-                    format!(r#"<script type="importmap">{}</script><script type="module">import m from "{}"; window.mermaid = m.default || m; if (window.mermaid.initialize) {{ try {{ window.mermaid.initialize({{startOnLoad:false}}) }} catch(e) {{}} }}</script>"#, map, mermaid_url)
+                    format!(r#"<script type="importmap">{}</script><script>window.__zwPdfWorker = "{}";</script><script src="{}"></script><script src="{}"></script><script type="module">import m from "{}"; window.mermaid = m.default || m; if (window.mermaid.initialize) {{ try {{ window.mermaid.initialize({{startOnLoad:false}}) }} catch(e) {{}} }}</script>"#, map, pdf_worker_url, xlsx_url, pptx_url, mermaid_url)
                 })) }
                 <script type="module" src=(app_js_url)></script>
             </body>

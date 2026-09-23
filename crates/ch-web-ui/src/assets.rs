@@ -13,3 +13,10 @@ pub static MARKED_JS: Asset = asset!("assets/js/chat/marked.js");
 pub static HIGHLIGHT_JS: Asset = asset!("assets/js/chat/highlight.min.js");
 pub static KATEX_JS: Asset = asset!("assets/js/chat/katex.mjs");
 pub static KATEX_CSS: Asset = asset!("assets/js/chat/katex.min.css");
+// File-viewer renderers, vendored dist files (served as static assets, no
+// bun install at build — same pattern as mermaid/katex).
+pub static PDF_JS: Asset = asset!("assets/js/chat/pdf.min.mjs");
+pub static PDF_WORKER_JS: Asset = asset!("assets/js/chat/pdf.worker.min.mjs");
+pub static DOCX_JS: Asset = asset!("assets/js/chat/docx-preview.mjs");
+pub static XLSX_JS: Asset = asset!("assets/js/chat/xlsx.full.min.js");
+pub static PPTX_JS: Asset = asset!("assets/js/chat/pptx-preview.umd.js");

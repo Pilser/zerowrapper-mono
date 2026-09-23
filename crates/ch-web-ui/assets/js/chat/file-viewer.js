@@ -1,16 +1,26 @@
 // File viewer drawer: shows files pinned via show_file tool.
-// - Floating icon always visible (bottom-left, above drawer), z-index 72 > drawer 71
-// - Drawer hidden on initial load; only opens on new file (prevLen>0 && hasNew) or user click
-// - Controls (Prev/Next/Download) moved to header next to tabs, tabs slim 32px, content max space
-// - loadFile always renders (no early-return on loaded), handles all ext + mime
-// - Close button uses delegation so listener survives tabs re-render
+// - Floating icon anchored just ABOVE the snap button (reads #snap position),
+//   z-index 72 > drawer 71 > snap 70, always visible, toggles open/close.
+// - Drawer hidden on initial load; only auto-opens when a NEW file is added
+//   after load (prevLen>0 && hasNew) — refresh lands in chat.
+// - Slim chrome (header 34px, tabs 30px) so content gets max space.
+// - Controls (Prev / Next / Download / Remove / Close) in the header.
+// - Renderers are vendored dist files: pdfjs-dist + docx-preview via import
+//   map, xlsx + pptx-preview via window globals (UMD script tags). No bun
+//   install needed at build — same pattern as mermaid/katex.
 
 import * as stylex from '@stylexjs/stylex'
 import { fv } from './file-viewer.stylex.js'
+import { marked } from 'marked'
+import { render as renderMarkdown } from './markdown.js'
 
-let files = [] // [{id, path, url, download_url, mime}]
+let files = [] // [{id, path, url, download_url, name}]
 let currentIndex = 0
-let loaded = new Set() // ids that have been rendered at least once (for caching but not early-return)
+let loaded = new Set()
+let _pdfjsP = null
+let _docxP = null
+
+const PDF_MAX_PAGES = 40
 
 function fileIcon(path) {
   const ext = (path.split('.').pop() || '').toLowerCase()
@@ -21,82 +31,162 @@ function fileIcon(path) {
   if (['doc','docx'].includes(ext)) return '📝'
   if (['xls','xlsx','csv'].includes(ext)) return '📊'
   if (['ppt','pptx'].includes(ext)) return '📽️'
+  if (ext === 'md' || ext === 'markdown') return '📘'
   return '📁'
 }
+
+function getSessionId() {
+  try {
+    return localStorage.getItem('zerowrapper_session') || 'shared'
+  } catch {
+    return 'shared'
+  }
+}
+
+function applyStyle(el, ...styles) {
+  const p = stylex.props(...styles.filter(Boolean))
+  if (p.className) el.className = (el.className ? el.className + ' ' : '') + p.className
+  // @ts-ignore
+  if (p.style) Object.assign(el.style, p.style)
+  return el
+}
+
+function el(tag, styles, props) {
+  const node = document.createElement(tag)
+  if (styles) applyStyle(node, ...styles)
+  if (props) Object.assign(node, props)
+  return node
+}
+
+// --- Renderer loaders (lazy, vendored) -------------------------------------
+
+function getPdfjs() {
+  if (!_pdfjsP) {
+    _pdfjsP = import('pdfjs-dist')
+      .then((m) => {
+        const lib = m && m.getDocument ? m : m.default || m
+        try {
+          if (lib.GlobalWorkerOptions && window.__zwPdfWorker) {
+            lib.GlobalWorkerOptions.workerSrc = window.__zwPdfWorker
+          }
+        } catch {}
+        return lib
+      })
+      .catch((e) => {
+        _pdfjsP = null
+        throw e
+      })
+  }
+  return _pdfjsP
+}
+
+function getDocx() {
+  if (!_docxP) {
+    _docxP = import('docx-preview').catch((e) => {
+      _docxP = null
+      throw e
+    })
+  }
+  return _docxP
+}
+
+// --- Icon positioning ------------------------------------------------------
+
+let _snapObserver = null
+
+function ensureSnapObserver() {
+  if (_snapObserver || !window.MutationObserver) return
+  const snap = document.getElementById('snap')
+  if (!snap) return
+  _snapObserver = new MutationObserver(positionIcon)
+  _snapObserver.observe(snap, { attributes: true, attributeFilter: ['style'] })
+}
+
+function positionIcon() {
+  const icon = document.getElementById('file-viewer-icon')
+  if (!icon) return
+  ensureSnapObserver()
+  const snap = document.getElementById('snap')
+  let bottom = 124
+  if (snap) {
+    const b = parseFloat(snap.style.bottom)
+    if (!isNaN(b)) bottom = b + 34 + 10
+  }
+  icon.style.bottom = bottom + 'px'
+  icon.style.right = '16px'
+  icon.style.left = 'auto'
+  icon.style.top = 'auto'
+}
+
+// --- DOM construction ------------------------------------------------------
 
 function ensureElements() {
   let icon = document.getElementById('file-viewer-icon')
   let drawer = document.getElementById('file-viewer-drawer')
+
   if (!icon) {
-    icon = document.createElement('button')
-    icon.id = 'file-viewer-icon'
-    const iconProps = stylex.props(fv.icon)
-    icon.className = iconProps.className || ''
-    // @ts-ignore
-    if (iconProps.style) Object.assign(icon.style, iconProps.style)
-    icon.innerHTML = '📁 <span class="file-viewer-badge">0</span>'
+    icon = el('button', [fv.icon], { id: 'file-viewer-icon' })
+    icon.type = 'button'
     icon.title = 'Files being worked on — click to open'
-    // Always visible, bottom-left, z above drawer (72 > 71), not behind snap at right 16px
-    icon.style.bottom = '20px'
-    icon.style.right = 'auto'
-    icon.style.left = '20px'
-    icon.style.top = 'auto'
-    icon.style.zIndex = '72'
+    icon.innerHTML = '📁 <span class="file-viewer-badge">0</span>'
     icon.addEventListener('click', () => {
       const d = document.getElementById('file-viewer-drawer')
       if (d && !d.classList.contains('hidden')) closeDrawer()
       else openDrawer()
     })
     document.body.appendChild(icon)
-  } else {
-    // Ensure always visible and correct z-index even if stylex had 70
-    icon.style.bottom = '20px'
-    icon.style.left = '20px'
-    icon.style.right = 'auto'
-    icon.style.top = 'auto'
-    icon.style.zIndex = '72'
-    icon.classList.remove('hidden')
   }
+  positionIcon()
+  icon.classList.remove('hidden')
+  icon.style.display = 'flex'
+  icon.style.zIndex = '72'
+
   if (!drawer) {
-    drawer = document.createElement('div')
-    drawer.id = 'file-viewer-drawer'
-    const drawerProps = stylex.props(fv.drawer)
-    drawer.className = (drawerProps.className || '') + ' hidden'
-    // @ts-ignore
-    if (drawerProps.style) Object.assign(drawer.style, drawerProps.style)
+    drawer = el('div', [fv.drawer], { id: 'file-viewer-drawer' })
+    drawer.classList.add('hidden')
     drawer.style.display = 'none'
-    const headerProps = stylex.props(fv.header)
-    const titleProps = stylex.props(fv.title)
-    const countProps = stylex.props(fv.count)
-    const tabsProps = stylex.props(fv.tabs)
-    const contentProps = stylex.props(fv.content)
-    const footerProps = stylex.props(fv.footer)
-    const controlsProps = stylex.props(fv.controls)
-    const closeProps = stylex.props(fv.closeBtn)
-    // Header contains title + count + controls (Prev/Next/Download/Close) at top; tabs slim row below; content flex; footer hidden
-    drawer.innerHTML = `
-      <div class="${headerProps.className || 'file-viewer-header'}" style="${headerProps.style ? Object.entries(headerProps.style).map(([k,v]) => `${k.replace(/[A-Z]/g, m => '-' + m.toLowerCase())}:${v}`).join(';') : ''}">
-        <span class="${titleProps.className || 'file-viewer-title'}" style="${titleProps.style ? Object.entries(titleProps.style).map(([k,v]) => `${k.replace(/[A-Z]/g, m => '-' + m.toLowerCase())}:${v}`).join(';') : ''}">Files</span>
-        <span class="${countProps.className || 'file-viewer-count'}" style="${countProps.style ? Object.entries(countProps.style).map(([k,v]) => `${k.replace(/[A-Z]/g, m => '-' + m.toLowerCase())}:${v}`).join(';') : ''}"></span>
-        <div class="${controlsProps.className || 'file-viewer-controls'}" style="${controlsProps.style ? Object.entries(controlsProps.style).map(([k,v]) => `${k.replace(/[A-Z]/g, m => '-' + m.toLowerCase())}:${v}`).join(';') : ''}">
-          <button id="file-viewer-prev">← Prev</button>
-          <button id="file-viewer-next">Next →</button>
-          <a id="file-viewer-download" class="file-viewer-download" download style="padding:4px 10px; border-radius:8px; background:var(--color-bg-interactive); color:white; text-decoration:none; font-size:12px; line-height:16px;">Download</a>
-          <button id="file-viewer-close" class="${closeProps.className || 'file-viewer-close'}" style="${closeProps.style ? Object.entries(closeProps.style).map(([k,v]) => `${k.replace(/[A-Z]/g, m => '-' + m.toLowerCase())}:${v}`).join(';') : 'background:none; border:none; cursor:pointer; font-size:18px; padding:4px 8px;'}">✕</button>
-        </div>
-      </div>
-      <div class="${tabsProps.className || 'file-viewer-tabs'}" style="${tabsProps.style ? Object.entries(tabsProps.style).map(([k,v]) => `${k.replace(/[A-Z]/g, m => '-' + m.toLowerCase())}:${v}`).join(';') : ''}"></div>
-      <div class="${contentProps.className || 'file-viewer-content'}" style="${contentProps.style ? Object.entries(contentProps.style).map(([k,v]) => `${k.replace(/[A-Z]/g, m => '-' + m.toLowerCase())}:${v}`).join(';') : ''}"></div>
-      <div class="${footerProps.className || 'file-viewer-footer'}" style="${footerProps.style ? Object.entries(footerProps.style).map(([k,v]) => `${k.replace(/[A-Z]/g, m => '-' + m.toLowerCase())}:${v}`).join(';') : ''} display:none;"></div>
-    `
+
+    const header = el('div', [fv.header])
+    header.id = 'file-viewer-header'
+
+    const title = el('span', [fv.title], { textContent: 'Files' })
+    title.className += ' file-viewer-title'
+    const count = el('span', [fv.count])
+    count.className += ' file-viewer-count'
+
+    const controls = el('div', [fv.controls])
+
+    const prev = el('button', [fv.controlBtn], { id: 'file-viewer-prev', textContent: '← Prev' })
+    prev.type = 'button'
+    const next = el('button', [fv.controlBtn], { id: 'file-viewer-next', textContent: 'Next →' })
+    next.type = 'button'
+    const download = el('a', [fv.downloadBtn], { id: 'file-viewer-download', textContent: 'Download' })
+    download.setAttribute('download', '')
+    const remove = el('button', [fv.removeBtn], { id: 'file-viewer-remove', textContent: 'Remove' })
+    remove.type = 'button'
+    remove.title = 'Remove current file from viewer'
+    const close = el('button', [fv.closeBtn], { id: 'file-viewer-close', textContent: '✕' })
+    close.type = 'button'
+    close.title = 'Close viewer'
+
+    controls.append(prev, next, download, remove, close)
+    header.append(title, count, controls)
+
+    const tabs = el('div', [fv.tabs])
+    tabs.className += ' file-viewer-tabs'
+    const content = el('div', [fv.content])
+    content.className += ' file-viewer-content'
+    const footer = el('div', [fv.footer])
+
+    drawer.append(header, tabs, content, footer)
     document.body.appendChild(drawer)
-    // Delegated listener for close/prev/next/download so innerHTML replacement never loses it
+
+    // Delegated listener — survives tab re-render.
     drawer.addEventListener('click', (e) => {
       const target = e.target
       if (!target || !target.closest) return
       if (target.closest('#file-viewer-close')) {
         e.preventDefault()
-        e.stopPropagation()
         closeDrawer()
         return
       }
@@ -110,41 +200,30 @@ function ensureElements() {
         navigate(1)
         return
       }
+      if (target.closest('#file-viewer-remove')) {
+        e.preventDefault()
+        if (files[currentIndex]) removeFile(files[currentIndex].id)
+        return
+      }
     })
-  } else {
-    // Ensure hidden on initial load if not explicitly opened — caller decides
-    // Do not auto-remove hidden here; updateFiles/openDrawer control it
   }
+
   return { icon, drawer }
 }
 
 function updateIcon() {
   const { icon } = ensureElements()
-  // Always visible, like whiteboard arrows — shows count
+  positionIcon()
   icon.classList.remove('hidden')
   icon.style.display = 'flex'
-  icon.style.bottom = '20px'
-  icon.style.left = '20px'
-  icon.style.right = 'auto'
   icon.style.zIndex = '72'
-  icon.style.opacity = '1'
-  const badge = icon.querySelector('.file-viewer-badge')
-  if (badge) badge.textContent = String(files.length)
-  if (files.length > 0) {
-    icon.title = files.length + ' file(s) — click to open viewer'
-  } else {
-    icon.title = 'No files pinned — agent will show files here'
-  }
+  const badge = `<span class="file-viewer-badge">${files.length}</span>`
   const drawer = document.getElementById('file-viewer-drawer')
   const isOpen = drawer && !drawer.classList.contains('hidden')
-  if (isOpen) {
-    // Keep X visible above drawer (z 72 > 71)
-    icon.innerHTML = '✕ <span class="file-viewer-badge">' + files.length + '</span>'
-    icon.style.zIndex = '72'
-  } else {
-    icon.innerHTML = '📁 <span class="file-viewer-badge">' + files.length + '</span>'
-    icon.style.zIndex = '72'
-  }
+  icon.innerHTML = (isOpen ? '✕ ' : '📁 ') + badge
+  icon.title = files.length
+    ? files.length + ' file(s) — click to ' + (isOpen ? 'close' : 'open') + ' viewer'
+    : 'No files pinned — agent will show files here'
 }
 
 function openDrawer() {
@@ -152,9 +231,11 @@ function openDrawer() {
   drawer.classList.remove('hidden')
   drawer.style.display = 'flex'
   updateIcon()
-  if (files.length > 0) {
-    updateTabs()
-    loadFile(currentIndex)
+  updateTabs()
+  if (files.length > 0) loadFile(currentIndex)
+  else {
+    const content = drawer.querySelector('.file-viewer-content')
+    if (content) content.innerHTML = '<div class="fv-empty">No files pinned</div>'
   }
 }
 
@@ -173,6 +254,36 @@ function navigate(dir) {
   updateTabs()
 }
 
+async function removeFile(id) {
+  const sid = getSessionId()
+  try {
+    await fetch('/api/files/close', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ file_id: id, session_id: sid }),
+    })
+  } catch {}
+  try {
+    await fetch(
+      `?api=files_close&file_id=${encodeURIComponent(id)}&session_id=${encodeURIComponent(sid)}`,
+      { method: 'POST' }
+    )
+  } catch {}
+
+  files = files.filter((x) => x.id !== id)
+  loaded.delete(id)
+  if (currentIndex >= files.length) currentIndex = Math.max(0, files.length - 1)
+  updateIcon()
+  updateTabs()
+  const drawer = document.getElementById('file-viewer-drawer')
+  const content = drawer ? drawer.querySelector('.file-viewer-content') : null
+  if (files.length === 0) {
+    if (content) content.innerHTML = '<div class="fv-empty">No files pinned</div>'
+  } else {
+    loadFile(currentIndex)
+  }
+}
+
 function updateTabs() {
   const drawer = document.getElementById('file-viewer-drawer')
   if (!drawer) return
@@ -186,65 +297,54 @@ function updateTabs() {
     title.removeAttribute('title')
   }
   const count = drawer.querySelector('.file-viewer-count')
-  if (count) count.textContent = files.length ? `${currentIndex+1} / ${files.length}` : ''
+  if (count) count.textContent = files.length ? `${currentIndex + 1} / ${files.length}` : ''
+
   const tabs = drawer.querySelector('.file-viewer-tabs')
   if (tabs) {
     tabs.innerHTML = ''
     files.forEach((f, i) => {
-      const tab = document.createElement('div')
-      tab.className = 'file-viewer-tab' + (i === currentIndex ? ' active' : '')
-      tab.style.cssText = 'display:inline-flex; align-items:center; gap:4px; padding:4px 10px; border-radius:8px; border:1px solid var(--color-border-weak); background:' + (i === currentIndex ? 'var(--color-bg-interactive); color:white; border-color:var(--color-bg-interactive)' : 'var(--color-bg); color:var(--color-text)') + '; cursor:pointer; font-size:12px; white-space:nowrap; flex-shrink:0;'
-      const label = document.createElement('button')
-      label.className = 'file-viewer-tab-label'
-      label.style.cssText = 'background:none; border:none; color:inherit; cursor:pointer; font:inherit; padding:0;'
-      label.textContent = `${i+1}. ${f.path.split('/').pop()}`
+      const tab = el('div', [fv.tab, i === currentIndex ? fv.tabActive : null])
+      tab.className += ' file-viewer-tab' + (i === currentIndex ? ' active' : '')
+      const label = el('button', [fv.tabLabel], {
+        textContent: `${i + 1}. ${f.path.split('/').pop()}`,
+      })
+      label.type = 'button'
       label.title = f.path
       label.addEventListener('click', () => {
         currentIndex = i
         loadFile(currentIndex)
         updateTabs()
       })
-      const closeBtn = document.createElement('button')
-      closeBtn.className = 'file-viewer-tab-close'
-      closeBtn.style.cssText = 'background:none; border:none; cursor:pointer; font-size:14px; padding:0 2px; color:inherit; opacity:0.7;'
-      closeBtn.textContent = '×'
+      const closeBtn = el('button', [fv.tabClose], { textContent: '×' })
+      closeBtn.type = 'button'
       closeBtn.title = 'Remove from viewer'
-      closeBtn.addEventListener('click', async (e) => {
+      closeBtn.addEventListener('click', (e) => {
         e.stopPropagation()
-        try {
-          const sid = localStorage.getItem('zerowrapper_session') || 'shared'
-          await fetch(`/api/files/close`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ file_id: f.id, session_id: sid })
-          })
-          await fetch(`?api=files_close&file_id=${encodeURIComponent(f.id)}&session_id=${encodeURIComponent(sid)}`, { method: 'POST' }).catch(()=>{})
-        } catch {}
-        files = files.filter(x => x.id !== f.id)
-        loaded.delete(f.id)
-        if (currentIndex >= files.length) currentIndex = Math.max(0, files.length - 1)
-        updateIcon()
-        updateTabs()
-        if (files.length === 0) {
-          const content = document.querySelector('.file-viewer-content')
-          if (content) content.innerHTML = '<div class="file-viewer-empty">No files pinned</div>'
-        } else {
-          loadFile(currentIndex)
-        }
+        removeFile(f.id)
       })
-      tab.appendChild(label)
-      tab.appendChild(closeBtn)
+      tab.append(label, closeBtn)
       tabs.appendChild(tab)
     })
   }
+
   const prev = drawer.querySelector('#file-viewer-prev')
   const next = drawer.querySelector('#file-viewer-next')
-  if (prev) prev.disabled = currentIndex === 0
-  if (next) next.disabled = currentIndex === files.length - 1
+  if (prev) {
+    prev.disabled = currentIndex === 0
+    prev.style.opacity = currentIndex === 0 ? '0.4' : '1'
+    prev.style.pointerEvents = currentIndex === 0 ? 'none' : 'auto'
+  }
+  if (next) {
+    next.disabled = currentIndex >= files.length - 1
+    next.style.opacity = currentIndex >= files.length - 1 ? '0.4' : '1'
+    next.style.pointerEvents = currentIndex >= files.length - 1 ? 'none' : 'auto'
+  }
+  const remove = drawer.querySelector('#file-viewer-remove')
+  if (remove) remove.style.display = files.length ? '' : 'none'
   const dl = drawer.querySelector('#file-viewer-download')
   if (dl && files[currentIndex]) {
     dl.href = files[currentIndex].download_url || files[currentIndex].url
-    dl.download = files[currentIndex].path.split('/').pop() || 'download'
+    dl.setAttribute('download', files[currentIndex].path.split('/').pop() || 'download')
     dl.style.opacity = '1'
     dl.style.pointerEvents = 'auto'
   } else if (dl) {
@@ -254,17 +354,9 @@ function updateTabs() {
   }
 }
 
-async function loadFile(index) {
-  if (index < 0 || index >= files.length) return
-  const file = files[index]
-  const drawer = document.getElementById('file-viewer-drawer')
-  const content = drawer ? drawer.querySelector('.file-viewer-content') : null
-  if (!content) return
+// --- Rendering -------------------------------------------------------------
 
-  // Always render — do not early-return on loaded.has(id), just show loading then render
-  content.innerHTML = '<div class="file-viewer-loading">Loading ' + escapeHtml(file.path.split('/').pop() || file.path) + '…</div>'
-
-  // Robust ext detection: use path ext, fallback to mime
+function extOf(file) {
   let ext = (file.path.split('.').pop() || '').toLowerCase()
   if (!ext || file.path.indexOf('.') === -1) {
     const mime = (file.mime || '').toLowerCase()
@@ -273,156 +365,217 @@ async function loadFile(index) {
     else if (mime.includes('video')) ext = 'mp4'
     else if (mime.includes('audio')) ext = 'mp3'
   }
-  // Normalize aliases
   if (ext === 'jpeg') ext = 'jpg'
+  return ext
+}
+
+async function renderPdf(url, content) {
+  const pdfjsLib = await getPdfjs()
+  const pdf = await pdfjsLib.getDocument({ url }).promise
+  const wrap = el('div', [fv.pdfWrap])
+  const total = Math.min(pdf.numPages, PDF_MAX_PAGES)
+  for (let p = 1; p <= total; p++) {
+    const page = await pdf.getPage(p)
+    const viewport = page.getViewport({ scale: 1.5 })
+    const canvas = el('canvas', [fv.pdfCanvas])
+    canvas.width = viewport.width
+    canvas.height = viewport.height
+    wrap.appendChild(canvas)
+    await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise
+  }
+  content.innerHTML = ''
+  content.appendChild(wrap)
+}
+
+async function renderDocx(url, content) {
+  const mod = await getDocx()
+  const renderAsync = mod.renderAsync || (mod.default && mod.default.renderAsync)
+  const buf = await (await fetch(url)).arrayBuffer()
+  const wrap = el('div', [fv.docWrap])
+  content.innerHTML = ''
+  content.appendChild(wrap)
+  await renderAsync(buf, wrap, wrap, {
+    ignoreWidth: true,
+    ignoreHeight: true,
+    inWrapper: false,
+    breakPages: true,
+  })
+}
+
+function renderXlsx(buf, content) {
+  const XLSX = window.XLSX
+  if (!XLSX) throw new Error('xlsx not loaded')
+  const wb = XLSX.read(buf, { type: 'array' })
+  const wrap = el('div', [fv.sheetWrap])
+  let html = ''
+  wb.SheetNames.forEach((name) => {
+    html += `<h3 style="margin:8px 0 4px;font-size:13px;">${escapeHtml(name)}</h3>`
+    html += XLSX.utils.sheet_to_html(wb.Sheets[name])
+  })
+  wrap.innerHTML = html
+  content.innerHTML = ''
+  content.appendChild(wrap)
+}
+
+async function renderPptx(url, content) {
+  const pptxPreview = window.pptxPreview
+  if (!pptxPreview || !pptxPreview.init) throw new Error('pptx-preview not loaded')
+  const buf = await (await fetch(url)).arrayBuffer()
+  const wrap = el('div', [fv.pptxWrap])
+  content.innerHTML = ''
+  content.appendChild(wrap)
+  const width = Math.max(320, Math.min(content.clientWidth || 900, 1200))
+  const previewer = pptxPreview.init(wrap, {
+    width,
+    height: Math.round(width * 0.5625),
+    mode: 'list',
+  })
+  await previewer.preview(buf)
+}
+
+async function loadFile(index) {
+  if (index < 0 || index >= files.length) return
+  const file = files[index]
+  const drawer = document.getElementById('file-viewer-drawer')
+  const content = drawer ? drawer.querySelector('.file-viewer-content') : null
+  if (!content) return
+
+  content.innerHTML = `<div class="fv-loading">Loading ${escapeHtml(
+    file.path.split('/').pop() || file.path
+  )}…</div>`
+
+  const ext = extOf(file)
   const url = file.url
 
   try {
-    if (['jpg','jpeg','png','gif','webp','svg','bmp'].includes(ext)) {
-      content.innerHTML = `<img src="${url}" class="fv-media-image" style="max-width:100%; max-height:70vh; width:auto; height:auto; object-fit:contain; display:block; margin:0 auto; border-radius:8px;" onerror="this.outerHTML='<div>Failed to load image <a href=&quot;${file.download_url || url}&quot; download>Download</a></div>'" />`
-    } else if (['mp4','webm','mov','avi'].includes(ext)) {
-      content.innerHTML = `<video controls src="${url}" style="max-width:100%; width:100%; height:auto; max-height:70vh; object-fit:contain; display:block; border-radius:8px; background:#000;"></video>`
-    } else if (['mp3','wav','ogg','m4a'].includes(ext)) {
-      content.innerHTML = `<audio controls src="${url}" style="width:100%; max-width:600px; display:block; margin:20px auto;"></audio>`
+    if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp'].includes(ext)) {
+      const img = el('img', [fv.mediaImage])
+      img.src = url
+      img.alt = file.path.split('/').pop() || ''
+      img.onerror = () => {
+        content.innerHTML = `<div class="fv-error">Failed to load image. <a href="${escapeHtml(
+          file.download_url || url
+        )}" download>Download</a></div>`
+      }
+      content.innerHTML = ''
+      content.appendChild(img)
+    } else if (['mp4', 'webm', 'mov', 'avi'].includes(ext)) {
+      const video = el('video', [fv.mediaVideo])
+      video.controls = true
+      video.src = url
+      content.innerHTML = ''
+      content.appendChild(video)
+    } else if (['mp3', 'wav', 'ogg', 'm4a'].includes(ext)) {
+      const audio = el('audio', [fv.mediaAudio])
+      audio.controls = true
+      audio.src = url
+      content.innerHTML = ''
+      content.appendChild(audio)
     } else if (ext === 'pdf') {
-      if (window.pdfjsLib) {
-        content.innerHTML = '<canvas id="pdf-canvas" style="max-width:100%; height:auto; display:block; margin:0 auto; border-radius:8px; box-shadow:0 2px 12px rgba(0,0,0,0.1);"></canvas>'
-        const pdf = await window.pdfjsLib.getDocument(url).promise
-        const page = await pdf.getPage(1)
-        const isMobile = window.innerWidth < 600
-        const scale = isMobile ? 1.0 : 1.5
-        const viewport = page.getViewport({ scale })
-        const canvas = content.querySelector('#pdf-canvas')
-        if (canvas) {
-          canvas.width = viewport.width
-          canvas.height = viewport.height
-          canvas.style.width = '100%'
-          canvas.style.maxWidth = viewport.width + 'px'
-          canvas.style.height = 'auto'
-          await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise
-        }
-      } else {
-        content.innerHTML = `<iframe src="${url}" style="width:100%; height:70vh; border:none; border-radius:8px; display:block;" loading="lazy"></iframe>`
-      }
-    } else if (['doc','docx'].includes(ext)) {
-      if (window.docxPreview) {
-        const res = await fetch(url)
-        const buf = await res.arrayBuffer()
-        content.innerHTML = '<div id="docx-container" style="width:100%; max-height:80vh; overflow:auto;"></div>'
-        await window.docxPreview.renderAsync(buf, content.querySelector('#docx-container'))
-      } else {
-        content.innerHTML = `<div>Doc preview not available. <a href="${file.download_url || url}" download>Download</a></div>`
-      }
-    } else if (['xls','xlsx','csv'].includes(ext)) {
-      if (window.XLSX) {
-        const res = await fetch(url)
-        const buf = await res.arrayBuffer()
-        const wb = window.XLSX.read(buf, { type: 'array' })
-        let html = ''
-        wb.SheetNames.forEach(name => {
-          const ws = wb.Sheets[name]
-          html += `<h3>${escapeHtml(name)}</h3>` + window.XLSX.utils.sheet_to_html(ws)
-        })
-        content.innerHTML = `<div style="overflow:auto; max-height:80vh; width:100%;">${html}</div>`
-      } else {
-        content.innerHTML = `<div>Spreadsheet preview not available. <a href="${file.download_url || url}" download>Download</a></div>`
-      }
-    } else if (['ppt','pptx'].includes(ext)) {
-      content.innerHTML = `<div>PPT preview — <a href="${file.download_url || url}" download>Download</a></div>`
-    } else if (ext === 'md' || file.path.toLowerCase().endsWith('.md') || (file.mime && file.mime.includes('markdown'))) {
-      const res = await fetch(url)
-      const text = await res.text()
-      try {
-        const { marked } = await import('marked')
-        const { render } = await import('./markdown.js')
-        const html = marked.parse(text.slice(0, 100000))
-        const div = document.createElement('div')
-        div.className = 'chat-markdown'
-        div.style.maxHeight = '75vh'
-        div.style.overflow = 'auto'
-        div.style.padding = '12px'
-        div.style.width = '100%'
-        div.style.boxSizing = 'border-box'
-        render(div, html)
-        content.innerHTML = ''
-        content.appendChild(div)
-      } catch {
-        content.innerHTML = `<pre style="white-space:pre-wrap; word-break:break-word; max-height:80vh; overflow:auto; background:var(--color-bg-weak); padding:12px; border-radius:8px; width:100%; box-sizing:border-box;">${escapeHtml(text.slice(0, 50000))}</pre>`
-      }
+      await renderPdf(url, content)
+    } else if (['doc', 'docx'].includes(ext)) {
+      await renderDocx(url, content)
+    } else if (['xls', 'xlsx', 'csv'].includes(ext)) {
+      const buf = await (await fetch(url)).arrayBuffer()
+      renderXlsx(buf, content)
+    } else if (['ppt', 'pptx'].includes(ext)) {
+      await renderPptx(url, content)
+    } else if (ext === 'md' || ext === 'markdown' || file.path.toLowerCase().endsWith('.md')) {
+      const text = await (await fetch(url)).text()
+      const html = marked.parse(text.slice(0, 200000))
+      const wrap = el('div', [fv.mdWrap])
+      wrap.className += ' chat-markdown'
+      renderMarkdown(wrap, html)
+      content.innerHTML = ''
+      content.appendChild(wrap)
     } else {
-      // Plain text / other
-      const res = await fetch(url)
-      const text = await res.text()
-      content.innerHTML = `<pre style="white-space:pre-wrap; word-break:break-word; max-height:80vh; overflow:auto; background:var(--color-bg-weak); padding:12px; border-radius:8px; width:100%; box-sizing:border-box;">${escapeHtml(text.slice(0, 50000))}</pre>`
+      const text = await (await fetch(url)).text()
+      const pre = el('pre', [fv.preWrap], { textContent: text.slice(0, 100000) })
+      content.innerHTML = ''
+      content.appendChild(pre)
     }
     loaded.add(file.id)
   } catch (e) {
-    content.innerHTML = `<div>Failed to load: ${escapeHtml(e.message || String(e))} <a href="${file.download_url || url}" download>Download</a></div>`
+    content.innerHTML = `<div class="fv-error">Failed to render ${escapeHtml(
+      ext
+    )}: ${escapeHtml(e && e.message ? e.message : String(e))} — <a href="${escapeHtml(
+      file.download_url || url
+    )}" download>Download</a></div>`
   }
 }
 
 function escapeHtml(s) {
-  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
 }
+
+// --- Public API ------------------------------------------------------------
 
 export function updateFiles(newFiles) {
   const prevLen = files.length
-  const prevIds = new Set(files.map(f => f.id))
+  const prevIds = new Set(files.map((f) => f.id))
   files = [...(newFiles || [])]
   if (currentIndex >= files.length) currentIndex = 0
-  // Detect new file(s) added — only auto-open when a *new* file appears
-  // after initial load. On refresh (prevLen==0), just show the icon, don't
-  // pop the drawer — user lands in chat and can open via button or when
-  // agent adds a new file.
-  const hasNew = files.some(f => !prevIds.has(f.id))
+
+  const hasNew = files.some((f) => !prevIds.has(f.id))
   const isNewFileAdded = hasNew && prevLen > 0
+
   if (isNewFileAdded) {
     currentIndex = 0
     const drawer = document.getElementById('file-viewer-drawer')
     const isDrawerOpen = drawer && !drawer.classList.contains('hidden')
-    if (!isDrawerOpen) {
-      openDrawer()
-    } else {
-      // Already open: surface new file immediately
+    if (!isDrawerOpen) openDrawer()
+    else {
       updateTabs()
       loadFile(currentIndex)
     }
-  } else if (prevLen === 0 && files.length > 0) {
-    // Initial load (refresh): don't auto-open, just update icon. User can
-    // open via floating button, or it will auto-open when agent adds next.
-    currentIndex = 0
   } else if (hasNew) {
     currentIndex = 0
   }
-  // Only keep loaded set for files still present
-  const ids = new Set(files.map(f => f.id))
-  for (const id of [...loaded]) {
-    if (!ids.has(id)) loaded.delete(id)
-  }
+
+  const ids = new Set(files.map((f) => f.id))
+  for (const id of [...loaded]) if (!ids.has(id)) loaded.delete(id)
+
   updateIcon()
   const drawer = document.getElementById('file-viewer-drawer')
-  if (drawer && !drawer.classList.contains('hidden') && files.length > 0) {
+  if (drawer && !drawer.classList.contains('hidden')) {
     updateTabs()
-    loadFile(currentIndex)
-  } else if (drawer && !drawer.classList.contains('hidden') && files.length === 0) {
-    const content = drawer.querySelector('.file-viewer-content')
-    if (content) content.innerHTML = '<div class="file-viewer-empty">No files pinned</div>'
+    if (files.length > 0) loadFile(currentIndex)
+    else {
+      const content = drawer.querySelector('.file-viewer-content')
+      if (content) content.innerHTML = '<div class="fv-empty">No files pinned</div>'
+    }
+  } else if (files.length > 0) {
     updateTabs()
-  } else {
-    // Drawer hidden: just refresh tabs for next open
-    if (files.length > 0) updateTabs()
   }
 }
 
 export function init() {
   const { drawer } = ensureElements()
-  // Ensure hidden on initial load — user lands in chat, not file view
-  if (drawer) drawer.classList.add('hidden')
+  if (drawer) {
+    drawer.classList.add('hidden')
+    drawer.style.display = 'none'
+  }
+  positionIcon()
   updateIcon()
-  // Poll for open files (fallback if WS missed) — 3s for near-immediate icon
+
+  // Keep the icon glued just above the snap button as it moves (chat input
+  // show/hide) and on resize. #snap may not exist yet (snap.js inits after
+  // us), so retry briefly and rely on the poll as a final fallback.
+  window.addEventListener('resize', positionIcon)
+  let tries = 0
+  const snapTick = setInterval(() => {
+    positionIcon()
+    if (_snapObserver || ++tries > 20) clearInterval(snapTick)
+  }, 250)
+
+  // Poll for open files (fallback if a WS update was missed).
   setInterval(async () => {
     try {
-      const sid = localStorage.getItem('zerowrapper_session') || ''
+      const sid = getSessionId()
       if (!sid) return
       const r = await fetch(`/api/files/open?session_id=${encodeURIComponent(sid)}`)
       if (!r.ok) return
@@ -430,5 +583,4 @@ export function init() {
       if (j.files) updateFiles(j.files)
     } catch {}
   }, 3000)
-  // Also try WS immediate via file_viewer_update (handled in connection.js)
 }

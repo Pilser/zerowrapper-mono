@@ -1,6 +1,10 @@
 @layer priority1;
 
 @layer priority2 {
+  .xln7xf2 {
+    font: inherit;
+  }
+
   .x10a8y8t {
     inset: 0;
   }
@@ -31,6 +35,10 @@
 
   .x39muk0 {
     padding: 0 16px 8px;
+  }
+
+  .x46zyou {
+    padding: 0 3px;
   }
 
   .xn7r4s3 {
@@ -81,16 +89,32 @@
     padding: 2px 12px 10px;
   }
 
+  .x10zodlp {
+    padding: 2px 4px 2px 9px;
+  }
+
+  .x1gqu590 {
+    padding: 3px 10px;
+  }
+
+  .x1osfv4n {
+    padding: 3px 12px;
+  }
+
+  .x18juh3m {
+    padding: 3px 6px;
+  }
+
+  .x1x7i2cb {
+    padding: 3px 9px;
+  }
+
   .xztvwtv {
     padding: 4px 0;
   }
 
   .x1v9t41d {
     padding: 4px 10px;
-  }
-
-  .xtdwleo {
-    padding: 4px 12px;
   }
 
   .xsmg1hj {
@@ -107,10 +131,6 @@
 
   .xqy1keh {
     padding: 5px 11px;
-  }
-
-  .x1arfzav {
-    padding: 6px 12px;
   }
 
   .x10kg585 {
@@ -183,12 +203,20 @@
     border-radius: 16px;
   }
 
+  .x13pz1uv {
+    border-radius: 22px;
+  }
+
   .x16rqkct {
     border-radius: 50%;
   }
 
   .x1kogg8i {
     border-radius: 6px;
+  }
+
+  .xu4hgxq {
+    border-radius: 7px;
   }
 
   .xur7f20 {
@@ -243,6 +271,10 @@
     gap: 2px;
   }
 
+  .x1jnr06f {
+    gap: 4px;
+  }
+
   .x1nejdyq {
     gap: 5px;
   }
@@ -261,6 +293,10 @@
 
   .xe8uvvx {
     list-style: none;
+  }
+
+  .xysyzu8 {
+    overflow: auto;
   }
 
   .xb3r6kr {
@@ -409,6 +445,10 @@
     background-color: var(--xwmb7oe);
   }
 
+  .x12peec7 {
+    background-color: #fff;
+  }
+
   .x18o3ruo {
     background-image: none;
   }
@@ -485,8 +525,16 @@
     box-sizing: border-box;
   }
 
+  .x1votaj3 {
+    color: #111;
+  }
+
   .xfungia {
     color: #fff;
+  }
+
+  .x1heor9g {
+    color: inherit;
   }
 
   .xto31z9 {
@@ -649,6 +697,10 @@
     font-size: 12px;
   }
 
+  .x4z9k3i {
+    font-size: 13px;
+  }
+
   .xif65rj {
     font-size: 14px;
   }
@@ -659,10 +711,6 @@
 
   .x1jchvi3 {
     font-size: 1rem;
-  }
-
-  .xwsyq91 {
-    font-size: 20px;
   }
 
   .x10p5zqr {
@@ -729,12 +777,24 @@
     line-height: 1;
   }
 
+  .x1xxsxie {
+    line-height: 14px;
+  }
+
   .x1d3mw78 {
     line-height: 16px;
   }
 
+  .xd4r4e8 {
+    line-height: 18px;
+  }
+
   .x19kjcj4 {
     object-fit: contain;
+  }
+
+  .x1ks1olk {
+    opacity: .7;
   }
 
   .xg01cxk {
@@ -863,6 +923,10 @@
 
   .x97pzxe {
     transition-duration: .6s;
+  }
+
+  .xuo13n2 {
+    transition-property: background-color, transform;
   }
 
   .x15406qy {
@@ -1015,12 +1079,12 @@
     bottom: 0;
   }
 
-  .xqvrlgc {
-    bottom: 150px;
+  .xo2byzu {
+    bottom: 124px;
   }
 
-  .xjnlgov {
-    bottom: 20px;
+  .xqvrlgc {
+    bottom: 150px;
   }
 
   .xy58vm5 {
@@ -1055,8 +1119,8 @@
     height: 30px;
   }
 
-  .x10w6t97 {
-    height: 32px;
+  .x90ne7k {
+    height: 34px;
   }
 
   .xc9qbxq {
@@ -1065,10 +1129,6 @@
 
   .xuoj239 {
     height: 3px;
-  }
-
-  .x1vqgdyp {
-    height: 40px;
   }
 
   .xn3w4p2 {
@@ -1103,12 +1163,12 @@
     left: 16px;
   }
 
-  .x1c42kn3 {
-    left: 20px;
-  }
-
   .x1nrll8i {
     left: 50%;
+  }
+
+  .x1t8mvi6 {
+    left: auto;
   }
 
   .x1yztbdb {
@@ -1127,6 +1187,10 @@
     margin-top: 2px;
   }
 
+  .x1tfhste {
+    margin-top: 40px;
+  }
+
   .x1k70j0n {
     margin-top: 6px;
   }
@@ -1139,8 +1203,12 @@
     max-height: 46vh;
   }
 
-  .x12f24lm {
-    max-height: 70vh;
+  .xodpcl9 {
+    max-height: 78vh;
+  }
+
+  .x179dxpb {
+    max-height: 80vh;
   }
 
   .xqui1pq {
@@ -1153,6 +1221,10 @@
 
   .x193iq5w {
     max-width: 100%;
+  }
+
+  .x1racy4e {
+    max-width: 220px;
   }
 
   .x16em4ew {
@@ -1183,12 +1255,12 @@
     min-height: 0;
   }
 
-  .x21xpn4 {
-    min-height: 32px;
+  .x1rz828m {
+    min-height: 30px;
   }
 
-  .x1ba4aug {
-    min-height: 40px;
+  .xu97haq {
+    min-height: 34px;
   }
 
   .x8nclml {
@@ -1197,6 +1269,10 @@
 
   .xeuugli {
     min-width: 0;
+  }
+
+  .x1nb6za0 {
+    min-width: 44px;
   }
 
   .xw2csxc {
@@ -1211,6 +1287,14 @@
     overflow-y: auto;
   }
 
+  .x1lqa7cf {
+    padding-left: 10px;
+  }
+
+  .xcicffo {
+    padding-right: 10px;
+  }
+
   .xlftelb {
     right: 12px;
   }
@@ -1221,10 +1305,6 @@
 
   .xn5hqff {
     right: 16px;
-  }
-
-  .xwukr4l {
-    right: auto;
   }
 
   .x13vifvy {

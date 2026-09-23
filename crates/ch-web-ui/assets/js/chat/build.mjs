@@ -9,7 +9,7 @@ const result = await Bun.build({
   naming: { entry: 'app.js' },
   format: 'esm',
   target: 'browser',
-  external: ['marked', 'highlight.js', 'katex', 'mermaid'],
+  external: ['marked', 'highlight.js', 'katex', 'mermaid', 'pdfjs-dist', 'docx-preview'],
   metafile: true,
   plugins: [stylex.esbuild({ useCSSLayers: true })],
 });
