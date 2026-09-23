@@ -11,6 +11,13 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Needed to publish build outputs to a release (see "Publish release assets").
+# Releases do not count against the Actions artifact storage quota, which the
+# free tier caps at 500 MB (each run's binary is ~20 MB, so artifacts filled
+# it and upload-artifact started failing with "storage quota has been hit").
+permissions:
+  contents: write
+
 env:
   CARGO_TERM_COLOR: always
   SCCACHE_GHA_ENABLED: "true"
@@ -110,15 +117,6 @@ jobs:
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.event_name == 'workflow_dispatch'
         run: cargo build -p zw --release
 
-      - name: Upload zw binary
-        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.event_name == 'workflow_dispatch'
-        uses: actions/upload-artifact@v4
-        with:
-          name: zw-linux-x86_64
-          path: target/release/zw
-          retention-days: 14
-          if-no-files-found: error
-
       - name: Cache topcoat-cli
         id: topcoat-cache
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.event_name == 'workflow_dispatch'
@@ -141,11 +139,24 @@ jobs:
         if: always()
         run: sccache --show-stats || true
 
-      - name: Upload assets bundle
+      - name: Publish release assets
+        # Releases instead of actions/upload-artifact: artifact storage is
+        # capped at 500 MB on the free tier and each run uploads ~21 MB, so
+        # artifact uploads eventually fail with "storage quota has been hit".
+        # A single rolling prerelease tag (ci-latest) is clobbered each run.
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.event_name == 'workflow_dispatch'
-        uses: actions/upload-artifact@v4
-        with:
-          name: zw-assets
-          path: bundle-assets/
-          retention-days: 14
-          if-no-files-found: error
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="ci-latest"
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" \
+              --title "CI latest build" \
+              --notes "Automated build of ${GITHUB_SHA}" \
+              --prerelease
+          fi
+          gh release upload "$TAG" target/release/zw --clobber
+          ( cd bundle-assets && zip -qr /tmp/zw-assets.zip . )
+          gh release upload "$TAG" /tmp/zw-assets.zip --clobber
+          gh release view "$TAG" --json assets -q '.assets[].name'
